@@ -66,6 +66,20 @@ def intro(dossier: dict) -> dict:
 
 def challenge(pitch: Pitch, dossier: dict) -> Challenge:
     fact = grounding_fact(dossier)
+    from .persona import physical_limits
+    category = classify_use(pitch.text)
+    limits = (dossier.get('persona') or {}).get('hard_limits') or physical_limits(dossier)
+    for limit in limits:
+        if category not in limit['rejects_categories']:
+            continue
+        cited = next((f for f in dossier['facts'] if f['id'] == limit['fact_ref']), None)
+        # Reject only an explicit numeric mismatch; a category alone proves no infeasibility.
+        areas = re.findall(r'(\d[\d,]*(?:\.\d+)?)\s*(?:sq\s*ft|square[ -]feet|sqft)', pitch.text, re.I)
+        if (cited and limit['constraint'] in {'floor_plate', 'dark_area'}
+                and re.search(r'single[ -]floor|one floor|floor \d+', pitch.text, re.I)
+                and any(float(area.replace(',', '')) > cited['value'] for area in areas)):
+            return Challenge(player_id=pitch.player_id, line=limit['text'], fact_ids=[cited['id']],
+                             counteroffer=f"Show me this in your plan: {desire(dossier)}", category_guess=category)
     line = (f"My dossier records {fact['key']}: {fact['say_as']}. How does your idea fit?"
             if fact else 'How will you handle the details my dossier does not verify?')
     return Challenge(player_id=pitch.player_id, line=line, fact_ids=[fact['id']] if fact else [],

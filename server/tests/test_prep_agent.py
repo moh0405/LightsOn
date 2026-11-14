@@ -367,3 +367,31 @@ def test_cache_rejects_modified_source_facts(tmp_path):
     path.write_text(json.dumps(first))
     result = prep_building(PID, model=scripted_model(source_dossier()), **kwargs)
     assert result['facts'] == source_dossier()['facts']
+
+
+def test_physical_limits_reject_identity_require_two_and_challenge_oversize():
+    from app.agent.persona import fake_persona, validate_persona
+    from app.agent.fake_agent import challenge
+    from app.models import Pitch
+    from datetime import datetime, timezone
+    dossier = source_dossier()
+    persona = fake_persona(dossier).model_dump()
+    assert len(persona['hard_limits']) >= 2
+    assert all(limit['constraint'] in {'floor_plate', 'dark_area', 'height', 'parking'} for limit in persona['hard_limits'])
+    bad = copy.deepcopy(persona)
+    bad['hard_limits'][0]['fact_ref'] = next(f['id'] for f in dossier['facts'] if f['key'] == 'buildingName')
+    with pytest.raises(ValueError):
+        validate_persona(bad, dossier)
+    bad = copy.deepcopy(persona)
+    bad['hard_limits'] = []
+    with pytest.raises(ValueError):
+        validate_persona(bad, dossier)
+    dossier['persona'] = persona
+    area = next(f['value'] for f in dossier['facts'] if f['key'] == 'grossTypicalFloorSquareFeet')
+    pitch = Pitch(player_id='p', text=f'A single floor arena needing {int(area) + 1} sq ft', origin='web', at=datetime.now(timezone.utc))
+    reply = challenge(pitch, dossier)
+    assert 'fit' in reply.line.lower()
+    assert persona['hard_limits'][0]['fact_ref'] in reply.fact_ids
+    unknown = {**dossier, 'facts': [], 'floors': []}
+    empty = fake_persona(unknown).model_dump()
+    assert empty['hard_limits'] == [] and empty['hard_limits_empty_reason']

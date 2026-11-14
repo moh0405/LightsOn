@@ -94,7 +94,7 @@ def build_agent(tools: BuildingTools, directory: Path, model=None):
              'as {"fact_ids": [positive source IDs from vexcel_detect]}. No negative detections or inferred measurements.'),
         dict(name='persona_writer', description='Write a grounded fictional building persona from researched facts.',
              model=model, tools=[], system_prompt=common + 'Read both facts files. Write /persona.json using the schema '
-             'and allowed vocabulary below. Factual backstory text and hard_limits must EXACTLY equal a factual_lines '
+             'and allowed vocabulary below. Choose at least two distinct physical_constraints as hard_limits; if fewer than two exist use [] and the supplied hard_limits_empty_reason, otherwise null. Factual backstory text must EXACTLY equal a factual_lines '
              'entry, including punctuation; fact_ref must be the matching ID, fiction:false. Use only researched IDs. '
              'Fictional backstory has fact_ref:null, fiction:true and text exactly from fictional_lines. '
              'intro_line is one fictional line OR one verified factual line + a space + one fictional line. '
@@ -127,6 +127,8 @@ def merge_research(tools: BuildingTools, directory: Path) -> dict:
     for beat in validated.backstory:
         if beat.get('fact_ref') is not None and beat['fact_ref'] not in researched:
             raise ValueError('Persona cites a fact not researched by a scout')
+    if any(limit.fact_ref not in researched for limit in validated.hard_limits):
+        raise ValueError('Physical constraints must cite researched facts')
     dossier['persona'] = validated.model_dump()
     return dossier
 

@@ -7,15 +7,36 @@
   "desire_key": "be_famous_again",
   "desire_text": "To be a place people dream of visiting.",
   "hard_limits": [
-    "My name is Esperson.",
-    "My dossier records construction completed in 1941.",
-    "My dossier lists 27 stories.",
-    "My recorded height is 297 feet.",
-    "My dossier lists 599,107 rentable square feet.",
-    "My dossier places me at 808 Travis St.",
-    "My dossier records a renovation finished in 2014.",
-    "My recorded property type is Office.",
-    "My recorded building class is B."
+    {
+      "fact_ref": "F_233953_grossTypicalFloorSquareFeet",
+      "constraint": "floor_plate",
+      "rejects_categories": [
+        "housing",
+        "food_retail",
+        "entertainment",
+        "community",
+        "culture",
+        "health",
+        "work",
+        "wildcard"
+      ],
+      "text": "For a typical single-floor pitch, fit within 22,189 square feet; show me your area budget."
+    },
+    {
+      "fact_ref": "F_233953_floor_7_available_sqft",
+      "constraint": "dark_area",
+      "rejects_categories": [
+        "housing",
+        "food_retail",
+        "entertainment",
+        "community",
+        "culture",
+        "health",
+        "work",
+        "wildcard"
+      ],
+      "text": "For floor 7, fit your pitch within 31,503 listed available square feet; show me what fits."
+    }
   ],
   "backstory": [
     {
@@ -121,5 +142,6 @@
     "233899": "Look at you stealing the spotlight. I approve.",
     "233918": "That is the kind of ambition I like.",
     "233905": "I suppose I can share the attention."
-  }
+  },
+  "hard_limits_empty_reason": null
 }
