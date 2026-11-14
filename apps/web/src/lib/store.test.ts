@@ -1,5 +1,5 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { initialGame, reduce, useHealthStore } from "./store";
+import { TOAST_MS, initialGame, reduce, useHealthStore } from "./store";
 import type { Counteroffer, Intro, RoomStateMsg } from "./protocol";
 
 it("protocol mood fields use the seven game moods", () => {
@@ -48,9 +48,16 @@ describe("game reducer", () => {
     expect(patch.players?.p1?.connected).toBe(false);
   });
 
-  it("only un-nonced errors become toasts", () => {
-    expect(reduce(initialGame, { type: "error", code: "x", message: "m", nonce: "n1" })).toEqual({});
-    expect(reduce(initialGame, { type: "error", code: "x", message: "m" }).lastError?.message).toBe("m");
+  it("every error event becomes a toast, including unmatched nonces", () => {
+    expect(reduce(initialGame, { type: "error", code: "x", message: "m", nonce: "n1" }, 10).lastError).toEqual({ code: "x", message: "m", at: 10 });
+    expect(reduce(initialGame, { type: "error", code: "x", message: "m" }, 10).lastError?.message).toBe("m");
+  });
+
+  it("dedupes identical errors while their toast is visible", () => {
+    const shown = { ...initialGame, ...reduce(initialGame, { type: "error", code: "x", message: "m" }, 0) };
+    expect(reduce(shown, { type: "error", code: "x", message: "m", nonce: "n2" }, 1000)).toEqual({});
+    expect(reduce(shown, { type: "error", code: "y", message: "other" }, 1000).lastError?.message).toBe("other");
+    expect(reduce(shown, { type: "error", code: "x", message: "m" }, TOAST_MS + 1).lastError?.at).toBe(TOAST_MS + 1);
   });
 });
 
@@ -95,7 +102,7 @@ describe("round events", () => {
     expect(reduce(after, { type: "neighborhood_updated", needs: { ...city.needs, entertainment: 45 }, most_needed: "food_retail" }).city?.needs.entertainment).toBe(45);
   });
   it("clears old round dialogue on reset and errors when a new round starts", () => {
-    const stale = { ...initialGame, charge: 75, lastError: { code: "no_pitches", message: "Round skipped" } };
+    const stale = { ...initialGame, charge: 75, lastError: { code: "no_pitches", message: "Round skipped", at: 0 } };
     expect(reduce(stale, { type: "round_started", round_id: "r", building_id: "233953", target_floors: [6] })).toMatchObject({ charge: 0, lastError: null, pitches: {}, counteroffers: {} });
     const reset = { ...stale, ...reduce(stale, { type: "phase_changed", round_id: null, phase: "EXPLORE", ends_at: null }) };
     expect(reset.charge).toBe(0);
