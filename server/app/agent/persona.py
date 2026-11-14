@@ -69,7 +69,10 @@ def fact_line(fact: dict) -> str | None:
         year = re.search(r'on the (\d{4}) flyover', fact['say_as'])
         when = f'On the {year[1]} flyover' if year else 'In imagery with an unknown capture date'
         noun = label if value == 1 else label + 's'
-        return f'{when}, it looks like {value} {noun} were detected.' if value != 1 else f'{when}, it looks like 1 {noun} was detected.'
+        scope = re.search(r'within about \d+(?:\.\d+)? m of the parcel', fact['say_as'])
+        qualifier = f' {scope[0]}' if scope else ''
+        verb = 'was' if value == 1 else 'were'
+        return f'{when}, it looks like {value} {noun} {verb} detected{qualifier}.'
     return f"My dossier records {key}: {fact['say_as']}."
 
 

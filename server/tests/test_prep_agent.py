@@ -47,6 +47,9 @@ def test_tools_only_source_allowlisted_contact_free_fields(mode):
     detections = tools.vexcel_detect()
     assert all(f['value'] > 0 for f in detections['facts'])
     assert '31 cars' in detections['facts'][0]['say_as']
+    assert 'within about 30 m of the parcel' in detections['facts'][0]['say_as']
+    from app.agent.persona import fact_line
+    assert 'within about 30 m of the parcel' in fact_line(detections['facts'][0])
 
 
 def test_tools_strip_unexpected_fields():

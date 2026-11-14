@@ -19,23 +19,8 @@ PROPERTY_KEYS = {
 HISTORY_KEYS = {'tenant_records', 'current_tenants', 'tenant_industries', 'tenant_exit_reasons'}
 
 
-def detection_facts(property_id: str, evidence: dict) -> list[dict]:
-    """Absence in an aerial detection is not evidence of physical absence."""
-    date = evidence.get('capture_dates', {}).get('ortho')
-    result = []
-    for detection in evidence.get('detections', []):
-        label, count = detection.get('label'), detection.get('count')
-        if label not in {'car', 'tree', 'parking lot', 'rooftop terrace', 'solar panel'}:
-            continue
-        if not isinstance(count, int) or count <= 0:
-            continue
-        noun = label if count == 1 else label + 's'
-        when = f'on the {date[:4]} flyover' if date else 'in imagery with an unknown capture date'
-        result.append(dict(id=f'F_{property_id}_vexcel_detection_{label.replace(" ", "_")}',
-            key=f'vexcel_detection_{label.replace(" ", "_")}', value=count, unit='count',
-            source='vexcel+vision', source_field='vexcel.elements/detect', kind='estimate',
-            say_as=f'{when}, looks like {count} {noun} detected'))
-    return result
+DETECTION_KEYS = {f'vexcel_detection_{label}' for label in
+                  ('car', 'tree', 'parking_lot', 'rooftop_terrace', 'solar_panel')}
 
 
 class BuildingTools:
@@ -53,12 +38,14 @@ class BuildingTools:
             if (key in PROPERTY_KEYS | HISTORY_KEYS | {'matterport_models'}
                     or re.fullmatch(r'floor_(?:-?\d+|id_\d+)_(?:size|available|occupied)_sqft', key)
                     or key in {'construction_ConstructionComplete', 'construction_RenovationFinished',
-                               'construction_CommonAreaRenovated'}):
+                               'construction_CommonAreaRenovated'}
+                    or (key in DETECTION_KEYS and fact.get('source') == 'vexcel+vision'
+                        and fact.get('kind') == 'estimate' and type(fact.get('value')) is int
+                        and fact['value'] > 0)):
                 self.facts.append({k: fact.get(k) for k in
                     ('id', 'key', 'value', 'unit', 'source', 'source_field', 'kind', 'say_as')})
         path = ROOT / f'server/fixtures/vexcel/{property_id}.json'
         self.evidence = json.loads(path.read_text()) if path.is_file() else {}
-        self.facts += detection_facts(property_id, self.evidence)
 
     def kit_get_building(self) -> dict:
         """Read office building facts; missing values remain null."""
@@ -96,7 +83,7 @@ class BuildingTools:
 
     def vexcel_detect(self) -> dict:
         """Read positive, dated aerial estimates only; never claim an absent detection."""
-        return {'facts': detection_facts(self.property_id, self.evidence),
+        return {'facts': [f for f in self.facts if f['source'] == 'vexcel+vision'],
                 'status': 'available' if self.evidence else 'unavailable'}
 
     def matterport_get_model(self) -> dict:

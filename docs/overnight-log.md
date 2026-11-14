@@ -85,3 +85,10 @@
   concurrent spending at the cap and symlink-safe accounting. No additional paid calls were made during validation.
 - Final Python validation: `cd server && uv run pytest -q` passed 153 tests, with only the opt-in Vexcel live test
   skipped; `uv run --project server python evals/run.py --quick` passed all 20 prep safety checks.
+- Rebased Phase 4B PR #11 onto the merged Vexcel fixes (f55d5d2), retaining the merged adapter, builder and dossier
+  files exactly. Prep now reuses the dossier's positive detection facts instead of reconstructing them from raw
+  detection counts; persona speech preserves the source's "within about 30 m of the parcel" qualifier. Refreshed that
+  factual clause and the ignored validated caches deterministically, with no new model calls. Post-rebase checks:
+  205 pytest passed (1 opt-in live test skipped), 20 prep checks passed, 34 web tests + messaging typecheck passed.
+- Full post-rebase Playwright passed 18/18 on LO_E2E_API_PORT=18201 and LO_E2E_WEB_PORT=15374, including prepared
+  intro subtitles in kit and fixtures modes. Spend remains $1.6183695 across the same 27 completed Bedrock calls.

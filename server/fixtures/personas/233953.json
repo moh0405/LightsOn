@@ -76,7 +76,7 @@
     {
       "fact_ref": "F_233953_vexcel_detection_car",
       "fiction": false,
-      "text": "On the 2023 flyover, it looks like 31 cars were detected."
+      "text": "On the 2023 flyover, it looks like 31 cars were detected within about 30 m of the parcel."
     },
     {
       "fact_ref": "F_233953_parkingRatio",
