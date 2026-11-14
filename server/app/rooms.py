@@ -125,6 +125,22 @@ class Room:
     _energy_clock: dict[str, float] = field(default_factory=dict, repr=False)
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
 
+    def spoken_lines(self) -> set[str]:
+        """Lines the server produced this round that the screen may voice (whitespace-normalized)."""
+        if not self.round_id or self.phase in ('LOBBY', 'EXPLORE'):
+            return set()
+        lines = [c.line + ' ' + c.counteroffer for c in self.challenges]
+        if self.intro:
+            lines.append(str(self.intro.get('text') or ''))
+        if self.verdict:
+            lines.append(self.verdict.reason_line)
+        lines.append(live_agent.THINKING)  # The live-challenge placeholder line.
+        try:
+            lines.append(str(live_agent.persona_for(self.dossier)['catchphrase'] or '') if self.dossier else '')
+        except (KeyError, TypeError, ValueError):
+            pass
+        return {' '.join(line.split()) for line in lines if line.strip()}
+
     def wakeable_ids(self) -> list[str]:
         """Buildings a player may wake now. Hero buildings need a prepared persona (an unprepared hero
         would look broken on stage); context buildings only need dark floors. Demo mode wakes only the

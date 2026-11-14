@@ -178,6 +178,7 @@ export function useScreenAudio() {
         .catch(() => { /* Optional persona: default browser voice still speaks the subtitle. */ });
     };
     const say = (text: string, url: string | null, mood: Mood) => {
+      const { room, roundId } = useGame.getState();
       const current = generation, signal = controller.signal;
       queue = queue.then(async () => {
         if (signal.aborted || current !== generation) return;
@@ -186,7 +187,7 @@ export function useScreenAudio() {
           if (!url) {
             try {
               const r = await fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text, voice_id: persona.voice_id }), signal: AbortSignal.any([signal, AbortSignal.timeout(5000)]) });
+                body: JSON.stringify({ room, round_id: roundId, text, voice_id: persona.voice_id }), signal: AbortSignal.any([signal, AbortSignal.timeout(5000)]) });
               if (!r.ok) throw new Error();
               url = (await r.json() as { audio_url: string | null }).audio_url;
             } catch { if (!signal.aborted) warn("Voice service unavailable. Browser speech and subtitles remain available."); }

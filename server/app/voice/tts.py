@@ -13,6 +13,21 @@ import httpx
 ROOT = Path(__file__).resolve().parents[3]
 CACHE = ROOT / 'server/cache/tts'
 log = logging.getLogger(__name__)
+CACHE_MAX_BYTES = 200 * 1024 * 1024
+
+
+def prune_cache() -> None:
+    """Keep the on-disk voice cache bounded: drop the oldest clips first."""
+    try:
+        clips = sorted(((p.stat().st_mtime, p.stat().st_size, p) for p in CACHE.glob('*.mp3')), reverse=True)
+    except OSError as exc:
+        log.error('TTS cache prune failed (%s)', type(exc).__name__)
+        return
+    total = 0
+    for _, size, path in clips:
+        total += size
+        if total > CACHE_MAX_BYTES:
+            path.unlink(missing_ok=True)
 
 
 def render_speech(text: str, voice_id: str = '', *, client: httpx.Client | None = None) -> str | None:
@@ -50,6 +65,7 @@ def render_speech(text: str, voice_id: str = '', *, client: httpx.Client | None 
                     if not size:
                         raise ValueError('Audio missing')
                 temporary.replace(path)
+                prune_cache()
         if client is None:
             with httpx.Client() as http:
                 request(http)
