@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { aim, clamp, rateLimit, smooth, wrap180 } from "./pointer";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { aim, clamp, rateLimit, requestSensors, smooth, wrap180 } from "./pointer";
 describe("phone aiming", () => {
   it("wraps across north in either direction", () => {
     expect(wrap180(358)).toBe(-2); expect(wrap180(-358)).toBe(2); expect(wrap180(540)).toBe(-180);
@@ -15,4 +15,24 @@ describe("phone aiming", () => {
     expect(Array.from({ length: 1000 }, (_, t) => allow(t)).filter(Boolean)).toHaveLength(30);
     expect(allow(1000)).toBe(false); expect(allow(1020)).toBe(true);
   });
+});
+
+afterEach(() => vi.unstubAllGlobals());
+it("falls back when sensors are missing or denied", async () => {
+  vi.stubGlobal("window", { isSecureContext: true });
+  vi.stubGlobal("DeviceOrientationEvent", undefined);
+  expect(await requestSensors()).toBe(false);
+  vi.stubGlobal("DeviceOrientationEvent", { requestPermission: () => Promise.resolve("denied") });
+  vi.stubGlobal("DeviceMotionEvent", { requestPermission: () => Promise.resolve("granted") });
+  expect(await requestSensors()).toBe(false);
+});
+it("starts both iOS permission requests within the Join gesture", async () => {
+  vi.stubGlobal("window", { isSecureContext: true });
+  const orientation = vi.fn(() => Promise.resolve("granted"));
+  const motion = vi.fn(() => Promise.resolve("granted"));
+  vi.stubGlobal("DeviceOrientationEvent", { requestPermission: orientation });
+  vi.stubGlobal("DeviceMotionEvent", { requestPermission: motion });
+  const pending = requestSensors();
+  expect(orientation).toHaveBeenCalledOnce(); expect(motion).toHaveBeenCalledOnce();
+  expect(await pending).toBe(true);
 });

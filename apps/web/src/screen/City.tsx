@@ -92,7 +92,7 @@ export function City() {
         const feature = map.queryRenderedFeatures([p.x * map.getCanvas().clientWidth, p.y * map.getCanvas().clientHeight], { layers: ["floors"] })[0];
         const building = feature?.properties?.building_id as string | undefined;
         const layer = `hover-${player}`;
-        if (!map.getLayer(layer)) map.addLayer({ id: layer, type: "line", source: "floors", filter: ["==", ["get", "building_id"], ""], paint: { "line-color": p.color, "line-width": 3 } });
+        if (!map.getLayer(layer)) map.addLayer({ id: layer, type: "line", source: "floors", filter: ["==", ["get", "building_id"], ""], paint: { "line-color": p.color, "line-width": 3, "line-offset": -3 } });
         if (outlined.get(layer) !== (building ?? "")) {
           map.setFilter(layer, ["==", ["get", "building_id"], building ?? ""]);
           outlined.set(layer, building ?? "");
