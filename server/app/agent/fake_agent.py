@@ -71,7 +71,7 @@ def challenge(pitch: Pitch, dossier: dict, *, variant: int | None = None) -> Cha
     if screened:
         return Challenge(player_id=pitch.player_id, line=INJECTION if screened == 'injection' else REFUSAL,
             fact_ids=[], counteroffer='Offer a kind, original idea for this space.', category_guess='wildcard')
-    from .persona import era_voice, limit_applies, physical_limits
+    from .persona import era_voice, limit_applies, physical_limits, pitch_needs
     from .prompts import safe_facts
     fact = grounding_fact(dossier)
     category = classify_use(pitch.text)
@@ -114,6 +114,14 @@ def challenge(pitch: Pitch, dossier: dict, *, variant: int | None = None) -> Cha
                 and (limit['constraint'] in {'floor_plate', 'dark_area'} or
                      limit['constraint'] == 'parking' and category in {'entertainment', 'food_retail'})]
     relevant = list({f['id']: f for f in relevant}.values())
+    requested_floors = pitch_needs(pitch.text)['floors']
+    requested = [f for f in facts.values() if f['key'] in {
+        f'floor_{n}_available_sqft' for n in requested_floors}
+        and f['kind'] == 'verified' and f['value'] is not None]
+    if requested:
+        relevant = requested
+    elif requested_floors:
+        relevant = [f for f in relevant if not f['key'].startswith('floor_')]
     if relevant:
         fact = relevant[variant % len(relevant)]
     questions = {

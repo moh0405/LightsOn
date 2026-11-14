@@ -571,3 +571,10 @@ async def test_failure_during_fallback_validation_returns_to_explore(dossier, mo
     assert room.phase == 'EXPLORE' and room.round_id is None
     assert any(e['type'] == 'error' and e['code'] == 'invalid_verdict' for e in events)
     room.close()
+
+
+def test_fallback_uses_the_floor_the_pitch_actually_requests(dossier):
+    for variant in range(4):
+        c = fake_agent.challenge(pitch('A community studio on floor 6'), dossier, variant=variant)
+        assert c.fact_ids == ['F_233953_floor_6_available_sqft']
+        assert check_line(c.line + ' ' + c.counteroffer, c.fact_ids, dossier) is None
