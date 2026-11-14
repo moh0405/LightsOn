@@ -84,6 +84,13 @@ def building_persona(property_id: str, provider: DataProvider = Depends(get_prov
     return dossier['persona']
 
 
+@app.get('/api/buildings/{property_id}/trace')
+def building_trace(property_id: str, provider: DataProvider = Depends(get_provider)) -> dict:
+    from .trace import recorded_trace
+    building(property_id, provider)
+    return recorded_trace(property_id)
+
+
 @app.post('/api/buildings/{property_id}/prep')
 async def prepare_building(property_id: str, request: Request, force: bool = False,
                            provider: DataProvider = Depends(get_provider)) -> dict:
