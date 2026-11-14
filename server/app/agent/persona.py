@@ -293,3 +293,53 @@ def writer_instructions(dossier: dict) -> str:
         era_brief=era_voice(dossier), fiction_vocabulary=sorted(FICTION_WORDS),
         physical_constraints=physical_limits(dossier), hard_limits_empty_reason=EMPTY_LIMITS,
         fictional_lines=FICTION, desire_text_by_key=DESIRES, voice_style_prefix=era_voice(dossier), signature_sounds=SOUNDS))
+
+
+def normalize_writer_persona(value: dict, dossier: dict) -> dict:
+    """Extract supported semantic clauses; discarded prose never becomes a fact.
+
+    This is not validation relaxation: the resulting candidate still passes the
+    strict validator and the researched-ID gate before anything is published.
+    """
+    import copy
+    result = copy.deepcopy(value)
+    facts = {fact['id']: fact for fact in dossier['facts']}
+    clauses = [(ref, clause) for ref, fact in facts.items() for clause in fact_clauses(fact)]
+    beats = []
+    for beat in value.get('backstory', []):
+        if not isinstance(beat.get('text'), str):
+            continue
+        for sentence in re.split(r'(?<=[.!?])\s+', beat['text']):
+            matches = [(ref, clause) for ref, clause in clauses if sentence.startswith(clause)]
+            # Keep a valid original citation where possible; otherwise assign the exact supported clause.
+            matches.sort(key=lambda pair: pair[0] != beat.get('fact_ref'))
+            if matches:
+                ref, clause = matches[0]
+                candidate = dict(text=sentence, fact_ref=ref, fiction=False)
+                try:
+                    validate_beat(candidate, facts)
+                except ValueError:
+                    candidate['text'] = clause
+                beats.append(candidate)
+            elif fiction_text(sentence):
+                beats.append(dict(text=sentence, fact_ref=None, fiction=True))
+    factual = [beat for beat in beats if beat['fact_ref'] is not None]
+    if len(factual) < 3:
+        raise ValueError('Writer supplied fewer than three supportable factual beats')
+    if not fiction_text(result.get('catchphrase', '')):
+        raise ValueError('Writer catchphrase contains unsupported prose')
+    first = factual[0]
+    clause = next(clause for clause in fact_clauses(facts[first['fact_ref']]) if first['text'].startswith(clause))
+    invitation = re.split(r'(?<=[.!?])\s+', result['catchphrase'])[0]
+    intro = dict(text=f"{clause} {invitation}", fact_ref=first['fact_ref'], fiction=False)
+    validate_beat(intro, facts)
+    result['intro_line'] = intro['text']
+    result['backstory'] = [intro] + [beat for beat in beats if beat is not first]
+    neighbors = {pid: line for pid, line in result.get('neighbor_lines', {}).items()
+                 if pid in dossier['neighbors'] and isinstance(line, str) and fiction_text(line)}
+    for i, pid in enumerate(dossier['neighbors']):
+        if len(neighbors) >= 3:
+            break
+        neighbors.setdefault(pid, FICTION[8 + i % 3])
+    result['neighbor_lines'] = dict(list(neighbors.items())[:3])
+    return validate_persona(result, dossier).model_dump()

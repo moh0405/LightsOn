@@ -17,7 +17,7 @@ from langchain_core.callbacks import BaseCallbackHandler
 from langsmith import tracing_context
 
 from ..data.provider import get_provider
-from .persona import fake_persona, validate_persona, writer_instructions
+from .persona import fake_persona, normalize_writer_persona, validate_persona, writer_instructions
 from .spend import CappedBedrockConverse, SpendUnavailable
 from .tools import BuildingTools
 
@@ -316,6 +316,8 @@ def regenerate_persona(property_id: str, research: Path, *, provider=None, model
         workspace.mkdir(exist_ok=True)
         for filename, selection in selections.items():
             write_json(workspace / filename, selection)
+        write_json(workspace / 'persona_proposal.json', value)
+        value = normalize_writer_persona(value, dossier)
         write_json(workspace / 'persona.json', value)
         result = merge_research(tools, workspace)
         from ..voice.tts import render_intro
