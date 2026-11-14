@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -5,6 +6,7 @@ from pathlib import Path
 
 import segno
 from dotenv import dotenv_values, load_dotenv
+from fastapi.responses import FileResponse
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
@@ -71,6 +73,49 @@ def building(property_id: str, provider: DataProvider = Depends(get_provider)) -
     if dossier is None:
         raise HTTPException(status_code=404, detail='Unknown building')
     return dossier
+
+
+@app.get('/api/buildings/{property_id}/persona')
+def building_persona(property_id: str, provider: DataProvider = Depends(get_provider)) -> dict:
+    dossier = building(property_id, provider)
+    if not dossier.get('persona'):
+        raise HTTPException(status_code=404, detail='Persona has not been prepared')
+    return dossier['persona']
+
+
+@app.post('/api/buildings/{property_id}/prep')
+async def prepare_building(property_id: str, request: Request, force: bool = False,
+                           provider: DataProvider = Depends(get_provider)) -> dict:
+    from .agent.prep_agent import prep_building
+    building(property_id, provider)  # Authorize the exact known building before filesystem access.
+    loop = asyncio.get_running_loop()
+    async def broadcast(event):
+        for room in list(request.app.state.manager.rooms.values()):
+            await room.broadcast('agent_step', event, to='screen')
+    def emit(event):
+        asyncio.run_coroutine_threadsafe(broadcast(event), loop).result(timeout=5)
+    try:
+        result = await asyncio.to_thread(prep_building, property_id, force, provider=provider, emit=emit)
+        if result.get('prep_status') == 'unavailable':
+            for room in list(request.app.state.manager.rooms.values()):
+                await room.broadcast('error', {'code': 'prep_unavailable', 'message': 'Building prep unavailable. Subtitles and offline play still work.'})
+        return result
+    except ValueError:
+        raise HTTPException(status_code=422, detail='Prep grounding failed; game fallback remains available') from None
+    except Exception:
+        log.error('Building prep unavailable; game fallback remains available')
+        raise HTTPException(status_code=503, detail='Prep unavailable; retry later') from None
+
+
+@app.get('/api/tts/{filename}')
+def intro_audio(filename: str):
+    import re
+    if not re.fullmatch(r'[a-f0-9]{64}\.mp3', filename):
+        raise HTTPException(status_code=404, detail='Unknown audio')
+    path = REPO_ROOT / 'server/cache/tts' / filename
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail='Unknown audio')
+    return FileResponse(path, media_type='audio/mpeg')
 
 
 class CreateRoom(BaseModel):

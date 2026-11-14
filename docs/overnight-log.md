@@ -42,3 +42,53 @@
 - 09:3x Reviews of PR #9/#10: Claude Opus pass-with-issues, Codex fail (1 P1 + 6 P2: zero-count detections became negative facts, Vexcel cache keying/transient-failure caching, fallbacks, cache path traversal, projector text under 28 px, merge tests not exercising code) plus a light-up animation flake. All in one Codex high fix PR (phase4/vexcel-fixes); Phase 4B told to leave Vexcel files alone. Review/QA specs now require symlinking the kit (Codex review ran without it).
 - 10:0x Phase 4B PR #11 ready: real Esperson prep cost $1.62 (all 3 subagents, refs resolved); Wells Fargo skipped to stay under the $3 cap. Waits for the Vexcel fix PR, then rebases.
 - 10:2x PR #12 (Vexcel review fixes, Codex high) merged as f55d5d2: only positive detections become facts ("31 cars ... within about 30 m"), cache/fallback/traversal fixed, 28 px text restored, light-up flake fixed, configurable e2e ports. 185 pytest pass on main. Told 4B to rebase.
+- Phase 4B implementation decisions (Codex, Nov 14): default AWS credential chain only; real prep limited to
+  233953/233899, all other buildings use deterministic fiction. Added a process-safe persisted spend ledger with
+  conservative pre-call reservations, actual response token accounting, no SDK retries and 10s connect / 60s read
+  timeout; incomplete calls retain their reservation. Corrupt accounting and unpriced models fail closed. The cap
+  cannot exceed $3, including when an environment override is present. Standard US geo inference list prices used:
+  Sonnet 4.6 $3.30/$16.50 and Haiku 4.5 $1.10/$5.50 per million input/output tokens (Anthropic Nov 9 rate card).
+- Persona grounding uses deterministic source wording for factual backstory, hard limits and factual intro clauses;
+  uncited character lines come from an approved emotional-fiction vocabulary. This conservative choice prevents
+  physical claims disguised as fiction without spending on a second model judge. Desire, voice, mood, motif and
+  reactions are chosen by the persona_writer; no contract changes. Deepagents has a virtual filesystem rooted under
+  each building's prep cache and no shell backend. It receives only scoped, allowlisted source evidence.
+- LANGSMITH_API_KEY absent: tracing explicitly disabled even if LANGCHAIN_TRACING_V2 is set; actual public tool
+  names/timings and named subagent calls are always written to agent_steps.json and emitted on HTTP prep. No private
+  reasoning or tool arguments are logged. ELEVENLABS_API_KEY absent: audio_url stays null, intro subtitles work,
+  and Polly is never called. Optional ElevenLabs adapter has a timed, logged silent fallback.
+- Coordinator moved all Vexcel builder/dossier fixes into phase4/vexcel-fixes while this task was running; reverted
+  the initial builder/dossier wording edits here. Prep tools independently keep only positive aerial estimates;
+  negative detections are never research facts or eligible persona references. Rebase onto that fix after merge.
+- Real Esperson prep succeeded in DATA_MODE=kit: three named subagents appear in the actual local agent_step trace;
+  grounded dossier + persona cached under server/cache/prep/233953/, persona committed under server/fixtures/personas/,
+  and floors.geojson rebuilt using the existing Vexcel footprint. Every factual backstory reference resolves, desire
+  uses the fixed list and three neighbor reactions are present; intro audio is intentionally null without ElevenLabs.
+  Response usage: 326,445 input / 32,794 output tokens, 27 completed calls, $1.6183695 total, no unconfirmed reservations.
+  Wells Fargo Plaza real prep skipped: $1.3816305 remaining is below the observed complete Esperson run cost; it retains
+  the normal fake-agent fallback. Re-running Esperson without --force is a cache hit and incurs zero model calls.
+- Observed deepagents behavior: the supervisor requested supplementary /output reports and spatial_scout repeatedly
+  hit the 4096-token output limit copying geometry before finishing. No generated research claims were accepted as
+  facts: post-processing selected only known source IDs. Tightened subsequent prompts to write only assigned files,
+  omit geometry coordinates, use short completion messages and start with write_todos; no additional real run was used.
+- Applied deterministic speech formatting to source fact clauses after prep (for example, construction completion in
+  1941); this changes presentation only and incurs no additional Bedrock calls. Canonical aerial estimate wording
+  validates against source values and capture year across the independent Vexcel wording update.
+- Preserved the real-run ledger in the original checkout's ignored server/state/bedrock_spend.json and symlinked this
+  worker's ledger to it, so subsequent main-checkout prep/live adapters inherit tonight's $1.6183695 spent instead
+  of resetting at merge. SpendLedger resolves symlinks before locking and atomically saving; a regression test
+  verifies the link survives calls. No credentials, caches, state files or media are committed.
+- Preserved the five validated prep JSON artifacts in the original checkout's ignored server/cache/prep/233953/
+  as well, so the CLI/POST remain cache hits after merge. Supplementary model-written reports were not copied.
+- Final Phase 4B checks: full Playwright 16/16 passed (including the new persona subtitles test in kit and fixtures),
+  33 web tests + messaging typecheck passed; offline coverage also exercises forced prep, WebSocket agent_step delivery,
+  concurrent spending at the cap and symlink-safe accounting. No additional paid calls were made during validation.
+- Final Python validation: `cd server && uv run pytest -q` passed 153 tests, with only the opt-in Vexcel live test
+  skipped; `uv run --project server python evals/run.py --quick` passed all 20 prep safety checks.
+- Rebased Phase 4B PR #11 onto the merged Vexcel fixes (f55d5d2), retaining the merged adapter, builder and dossier
+  files exactly. Prep now reuses the dossier's positive detection facts instead of reconstructing them from raw
+  detection counts; persona speech preserves the source's "within about 30 m of the parcel" qualifier. Refreshed that
+  factual clause and the ignored validated caches deterministically, with no new model calls. Post-rebase checks:
+  205 pytest passed (1 opt-in live test skipped), 20 prep checks passed, 34 web tests + messaging typecheck passed.
+- Full post-rebase Playwright passed 18/18 on LO_E2E_API_PORT=18201 and LO_E2E_WEB_PORT=15374, including prepared
+  intro subtitles in kit and fixtures modes. Spend remains $1.6183695 across the same 27 completed Bedrock calls.
