@@ -1,26 +1,23 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Map as CityMap, setWorkerUrl, type ExpressionSpecification } from "maplibre-gl";
+import { Map as CityMap, setWorkerUrl } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
 setWorkerUrl(workerUrl);
 import type { FeatureCollection } from "geojson";
+import { floorColorExpression } from "../lib/floor-colors";
 import { getData, type Building } from "../lib/buildings";
 import { useGame } from "../lib/store";
 import { HoverCard } from "./overlays/HoverCard";
 
 declare global { interface Window { __lightsOnMap?: CityMap } }
 const CENTER: [number, number] = [-95.3650891, 29.7588018];
-export const FLOOR_COLOR: ExpressionSpecification = ["case",
-  ["==", ["get", "game_status"], "revived"], "#f2c46d",
-  ["==", ["get", "game_status"], "lit"], "#f2c46d",
-  ["match", ["get", "source_status"], "dark", "#1a1d2b", "partial", "#4a4636", "occupied", "#f2c46d", "#3a3f52"],
-];
+const FLOOR_COLOR = floorColorExpression({});
 interface Hover { player: string; building: string; color: string }
 
 export function City() {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<CityMap | null>(null);
-  const { pointers, players, phase, buildingId } = useGame();
+  const { pointers, players, phase, buildingId, revivedColors } = useGame();
   const current = useRef({ pointers, phase });
   current.current = { pointers, phase };
   const [ready, setReady] = useState(false);
@@ -111,14 +108,10 @@ export function City() {
     return () => { map.off("render", update); };
   }, [ready, pointers]);
 
-  // Until revival events carry a color, the active player's server-assigned color is used.
   useEffect(() => {
     const map = mapRef.current;
-    if (!ready || !map?.getLayer("floors")) return;
-    const expression: ExpressionSpecification = [...FLOOR_COLOR];
-    expression[2] = Object.values(players)[0]?.color ?? "#f2c46d";
-    map.setPaintProperty("floors", "fill-extrusion-color", expression);
-  }, [players, ready]);
+    if (ready && map?.getLayer("floors")) map.setPaintProperty("floors", "fill-extrusion-color", floorColorExpression(revivedColors));
+  }, [revivedColors, ready]);
 
   return <>
     {error && <div role="alert" style={{ padding: 10, background: "#5a3b00" }}>{error}</div>}
