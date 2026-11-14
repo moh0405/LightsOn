@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Category } from "../lib/types";
 import type { Mood } from "../lib/protocol";
 import { useGame, type GameState } from "../lib/store";
+import { getDossier } from "../lib/buildings";
 
 export const categoryLayers = {
   housing: "bass", food_retail: "drums", entertainment: "synth lead", community: "pads",
@@ -167,9 +168,13 @@ export function useScreenAudio() {
       personaRequest.abort(); personaRequest = new AbortController(); persona = defaultVoice;
       if (!id) return;
       const requestSignal = personaRequest.signal;
-      void fetch(`/api/buildings/${encodeURIComponent(id)}/persona`, { signal: AbortSignal.any([requestSignal, AbortSignal.timeout(5000)]) })
-        .then(async (r) => { if (!r.ok) throw new Error(); return await r.json() as PersonaVoice; })
-        .then((value) => { if (!requestSignal.aborted) persona = value; })
+      // The dossier says whether a persona was prepared, so an unprepared
+      // building never triggers a 404 persona request.
+      void getDossier(id)
+        .then((dossier) => {
+          const prepared = (dossier as typeof dossier & { persona?: Partial<PersonaVoice> | null }).persona;
+          if (!requestSignal.aborted && prepared) persona = { voice_style: prepared.voice_style ?? "", voice_id: prepared.voice_id ?? "" };
+        })
         .catch(() => { /* Optional persona: default browser voice still speaks the subtitle. */ });
     };
     const say = (text: string, url: string | null, mood: Mood) => {

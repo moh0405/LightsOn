@@ -24,10 +24,12 @@ test("Phase 6 optional persona fallback keeps the screen console clean", async (
     await other.getByLabel("Nickname").fill("QA2");
     await other.getByRole("button", { name: "Join", exact: true }).tap();
     await expect(screen.getByTestId("phase")).toContainText("EXPLORE");
-    const response = screen.waitForResponse(r => r.url().endsWith("/233899/persona"));
-    await phone.getByRole("button", { name: "Wake building Wells Fargo Plaza", exact: true }).tap();
-    await response;
+    const personaRequests: string[] = [];
+    screen.on("request", request => { if (request.url().includes("/persona")) personaRequests.push(request.url()); });
+    // TC Energy Center has no prepared persona: the screen must not ask for one.
+    await phone.getByRole("button", { name: "Wake building TC Energy Center", exact: true }).tap();
     await expect(screen.getByTestId("subtitles")).toBeVisible();
+    expect(personaRequests).toEqual([]);
     await screen.screenshot({ path: "e2e/artifacts/qa-phase6/persona-console-regression.png" });
     expect(errors).toEqual([]);
   } finally { await Promise.all([desktop, mobile, second].map(context => context.close())); }
