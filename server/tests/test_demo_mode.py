@@ -43,3 +43,23 @@ async def test_demo_mode_wakes_esperson_only(game_mode, monkeypatch):
     # A demo list cannot smuggle in an unprepared building.
     monkeypatch.setenv('DEMO_BUILDING_IDS', '233953,233899,233905')
     assert room.wakeable_ids() == ['233953']
+
+
+@pytest.mark.parametrize('bid', ['233953', '233899'])
+def test_parking_pitch_is_challenged_with_vexcel_evidence(game_mode, bid):
+    """A6: at least one challenge cites a spatial fact from the dossier."""
+    from datetime import datetime, timezone
+    from app.agent import fake_agent
+    from app.agent.grounding import check_line
+    from app.data.provider import provider_for_mode
+    from app.models import Pitch
+    dossier = provider_for_mode(game_mode).dossier(bid)
+    p = Pitch(player_id='p1', text='A drive-in movie night where neighbors park their cars nearby.',
+              origin='web', at=datetime.now(timezone.utc))
+    c = fake_agent.challenge(p, dossier)
+    assert c.fact_ids == [f'F_{bid}_vexcel_detection_car']
+    assert 'looks like' in c.line and c.line.endswith('Where would your crowd park?')
+    assert check_line(c.line + ' ' + c.counteroffer, c.fact_ids, dossier) is None
+    # Without cars or parking, the challenge keeps using area evidence.
+    plain = fake_agent.challenge(p.model_copy(update={'text': 'A public community studio.'}), dossier)
+    assert not any('vexcel' in fid for fid in plain.fact_ids)

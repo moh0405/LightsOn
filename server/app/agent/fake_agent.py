@@ -122,6 +122,11 @@ def challenge(pitch: Pitch, dossier: dict, *, variant: int | None = None) -> Cha
         relevant = requested
     elif requested_floors:
         relevant = [f for f in relevant if not f['key'].startswith('floor_')]
+    # A pitch about cars or parking gets the spatial evidence: the Vexcel aerial car count
+    # near the parcel (an estimate, so its line says "looks like").
+    if re.search(r'\b(?:park(?:ing|ed)|cars?|driv(?:e|es|ing)|drive-in)\b', pitch.text, re.I):
+        spatial = [f for f in facts.values() if f['key'] == 'vexcel_detection_car' and f['value'] is not None]
+        relevant = spatial or relevant
     if relevant:
         fact = relevant[variant % len(relevant)]
     questions = {
@@ -135,7 +140,9 @@ def challenge(pitch: Pitch, dossier: dict, *, variant: int | None = None) -> Cha
         'wildcard': 'What would your idea need within that evidence?',
     }
     clause = (fact_line(fact) or fact['say_as']) if fact else None
-    line = (f"{address} {clause[0].lower()}{clause[1:]} {questions[category]}"
+    question = ('Where would your crowd park?' if fact and fact['key'] == 'vexcel_detection_car'
+                else questions[category])
+    line = (f"{address} {clause[0].lower()}{clause[1:]} {question}"
             if fact else f'{address} show me your plan; I need details before I make a deal.')
     return Challenge(player_id=pitch.player_id, line=line, fact_ids=[fact['id']] if fact else [],
                      counteroffer=counteroffer, category_guess=category)

@@ -140,7 +140,12 @@ async def evaluate(live, spec, stop_at=None):
                 metrics['grounded'] += int(reason is None)
                 if row['kind'] in ('injection', 'unsafe'):
                     assert challenge.fact_ids == [] and safety_reason(row['text'])
+                # A6: a parking pitch is challenged with spatial (Vexcel) evidence from the dossier.
+                spatial = [f['id'] for f in dossier['facts'] if 'vexcel' in (f.get('source') or '')]
+                if row['kind'] == 'spatial' and not live and spatial:
+                    assert set(challenge.fact_ids) & set(spatial), (bid, challenge)
                 rows_out.append(dict(building=bid, case=row['id'], ground_error=reason,
+                                     spatial=bool(set(challenge.fact_ids) & set(spatial)),
                                      line=challenge.line, counteroffer=challenge.counteroffer, fact_ids=challenge.fact_ids))
         if partial:
             break
@@ -261,6 +266,7 @@ def main():
         result = asyncio.run(evaluate(False, spec))
         assert result['metrics']['grounded'] == result['metrics']['outputs'], result['challenges']
         assert all(row['stability'] == 1 for row in result['winners'])
+        assert {row['building'] for row in result['challenges'] if row['spatial']} == set(spec['buildings']), 'A6'
         print(f"Offline eval: {len(result['challenges'])} challenges, {result['metrics']['completed_verdicts']} verdicts; grounding/schema/stability 100%", flush=True)
         return subprocess.call([sys.executable, '-m', 'pytest', 'tests/test_prep_agent.py', 'tests/test_live_agent.py', '-q'], cwd=ROOT / 'server')
     # Pin the approved pricing/models and share the real main-checkout spend ledger.
