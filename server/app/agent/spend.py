@@ -24,6 +24,9 @@ PRICES = {
     'us.anthropic.claude-sonnet-4-6': (3.30, 16.50),
     'us.anthropic.claude-haiku-4-5-20251001-v1:0': (1.10, 5.50),
 }
+# Hard ceiling for any configured cap: stays below the $5 AWS budget.
+SPEND_CAP_CEILING_USD = 4.50
+DEFAULT_SPEND_CAP_USD = 3.00
 T = TypeVar('T')
 
 
@@ -38,9 +41,9 @@ class SpendUnavailable(RuntimeError):
 class SpendLedger:
     def __init__(self, path: Path | None = None, cap: float | None = None):
         self.path = Path(path or os.getenv('BEDROCK_SPEND_LEDGER') or ROOT / 'server/state/bedrock_spend.json').resolve()
-        self.cap = float(os.getenv('BEDROCK_SPEND_CAP_USD', '3.00')) if cap is None else cap
-        if not math.isfinite(self.cap) or not 0 <= self.cap <= 3:
-            raise SpendUnavailable('Spend cap must be between zero and $3.')
+        self.cap = float(os.getenv('BEDROCK_SPEND_CAP_USD', str(DEFAULT_SPEND_CAP_USD))) if cap is None else cap
+        if not math.isfinite(self.cap) or not 0 <= self.cap <= SPEND_CAP_CEILING_USD:
+            raise SpendUnavailable(f'Spend cap must be between zero and ${SPEND_CAP_CEILING_USD:.2f}.')
 
     def snapshot(self) -> dict:
         try:
