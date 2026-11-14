@@ -515,7 +515,7 @@ def test_small_paid_check_plan_and_budget_ceiling(monkeypatch):
     from pathlib import Path
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2]))
     from evals.live_quality import budget_ceiling, challenge_plan
-    assert budget_ceiling(2.44) == pytest.approx(2.64)
+    assert budget_ceiling(2.44) == pytest.approx(2.56)
     assert budget_ceiling(2.60) < 2.70
     plan = challenge_plan()
     assert sum(len(rows) for rows in plan.values()) == 8
@@ -754,3 +754,34 @@ def test_bedrock_challenge_output_is_short_and_shared_prompt_has_checkpoint(monk
     assert requests[0]['system'][1] == {'cachePoint': {'type': 'default'}}
     row = SpendLedger().snapshot()['calls'][0]
     assert row['cache_read_tokens'] == 20 and row['cache_write_5m_tokens'] == 30
+
+
+def test_latency_percentiles_use_nearest_rank(monkeypatch):
+    from pathlib import Path
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2]))
+    from evals.live_quality import percentile
+    assert percentile([], .9) is None
+    assert percentile([1, 2, 3, 4, 5, 6, 7, 8], .5) == 4
+    assert percentile([1, 2, 3, 4, 5, 6, 7, 8], .9) == 8
+
+
+@pytest.mark.parametrize('line', [
+    "My typical floor gives you 25,529 square feet—a restaurant needs way more than that. Show me a restaurant concept that fits one floor. Let's make a deal.",
+    'Bring me a studio that fits one floor.',
+])
+def test_retained_one_floor_request_is_a_plan_not_a_floor_count(game_mode, line):
+    d = provider_for_mode(game_mode).dossier('233899')
+    assert check_line(line, ['F_233899_grossTypicalFloorSquareFeet'], d) is None
+    assert check_line('This building has one floor.', ['F_233899_grossTypicalFloorSquareFeet'], d)
+
+
+async def test_hypothetical_prefix_cannot_hide_uncited_existing_feature(dossier):
+    from time import monotonic
+    called = []
+    async def model(*args):
+        called.append(True)
+        return {'checks': [{'supported': False, 'reason': 'Unsupported building feature'}]}
+    agent = LiveAgent(model=model)
+    assert await agent.grounded([('Could your studio use my swimming pool?', [])], dossier,
+                                monotonic() + 1, step='verdict', attempt=0)
+    assert called

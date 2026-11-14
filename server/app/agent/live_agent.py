@@ -173,9 +173,11 @@ class LiveAgent:
                 return True
             # Only skip recognizable voice or hypothetical plans. Uncited factual
             # assertions still need semantic validation, even without quantities.
-            assertion = re.search(r"\b(?:i|we|it|this building|my [a-z ]+)\s+(?:have|has|had|was|were|is|are|contain|offer|stand|rise|built)|"
+            if re.fullmatch(r'Darling, you have my attention[.!]?', line, re.I):
+                return False
+            assertion = re.search(r"\b(?:my|our|existing|already|have|has|had|was|were|is|are|since|built|contains|offers)\b|"
                                   r"\b(?:tunnels?|windows?|ceilings?|daylight|capacity|history|years|decades|legal)\b", line, re.I)
-            pure = re.match(r"(?:darling, you have my attention[.!]?|could your |would your |can your |let['’]s |give me |start |offer )", line, re.I)
+            pure = re.match(r"(?:could your |would your |can your |let['’]s |give me |start |offer )", line, re.I)
             return bool(assertion) or not pure
         pending = [i for i, issue in enumerate(issues) if issue is None and needs_check(*lines[i])]
         if not pending:

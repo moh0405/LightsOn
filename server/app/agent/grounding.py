@@ -63,8 +63,8 @@ def check_line(line: str, fact_ids: list[str], dossier: dict, impact: dict | Non
         after = line[match.end():]
         before = line[:match.start()]
         clause = re.split(r'[.!?;:]', before)[-1]
-        hypothetical = re.search(r'\b(?:start|propose|imagine|try|could|would|should|pitch|give\s+me)\b', clause, re.I)
-        asserted = re.search(r'\b(?:i|we)\s+(?:have|had|own|contain|offer|rise|stand)\b', clause, re.I)
+        hypothetical = re.search(r'\b(?:start|propose|imagine|try|could|would|should|pitch|give\s+me|show\s+me|bring\s+me|fits?)\b', clause, re.I)
+        asserted = re.search(r'\b(?:i|we|this building)\s+(?:have|has|had|own|contain|offer|rise|stand)\b', clause, re.I)
         if (match[0].casefold() == 'one' and re.match(r'\s+floor\b', after, re.I)
                 and hypothetical and not asserted):
             return match[0]  # "start on one floor" proposes a plan, not an existing floor count

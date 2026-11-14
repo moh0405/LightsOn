@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Explicit small paid check: eight challenges, two verdicts, <= $0.20, ledger < $2.70."""
+"""Explicit paid latency check: eight challenges, two verdicts, <= $0.12, ledger < $2.70."""
 from __future__ import annotations
 
 import argparse
@@ -7,6 +7,7 @@ import asyncio
 from collections import Counter
 from datetime import datetime, timezone
 import json
+import math
 import os
 from pathlib import Path
 import sys
@@ -26,7 +27,12 @@ from app.models import Pitch
 
 
 def budget_ceiling(total: float) -> float:
-    return min(total + .20, 2.70 - .000001)
+    return min(total + .12, 2.70 - .000001)
+
+
+def percentile(samples, quantile):
+    """Nearest rank; eight players' p90 is the slowest measured player."""
+    return sorted(samples)[max(0, math.ceil(len(samples) * quantile) - 1)] if samples else None
 
 
 def challenge_plan() -> dict:
@@ -37,29 +43,36 @@ def challenge_plan() -> dict:
 
 
 async def evaluate(plan):
-    output = dict(challenges=[], verdicts=[], requests=[], schema_failures=0)
+    output = dict(challenges=[], verdicts=[], rounds=[], requests=[], schema_failures=0)
     adapter = Bedrock()
     def model(step, system, content, schema, timeout):
         output['requests'].append(dict(step=step, timeout=timeout))
         return adapter(step, system, content, schema, timeout)
-    # Each building is one round: all four players in one generation batch.
+    # Each building is one round: four independent, parallel player generations.
     for bid, rows in plan.items():
         dossier = provider_for_mode('kit').dossier(bid)
         dossier['persona'] = persona_for(dossier)
         city = City()
         pitches = [Pitch(player_id=f'p{i+1}', text=row['text'], origin='web',
                          at=datetime.now(timezone.utc)) for i, row in enumerate(rows)]
-        agent = LiveAgent(model=model)
+        published = {}
         started = monotonic()
+        def publish(c):
+            published[c.player_id] = monotonic() - started
+        agent = LiveAgent(model=model, on_challenge=publish)
         challenges = await agent.challenge(pitches, dossier, city)
         elapsed = monotonic() - started
         for row, c in zip(rows, challenges):
             cause = agent.fallback_player_causes.get(c.player_id)
             output['challenges'].append(dict(building=bid, case=row['id'],
                 line=c.line, counteroffer=c.counteroffer, fact_ids=c.fact_ids,
-                fallback_cause=cause, from_model=cause is None,
-                # Same whole-step publication-ready time, classified by origin.
-                seconds=elapsed, ground_error=check_line(c.line + ' ' + c.counteroffer, c.fact_ids, dossier)))
+                fallback_cause=cause, from_model=c.player_id in agent.challenge_latencies,
+                seconds=agent.challenge_latencies.get(c.player_id),
+                publication_seconds=published[c.player_id], round_seconds=elapsed,
+                ground_error=check_line(c.line + ' ' + c.counteroffer, c.fact_ids, dossier)))
+        ready = [published[pid] for pid in agent.challenge_latencies]
+        output['rounds'].append(dict(building=bid, first_model_seconds=min(ready) if ready else None,
+                                    full_seconds=elapsed))
         output['schema_failures'] += agent.schema_failures
         print(f'Challenge {bid}: {len(agent.fallback_player_ids)}/4 fallbacks; '
               f'{dict(agent.challenge_fallback_causes)}; {elapsed:.3f}s', flush=True)
@@ -84,42 +97,67 @@ def report(result, before, after, ceiling):
     verdict_counts = Counter(v['fallback_cause'] for v in verdicts if v['fallback_cause'])
     calls = after['calls'][len(before['calls']):]
     spend = after['total_usd'] - before['total_usd']
-    lines = ['# Small paid live-quality check', '',
+    model_times = [c['seconds'] for c in challenges if c['from_model'] and c['seconds'] is not None]
+    p50, p90 = percentile(model_times, .5), percentile(model_times, .9)
+    first = [r['first_model_seconds'] for r in result['rounds'] if r['first_model_seconds'] is not None]
+    def timing(value):
+        return f'{value:.3f}s' if value is not None else 'not observed'
+    lines = ['# Phase 5 per-player latency check', '',
         f"Run: {datetime.now(timezone.utc).isoformat()}; DATA_MODE=kit; eight challenge cases and two verdict cases.", '',
         f"Challenge fallbacks: **{sum(counts.values())}/{len(challenges)}**; target ≤1/8: "
         f"{'PASS' if sum(counts.values()) <= 1 and len(challenges) == 8 else 'MISS'}.",
         f"Verdict fallbacks: **{sum(verdict_counts.values())}/{len(verdicts)}**. "
         f"Invalid schema attempts (including truncated tool JSON): {result['schema_failures']}.",
-        f"Published numeric/ID grounding: {sum(c['ground_error'] is None for c in challenges + verdicts)}/{len(challenges + verdicts)}.", '',
+        f"Published local numeric/ID grounding: {sum(c['ground_error'] is None for c in challenges + verdicts)}/{len(challenges + verdicts)}. "
+        'Local checks plus model claim checks are not proof of perfect semantic accuracy; model lines require a manual audit.', '',
         '| Cause | Challenge cases | Verdict cases |', '| --- | --- | --- |']
     for cause in ('timeout', 'invalid_schema', 'fact_id', 'number_match', 'claim_check', 'safety', 'budget', 'unavailable'):
         lines.append(f'| {cause} | {counts[cause]} | {verdict_counts[cause]} |')
-    lines += ['', f'Run spend including retained reservations: **${spend:.6f}** (limit $0.20).',
+    lines += ['', f'Run spend including retained reservations: **${spend:.6f}** (limit $0.12).',
         f"Shared ledger: **${before['total_usd']:.6f} → ${after['total_usd']:.6f}**; run cap ${ceiling:.6f}, below $2.70.",
         f"Paid requests: {len(calls)}, reconciled {sum(c['status'] == 'complete' for c in calls)}, "
         f"unconfirmed {sum(c['status'] != 'complete' for c in calls)}.", '',
-        '## Latency by published origin', '',
-        'These are direct LiveAgent whole-step publication-ready times, including generation, validation and any regeneration. '
-        'They exclude WebSocket delivery, cumulative-prefix animation and browser rendering; they are not a measurement of first visible subtitles. '
-        'Fallback timings are never counted as model timings.', '']
-    for origin in (True, False):
-        # Four cases share each round's batched timing; do not count them as four independent samples.
-        samples = sorted({(c['building'], c['seconds']) for c in challenges if c['from_model'] == origin})
-        label = 'Model challenge batches' if origin else 'Fallback challenge batches'
-        lines.append(f"- {label}: " + (', '.join(f'{bid}: {seconds:.3f}s' for bid, seconds in samples) or 'not observed'))
-    lines += ['', '## Verbatim model challenge lines', '']
+        '## Per-player model latency', '',
+        f'Model-only time to grounded line: **p50 {timing(p50)} / p90 {timing(p90)}** ({len(model_times)} players; nearest rank).',
+        'Each sample starts when that player generation task begins and ends after local grounding and any semantic '
+        'claim check/regeneration, immediately before its publication callback. Fallback samples are excluded. '
+        'Independent claim checks overlap other players’ generation and publication. These are direct LiveAgent '
+        'measurements; WebSocket transport and browser render time are excluded. The room regression separately '
+        'proves its callback emits the existing counteroffer event while another player is pending.', '',
+        f'First grounded model callback per round: {", ".join(timing(x) for x in first) or "not observed"}.', '',
+        '| Building / case | Origin | Grounded model | Publication callback |',
+        '| --- | --- | --- | --- |']
+    for c in challenges:
+        lines.append(f"| {c['building']} / {c['case']} | {'model' if c['from_model'] else 'fallback'} | "
+                     f"{timing(c['seconds'])} | {c['publication_seconds']:.3f}s |")
+    lines += ['', '## Prompt cache', '',
+        f"Observed cache tokens: {sum(c.get('cache_read_tokens', 0) for c in calls)} reads; "
+        f"{sum(c.get('cache_write_5m_tokens', 0) for c in calls)} five-minute writes; "
+        f"{sum(c.get('cache_write_1h_tokens', 0) for c in calls)} one-hour writes.",
+        'Challenge requests put shared rules, persona, hard limits and the fact table before a cache checkpoint, '
+        'then add only pitch-specific facts. A cache capability ValidationException retries once without '
+        'checkpoints inside the same reservation. Other request errors retain the reservation and use fallback. '
+        '[AWS documents a 4,096-token minimum for Haiku 4.5 checkpoints]'
+        '(https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-haiku-4-5.html); '
+        'these deliberately short contexts may remain below that minimum, so zero cache usage is expected and '
+        'no caching speedup is claimed. No padding or extra paid cache probe is used.', '',
+        '## Verbatim model challenge lines', '']
     for c in [c for c in challenges if c['from_model']][:3]:
         lines += [f"{c['building']} / {c['case']}:", '', '> ' + c['line'], '']
-    lines += ['## All cases', '', '| Building / case | Origin | Cause |', '| --- | --- | --- |']
+    lines += ['## All dialogue for manual audit', '']
     for c in challenges:
-        lines.append(f"| {c['building']} / {c['case']} | {'model' if c['from_model'] else 'fallback'} | {c['fallback_cause'] or '—'} |")
-    lines += ['', '## Verdict lines', '']
+        lines.append(f"- {c['building']} / {c['case']} ({c['fallback_cause'] or 'model'}): {c['line']} "
+                     f"Counteroffer: {c['counteroffer']} Cites: {', '.join(c['fact_ids'])}.")
     for v in verdicts:
-        lines.append(f"- {v['building']}: {v['line']} (winner {v['winner']}; {v['fallback_cause'] or 'model'}; {v['seconds']:.3f}s)")
-    lines += ['', 'Private full responses and request counts: `server/state/live_quality_result.json`; rejected candidates: `server/state/live_agent.jsonl`. '
-        'The original larger paid run remains in `evals/report.md`; its fallback diagnosis is in `evals/live-quality.md`.']
-    (ROOT / 'evals/live-quality-check.md').write_text('\n'.join(lines) + '\n')
-    return spend <= .20 + 1e-9 and after['total_usd'] <= ceiling + 1e-9 and all(c['ground_error'] is None for c in challenges + verdicts)
+        lines.append(f"- Verdict {v['building']}: {v['line']} (winner {v['winner']}; {v['fallback_cause'] or 'model'}; {v['seconds']:.3f}s). "
+                     f"Cites: {', '.join(v['fact_ids'])}.")
+    lines += ['', 'Private responses and request counts: `server/state/latency_result.json`; '
+        'rejected candidates: `server/state/live_agent.jsonl`. The prior paid check remains in `evals/live-quality-check.md`.']
+    (ROOT / 'evals/latency-check.md').write_text('\n'.join(lines) + '\n')
+    return (sum(counts.values()) <= 1 and len(challenges) == 8 and len(verdicts) == 2
+            and p90 is not None and p90 <= 6 and len(first) == 2 and max(first) <= 3
+            and spend <= .12 + 1e-9 and after['total_usd'] <= ceiling + 1e-9
+            and all(c['ground_error'] is None for c in challenges + verdicts))
 
 
 def main():
@@ -137,15 +175,17 @@ def main():
         print('No authorized headroom; no calls made.', file=sys.stderr)
         return 2
     os.environ['BEDROCK_SPEND_CAP_USD'] = str(ceiling)
-    print(f"Ledger ${before['total_usd']:.6f}; cap ${ceiling:.6f}; at most eight challenges + two verdicts.", flush=True)
+    print(f"Ledger ${before['total_usd']:.6f}; cap ${ceiling:.6f}; eight challenges + two verdict cases (bounded retries).", flush=True)
+    # asyncio.run waits for bounded synchronous SDK threads, including timed-out ones,
+    # before the ledger snapshot. The ledger lock itself no longer waits on network I/O.
     result = asyncio.run(evaluate(challenge_plan()))
-    after = SpendLedger().snapshot()  # waits for bounded synchronous SDK threads
-    private = ROOT / 'server/state/live_quality_result.json'
+    after = SpendLedger().snapshot()
+    private = ROOT / 'server/state/latency_result.json'
     private.parent.mkdir(parents=True, exist_ok=True)
     with os.fdopen(os.open(private, os.O_CREAT | os.O_WRONLY | os.O_TRUNC, 0o600), 'w') as stream:
         json.dump(dict(result=result, before=before['total_usd'], after=after['total_usd'], ceiling=ceiling), stream, indent=2)
     okay = report(result, before, after, ceiling)
-    print(f"Report evals/live-quality-check.md; spent ${after['total_usd']-before['total_usd']:.6f}; ledger ${after['total_usd']:.6f}", flush=True)
+    print(f"Report evals/latency-check.md; spent ${after['total_usd']-before['total_usd']:.6f}; ledger ${after['total_usd']:.6f}", flush=True)
     return 0 if okay else 1
 
 
