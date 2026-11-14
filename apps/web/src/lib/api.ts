@@ -1,6 +1,7 @@
 export interface Health {
   ok: boolean;
   data_mode: string;
+  demo_mode?: boolean;
   keys: Record<string, boolean>;
   costar_property_file: boolean;
 }

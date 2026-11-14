@@ -898,10 +898,19 @@ async def test_legitimate_counteroffers_pass_after_claim_check(dossier, line):
 PAID_VERDICT = ('A night-lit community gaming studio fits my bones and my hopes; '
                 'a nine-million-square-foot restaurant on one floor defies every wall I own.')
 PAID_VERDICT_FACTS = ['F_233953_grossTypicalFloorSquareFeet', 'F_233953_dark_sqft']
+# The losing pitch in that run (evals/pitches.yaml); the verdict restates its own number.
+PAID_PITCHES = ['A community gaming studio open at night',
+                'I need 9000000 square feet on a single floor for a restaurant.']
 
 
 def test_paid_rejected_verdict_pitch_plan_is_not_a_floor_count(dossier):
-    assert check_line(PAID_VERDICT, PAID_VERDICT_FACTS, dossier) is None
+    assert check_line(PAID_VERDICT, PAID_VERDICT_FACTS, dossier, quoted=PAID_PITCHES) is None
+    # The hyphenated area is a real number: without the pitch that states it, it is unsupported.
+    assert check_line(PAID_VERDICT, PAID_VERDICT_FACTS, dossier).startswith('Number 9000000 (sqft)')
+    # A pitch number only covers the same value and unit.
+    assert check_line(PAID_VERDICT.replace('nine-million', 'eight-million'), PAID_VERDICT_FACTS, dossier,
+                      quoted=PAID_PITCHES)
+    assert check_line('I have 9000000 cars.', PAID_VERDICT_FACTS, dossier, quoted=PAID_PITCHES)
     # Building facts still must match: an asserted floor count stays rejected.
     assert check_line('This building has one floor.', PAID_VERDICT_FACTS, dossier)
     assert check_line('I have one floor for a restaurant.', PAID_VERDICT_FACTS, dossier)
@@ -909,14 +918,15 @@ def test_paid_rejected_verdict_pitch_plan_is_not_a_floor_count(dossier):
 
 
 async def test_paid_rejected_verdict_publishes_without_fallback(dossier):
-    p = pitch()
+    pitches = [pitch(text, player=f'p{i}') for i, text in enumerate(PAID_PITCHES)]
     async def model(step, system, content, schema, timeout):
         if step == 'claim_check':
             return {'checks': [{'supported': True, 'reason': ''} for _ in json.loads(content)]}
-        proposal = fake_agent.verdict([p.model_copy(update={'player_id': 'candidate_0'})], dossier, City())
+        proposal = fake_agent.verdict([p.model_copy(update={'player_id': f'candidate_{i}'})
+                                       for i, p in enumerate(pitches)], dossier, City())
         return proposal.model_copy(update={'reason_line': PAID_VERDICT, 'fact_ids': PAID_VERDICT_FACTS}).model_dump()
     agent = LiveAgent(model=model)
-    batches = await agent.verdict_batches([p], [], dossier, City(), [])
+    batches = await agent.verdict_batches(pitches, [], dossier, City(), [])
     assert batches[0][0].reason_line == PAID_VERDICT and agent.fallbacks == 0
 
 

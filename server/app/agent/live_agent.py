@@ -153,7 +153,7 @@ class LiveAgent:
                 if attempt:
                     raise
 
-    async def grounded_each(self, lines, dossier, deadline, *, step, attempt, impact=None):
+    async def grounded_each(self, lines, dossier, deadline, *, step, attempt, impact=None, quoted=None):
         # Local checks run first; unrelated player tasks keep publishing during the remote check.
         def reject(line, refs, reason, cause):
             diagnostic('rejected', cause, step=step, attempt=attempt + 1,
@@ -165,7 +165,7 @@ class LiveAgent:
                 issues[index] = reject(line, refs, 'Challenge must cite a researched constraint', 'fact_id')
             elif len(line) > 480:
                 issues[index] = reject(line, refs, 'Dialogue must use short sentences', 'invalid_schema')
-            elif reason := check_line(line, refs, dossier, impact):
+            elif reason := check_line(line, refs, dossier, impact, quoted):
                 cause = ('fact_id' if reason == 'Unknown or null fact ID' else
                          'safety' if reason == 'Prohibited floor-status word' else
                          'number_match' if reason.startswith('Number ') else 'claim_check')
@@ -203,8 +203,9 @@ class LiveAgent:
                 issues[index] = reject(*lines[index], 'Claim-check count mismatch', 'invalid_schema')
         return issues
 
-    async def grounded(self, lines, dossier, deadline, *, step, attempt, impact=None):
-        issues = await self.grounded_each(lines, dossier, deadline, step=step, attempt=attempt, impact=impact)
+    async def grounded(self, lines, dossier, deadline, *, step, attempt, impact=None, quoted=None):
+        issues = await self.grounded_each(lines, dossier, deadline, step=step, attempt=attempt, impact=impact,
+                                          quoted=quoted)
         first = next((issue for issue in issues if issue is not None), None)
         if first:
             self.last_failure = first[1]
@@ -313,7 +314,8 @@ class LiveAgent:
                 impact = (housing_impact(impact_sqft) if impact_sqft and winner
                           and fake_agent.classify_use(winner.text) == 'housing' else None)
                 reason = await self.grounded([(proposal.reason_line, proposal.fact_ids)], dossier, deadline,
-                                             step='verdict', attempt=attempt, impact=impact)
+                                             step='verdict', attempt=attempt, impact=impact,
+                                             quoted=[p.text for p in safe])
                 if not reason:
                     break
                 if attempt:

@@ -157,11 +157,11 @@ async def test_snapshot_restores_after_restart(tmp_path):
     room = mgr.create("ABCD")
     a = await join(cmds, room, "Ann")
     await join(cmds, room, "Bo")
-    await cmds.handle({"type": "wake", "room": "ABCD", "player_id": a["player_id"], "building_id": "233899"}, "web")
+    await cmds.handle({"type": "wake", "room": "ABCD", "player_id": a["player_id"], "building_id": "233905"}, "web")
     mgr.close()
     mgr2, _ = make(tmp_path)
     back = mgr2.get("abcd")
-    assert back and back.phase == "INTRO" and back.building_id == "233899"
+    assert back and back.phase == "INTRO" and back.building_id == "233905"
     assert [p.nickname for p in back.players.values()] == ["Ann", "Bo"]
     assert all(not p.connected for p in back.players.values())
     assert mgr2.get("../x") is None  # room codes never reach the filesystem unchecked

@@ -276,7 +276,7 @@ async def test_intro_survives_pitch_snapshot_and_restart(game):
     assert back.phase == 'PITCH' and back.snapshot()['intro'] == intro
     await back.reset_round()
     assert back.snapshot()['intro'] is None
-    await back.start_round('233899')
+    await back.start_round('233905')
     assert back.snapshot()['intro'] != intro
     await back.reset_room()
     assert back.snapshot()['intro'] is None

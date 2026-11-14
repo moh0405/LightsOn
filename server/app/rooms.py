@@ -36,6 +36,26 @@ DEFAULT_DURATIONS: dict[Phase, float | None] = {
     "LOBBY": None, "EXPLORE": None, "INTRO": 8, "PITCH": 45, "CHALLENGE": 10,
     "NEGOTIATE": 30, "VERDICT": 10, "POWER_UP": 10, "REVIVED": 8,
 }
+# Demo preset (server env DEMO_MODE=1): shorter pitch and negotiate windows, polished buildings only.
+DEMO_DURATIONS: dict[Phase, float | None] = {"PITCH": 20, "NEGOTIATE": 15}
+DEFAULT_DEMO_BUILDINGS = "233953"  # Esperson, the building with a prepared persona
+
+
+def demo_mode() -> bool:
+    return (os.getenv("DEMO_MODE") or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def demo_building_ids() -> list[str]:
+    raw = os.getenv("DEMO_BUILDING_IDS") or DEFAULT_DEMO_BUILDINGS
+    return list(dict.fromkeys(x.strip() for x in raw.split(",") if x.strip()))
+
+
+def phase_durations(scale: float = 1.0, demo: bool | None = None) -> dict[Phase, float | None]:
+    """Phase timers: the defaults, with the demo preset applied when DEMO_MODE is on, then scaled."""
+    base = {**DEFAULT_DURATIONS, **(DEMO_DURATIONS if (demo_mode() if demo is None else demo) else {})}
+    return {phase: seconds * scale if seconds is not None else None for phase, seconds in base.items()}
+
+
 PLAYER_COLORS = ["#ff5d73", "#4cc9f0", "#ffd166", "#7bd88f"]
 MAX_PLAYERS = len(PLAYER_COLORS)
 ROOM_CODE_RE = re.compile(r"^[A-Z0-9]{4}$")
@@ -106,13 +126,19 @@ class Room:
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
 
     def wakeable_ids(self) -> list[str]:
+        """Buildings a player may wake now. Hero buildings need a prepared persona (an unprepared hero
+        would look broken on stage); context buildings only need dark floors. Demo mode wakes only the
+        demo buildings, and only once they are prepared."""
         try:
             provider = provider_for_mode(self.data_mode)
-            ids = list(dict.fromkeys(self.hero_ids + [b['id'] for b in provider.buildings()]))
+            demo = demo_mode()
+            ids = demo_building_ids() if demo else list(dict.fromkeys(self.hero_ids + [b['id'] for b in provider.buildings()]))
             return [bid for bid in ids if (d := provider.dossier(bid)) is not None
+                    and (d.get('persona') or (not demo and bid not in self.hero_ids))
                     and select_target_floors(d, set(self.revived.get(bid, {}).get('floors', [])))]
-        except (OSError, ValueError, sqlite3.Error):
-            return list(self.hero_ids)
+        except (OSError, ValueError, sqlite3.Error) as exc:
+            log.error('Wake list unavailable (%s)', type(exc).__name__)
+            return []
 
     # ---- views -------------------------------------------------------
     def snapshot(self) -> dict:
@@ -170,7 +196,7 @@ class Room:
     def can_wake(self, building_id: str) -> None:
         if self.phase != "EXPLORE":
             raise RoomError("wrong_phase", f"Cannot wake a building during {self.phase}.")
-        if building_id not in self.hero_ids and building_id not in self.wakeable_ids() and building_id not in self.revived:
+        if building_id not in self.wakeable_ids() and building_id not in self.revived:
             raise RoomError("unknown_building", "That building is not in this game.")
 
     async def start_round(self, building_id: str) -> None:
