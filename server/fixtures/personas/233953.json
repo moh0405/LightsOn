@@ -1,7 +1,7 @@
 {
   "building_id": "233953",
   "name": "Esperson",
-  "voice_style": "old-Houston art-deco pride, warm and investor-sharp",
+  "voice_style": "old-Houston art-deco pride, warm, theatrical, proud, sharp, witty, dry, hopeful",
   "voice_id": "",
   "mood_baseline": "proud",
   "desire_key": "night_life",
@@ -30,39 +30,26 @@
       "text": "For a typical single-floor pitch, fit within 22,189 square feet; show me your area budget."
     },
     {
-      "fact_ref": "F_233953_buildingHeightInFeet",
-      "constraint": "height",
-      "threshold": 297.0,
-      "unit": "ft",
-      "floor": null,
-      "applies_to": [],
-      "text": "I stand 297 feet tall; anything taller is a different building, darling."
-    },
-    {
-      "fact_ref": "F_233953_parkingRatio",
-      "constraint": "parking",
-      "threshold": 0.89,
-      "unit": "spaces_per_1000_sqft",
-      "floor": null,
-      "applies_to": [],
-      "text": "My parking ratio is 0.89 spaces per 1,000 square feet; tell me where the extra cars go."
-    },
-    {
-      "fact_ref": "F_233953_floor_7_available_sqft",
+      "fact_ref": "F_233953_dark_sqft",
       "constraint": "dark_area",
-      "threshold": 31503.0,
+      "threshold": 150365.0,
       "unit": "sqft",
-      "floor": 7,
+      "floor": null,
       "applies_to": [],
-      "text": "For floor 7, fit your pitch within 31,503 listed available square feet; show me what fits."
+      "text": "My dark floors list 150,365 available square feet in total; fit your plan inside that, darling."
     }
   ],
   "hard_limits_empty_reason": null,
   "backstory": [
     {
-      "text": "I made my entrance in 1941. Darling, bring me a plot twist and we might have a deal.",
+      "text": "I made my entrance in 1941. Pitch like you mean it, kid \u2014 I have been waiting long enough.",
       "fact_ref": "F_233953_construction_ConstructionComplete",
       "fiction": false
+    },
+    {
+      "text": "Sugar, some things arrive already knowing their worth.",
+      "fact_ref": null,
+      "fiction": true
     },
     {
       "text": "A renovation finished in 2014.",
@@ -70,24 +57,9 @@
       "fiction": false
     },
     {
-      "text": "I rise 27 stories.",
-      "fact_ref": "F_233953_numStoriesAboveGrade",
-      "fiction": false
-    },
-    {
-      "text": "My typical floor gives you 22,189 square feet.",
-      "fact_ref": "F_233953_grossTypicalFloorSquareFeet",
-      "fiction": false
-    },
-    {
-      "text": "8 dark floors, darling.",
-      "fact_ref": "F_233953_dark_floor_count",
-      "fiction": false
-    },
-    {
-      "text": "150,365 square feet across my dark floors await your pitch.",
-      "fact_ref": "F_233953_dark_sqft",
-      "fiction": false
+      "text": "A little polish never hurt a legend.",
+      "fact_ref": null,
+      "fiction": true
     },
     {
       "text": "I've known the professional scientific and technical services crowd.",
@@ -95,22 +67,47 @@
       "fiction": false
     },
     {
+      "text": "Clever company keeps a building sharp.",
+      "fact_ref": null,
+      "fiction": true
+    },
+    {
       "text": "I've known the financial institutions crowd.",
       "fact_ref": "F_233953_top_former_industry_3",
       "fiction": false
     },
     {
-      "text": "670 former tenancy entries; I still want a plot twist.",
-      "fact_ref": "F_233953_former_tenancy_records",
-      "fiction": false
-    },
-    {
-      "text": "I pretend not to care, but I am rooting for you.",
+      "text": "Money talks, darling, and I have heard every dialect.",
       "fact_ref": null,
       "fiction": true
     },
     {
-      "text": "Bring me a bold idea and let's make a deal.",
+      "text": "8 dark floors, darling.",
+      "fact_ref": "F_233953_dark_floor_count",
+      "fiction": false
+    },
+    {
+      "text": "That is not a problem \u2014 that is an invitation waiting on the right pitch.",
+      "fact_ref": null,
+      "fiction": true
+    },
+    {
+      "text": "150,365 square feet across my dark floors await your pitch.",
+      "fact_ref": "F_233953_dark_sqft",
+      "fiction": false
+    },
+    {
+      "text": "I am not asking for charity; I am offering opportunity.",
+      "fact_ref": null,
+      "fiction": true
+    },
+    {
+      "text": "I rise 27 stories.",
+      "fact_ref": "F_233953_numStoriesAboveGrade",
+      "fiction": false
+    },
+    {
+      "text": "Bring me a plot twist and we might have a deal.",
       "fact_ref": null,
       "fiction": true
     },
@@ -118,19 +115,14 @@
       "text": "My pride is expensive; your imagination had better be priceless.",
       "fact_ref": null,
       "fiction": true
-    },
-    {
-      "text": "I invest in nerve, not polite applause.",
-      "fact_ref": null,
-      "fiction": true
     }
   ],
-  "catchphrase": "Darling, bring me a plot twist and we might have a deal.",
-  "intro_line": "I made my entrance in 1941. Darling, bring me a plot twist and we might have a deal.",
+  "catchphrase": "Pitch like you mean it, kid \u2014 I have been waiting long enough.",
+  "intro_line": "I made my entrance in 1941. Pitch like you mean it, kid \u2014 I have been waiting long enough.",
   "signature_sound": "low brass",
   "neighbor_lines": {
-    "233899": "I am rooting for you, sweetheart, but save some applause for me.",
-    "233935": "I am proud of you, but keep that between us.",
-    "233918": "Save some applause for me."
+    "233899": "I feel a quiet rivalry stirring \u2014 the kind that keeps you on your toes.",
+    "233918": "Something about that neighbor makes me want to stand a little straighter.",
+    "233905": "I am rooting for them, even if I would never say it out loud."
   }
 }
