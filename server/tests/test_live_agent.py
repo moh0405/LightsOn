@@ -338,3 +338,49 @@ async def test_budget_and_socket_failures_remain_distinguishable(dossier, tmp_pa
         ledger.call(FAST, 10, 10, timeout, lambda _: {})
     assert expired.value.cause == 'timeout'
     assert ledger.snapshot()['calls'][-1]['status'] == 'unconfirmed'
+
+
+async def test_round_fallbacks_vary_and_keep_persona_and_desire(dossier):
+    from app.agent.prompts import persona_for
+    pitches = [pitch(player=f'p{i}') for i in range(4)]
+    agent = LiveAgent(model=Model([TimeoutError()]))
+    results = await agent.challenge(pitches, dossier)
+    assert len({c.line for c in results}) == len(results)
+    assert len({tuple(c.fact_ids) for c in results}) > 1
+    persona = persona_for(dossier)
+    assert all(persona['catchphrase'] in c.counteroffer for c in results)
+    assert all(check_line(c.line + ' ' + c.counteroffer, c.fact_ids, dossier) is None for c in results)
+    assert all('after sunset' in c.counteroffer for c in results)
+
+
+def test_fallback_prioritizes_triggered_limit_and_relevant_facts(dossier):
+    impossible = fake_agent.challenge(pitch('I need 9000000 square feet on a single floor for a restaurant.'), dossier)
+    assert impossible.fact_ids == ['F_233953_grossTypicalFloorSquareFeet']
+    assert '22,189' in impossible.line
+    assert dossier['persona']['catchphrase'] in impossible.counteroffer
+    housing = fake_agent.challenge(pitch('Homes where everyone can live'), dossier)
+    assert all('parking' not in fid for fid in housing.fact_ids)
+
+
+async def test_batched_challenges_accept_voice_and_hypothetical_counteroffers(dossier):
+    from app.agent.prompts import persona_for
+    from app.agent.persona import fact_line
+    fact = next(f for f in dossier['facts'] if f['key'] == 'grossTypicalFloorSquareFeet')
+    pitches = [pitch(player=f'p{i}') for i in range(4)]
+    calls = []
+    def model(step, system, content, schema, timeout):
+        calls.append(step)
+        if step == 'challenge':
+            assert all(f'player="{p.player_id}"' in content for p in pitches)
+            assert fact['say_as'] in system and fact_line(fact) in system
+            assert persona_for(dossier)['voice_style'] in system
+            return {'challenges': [dict(player_id=p.player_id,
+                line=f"Sugar, I have standards. {fact_line(fact)}", fact_ids=[fact['id']],
+                counteroffer='Could your studio welcome neighbors after sunset?', category_guess='work') for p in pitches]}
+        assert step == 'claim_check'
+        assert 'Fictional mood' in system and 'hypothetical counteroffers' in system
+        return {'checks': [{'supported': True, 'reason': ''} for _ in pitches]}
+    agent = LiveAgent(model=model)
+    result = await agent.challenge(pitches, dossier)
+    assert calls == ['challenge', 'claim_check']
+    assert agent.fallbacks == 0 and len(result) == 4
