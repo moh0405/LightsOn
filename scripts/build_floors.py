@@ -11,6 +11,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def footprint_for(dossier, city):
+    if dossier.get('footprint') and dossier['footprint'].get('coordinates'):
+        geom = dict(type=dossier['footprint'].get('type', 'Polygon'),
+                    coordinates=dossier['footprint']['coordinates'])
+        return geom, dossier['footprint'].get('source', 'vexcel')
     point = Point(dossier['lng'], dossier['lat'])
     matches = [f['geometry'] for f in city['features'] if shape(f['geometry']).covers(point)]
     if matches:

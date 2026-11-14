@@ -40,7 +40,7 @@ def test_floor_artifact_contract(tmp_path):
         assert p['height_m'] > p['base_m'] >= 0
         assert feature['geometry']['type'] == 'Polygon'
         assert shape(feature['geometry']).is_valid
-        assert feature['footprint_source'] in {'osm', 'approx'}
+        assert feature['footprint_source'] in {'vexcel', 'osm', 'approx'}
     for number in [6, 7, 8]:
         floor = next(f for f in result['features'] if f['properties']['building_id'] == '233953'
                      and f['properties']['floor_number'] == number)
@@ -53,11 +53,15 @@ def test_floor_artifact_contract(tmp_path):
 def test_approximate_footprint_is_explicit():
     builder = load_script('build_floors')
     dossier = json.loads((DEFAULT_DOSSIERS / '233953.json').read_text())
-    geometry, source = builder.footprint_for(dossier, {'features': []})
+    geom, src = builder.footprint_for(dossier, {'features': []})
+    assert src == 'vexcel'
+
+    dossier_no_fp = {**dossier, 'footprint': None}
+    geometry, source = builder.footprint_for(dossier_no_fp, {'features': []})
     assert source == 'approx'
     assert shape(geometry).covers(Point(dossier['lng'], dossier['lat']))
     actual = {'geometry': geometry}
-    assert builder.footprint_for(dossier, {'features': [actual]}) == (geometry, 'osm')
+    assert builder.footprint_for(dossier_no_fp, {'features': [actual]}) == (geometry, 'osm')
 
 
 def test_osm_export_and_height():

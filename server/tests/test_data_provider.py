@@ -42,9 +42,12 @@ def test_fact_provenance():
         assert len(ids) == len(set(ids))
         for fact in dossier['facts']:
             assert set(fact) == required
-            assert fact['source'] == 'costar'
+            assert fact['source'] in {'costar', 'vexcel+vision'}
         assert {fid for floor in dossier['floors'] for fid in floor['fact_ids']} <= set(ids)
-        assert dossier['media']['aerial']['ortho'] is None
+        if dossier['id'] in {'233953', '233899'}:
+            assert dossier['media']['aerial']['ortho'] == f"/media/{dossier['id']}/ortho.jpg"
+        else:
+            assert dossier['media']['aerial']['ortho'] is None
 
 
 def test_invalid_mode(monkeypatch):
