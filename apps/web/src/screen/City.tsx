@@ -8,6 +8,8 @@ import { floorColorExpression } from "../lib/floor-colors";
 import { getData, prefetchDossiers, type Building } from "../lib/buildings";
 import { useGame } from "../lib/store";
 import { HoverCard } from "./overlays/HoverCard";
+import { Sparks } from "./Sparks";
+import { FLASH_MS, firstFloorAt, INTRO_DIVE_MS, lightUpDuration } from "./effects";
 
 declare global { interface Window { __lightsOnMap?: CityMap } }
 const CENTER: [number, number] = [-95.3650891, 29.7588018];
@@ -73,6 +75,8 @@ export function City() {
         setReady(true);
       });
     });
+    const resize = new ResizeObserver(() => map.resize());
+    resize.observe(container.current!);
     let last = performance.now();
     const orbit = setInterval(() => {
       const now = performance.now();
@@ -80,7 +84,7 @@ export function City() {
       last = now;
     }, 100);
     return () => {
-      active = false; clearInterval(orbit); mapRef.current = null;
+      active = false; resize.disconnect(); clearInterval(orbit); mapRef.current = null;
       if (window.__lightsOnMap === map) delete window.__lightsOnMap;
       map.remove();
     };
@@ -91,9 +95,9 @@ export function City() {
     if (!ready || !map) return;
     if (buildingId) {
       const building = buildings.find((b) => String(b.id) === buildingId);
-      if (building?.lng != null && building.lat != null) map.flyTo({ center: [building.lng, building.lat], zoom: 17.5, pitch: 60, duration: 2500, essential: true });
+      if (building?.lng != null && building.lat != null) map.flyTo({ center: [building.lng, building.lat], zoom: 17.5, pitch: 60, duration: INTRO_DIVE_MS, essential: true });
     } else if (phase === "EXPLORE" || phase === "LOBBY") {
-      map.flyTo({ center: CENTER, zoom: 15.5, pitch: 60, duration: 2500, essential: true });
+      map.flyTo({ center: CENTER, zoom: 15.5, pitch: 60, duration: INTRO_DIVE_MS, essential: true });
     }
   }, [buildingId, buildings, ready, phase === "EXPLORE" || phase === "LOBBY"]);
 
@@ -104,7 +108,10 @@ export function City() {
     const update = () => {
       const next: Hover[] = [];
       for (const [player, p] of Object.entries(current.current.pointers)) {
-        const feature = map.queryRenderedFeatures([p.x * map.getCanvas().clientWidth, p.y * map.getCanvas().clientHeight], { layers: ["floors"] })[0];
+        // The visible beam is 22 px wide. A small hit area keeps its edge
+        // responsive while the attract camera orbits and touch rounds pixels.
+        const x = p.x * map.getCanvas().clientWidth, y = p.y * map.getCanvas().clientHeight;
+        const feature = map.queryRenderedFeatures([[x - 6, y - 6], [x + 6, y + 6]], { layers: ["floors"] })[0];
         const building = feature?.properties?.building_id as string | undefined;
         const layer = `hover-${player}`;
         if (!map.getLayer(layer)) map.addLayer({ id: layer, type: "line", source: "floors", filter: ["==", ["get", "building_id"], ""], paint: { "line-color": p.color, "line-width": 3, "line-offset": -3 } });
@@ -126,29 +133,47 @@ export function City() {
   useEffect(() => {
     const map = mapRef.current;
     if (!ready || !map?.getLayer("floors")) return;
-    const target = buildings.find((b) => String(b.id) === revival?.building_id);
-    setFlashPoint(target?.lng != null && target.lat != null ? map.project([target.lng, target.lat]) : null);
     map.setPaintProperty("floors", "fill-extrusion-color-transition", { duration: 0 });
     let frame = 0;
     const paint = () => {
       // Paint and scheduling must share one clock read so the final frame
       // cannot be dropped when the deadline is crossed during setPaintProperty.
       const now = Date.now();
-      map.setPaintProperty("floors", "fill-extrusion-color", floorColorExpression(revivedColors, revival ?? undefined, now));
-      if (revival && now - revival.at < 600 + Math.max(0, revival.floors.length - 1) * 60) frame = requestAnimationFrame(paint);
+      map.setPaintProperty("floors", "fill-extrusion-color", floorColorExpression(revivedColors, revival ? { ...revival, at: firstFloorAt(revival.at) } : undefined, now));
+      if (revival && now - revival.at < lightUpDuration(revival.floors)) frame = requestAnimationFrame(paint);
     };
     paint();
     return () => cancelAnimationFrame(frame);
   }, [revivedColors, revival, ready, buildings]);
 
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!ready || !map) return;
+    const target = buildings.find((b) => String(b.id) === (revival?.building_id ?? buildingId));
+    const project = () => {
+      const point = target?.lng != null && target.lat != null ? map.project([target.lng, target.lat]) : null;
+      setFlashPoint((old) => old?.x === point?.x && old?.y === point?.y ? old : point);
+    };
+    project(); map.on("move", project);
+    return () => { map.off("move", project); };
+  }, [buildingId, revival, ready, buildings]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!revival || !ready || !map) return;
+    const timer = setTimeout(() => map.easeTo({ zoom: 16.5, pitch: 60, duration: 1800 }), lightUpDuration(revival.floors));
+    return () => clearTimeout(timer);
+  }, [revival, ready]);
+
   return <>
     {error && <div role="alert" style={{ padding: 10, background: "#5a3b00" }}>{error}</div>}
-    <div data-testid="field" data-facts-ready={ready && factsReady} style={{ position: "relative", height: "65vh", minHeight: 360, borderRadius: 12, overflow: "hidden", background: "#10131c" }}>
-      {revival && flashPoint && <div key={revival.at} aria-hidden="true" style={{ position: "absolute", top: flashPoint.y, left: flashPoint.x - 32, width: 64, height: 24, zIndex: 1, background: "white", filter: "blur(18px)", animation: "city-flash 200ms forwards", pointerEvents: "none" }} />}
+    <div data-testid="field" className="city-field" data-facts-ready={ready && factsReady} style={{ position: "relative", height: "100%", minHeight: 0, borderRadius: 12, overflow: "hidden", background: "#10131c" }}>
+      {revival && flashPoint && <div key={revival.at} data-testid="revival-flash" data-soft={revival.auto_completed} aria-hidden="true" style={{ position: "absolute", top: flashPoint.y, left: flashPoint.x - 32, width: 64, height: 24, zIndex: 1, background: revival.auto_completed ? "#ffffff40" : "white", filter: "blur(18px)", animation: `city-flash ${FLASH_MS}ms forwards`, pointerEvents: "none" }} />}
       <style>{`@keyframes city-flash { from { opacity: 0.9 } to { opacity: 0 } }`}</style>
       <div ref={container} style={{ position: "absolute", inset: 0 }} />
+      <Sparks target={flashPoint} />
       {Object.entries(pointers).map(([id, p]) => <div key={id} data-testid="dot" style={{ pointerEvents: "none", position: "absolute", left: `${p.x * 100}%`, top: `${p.y * 100}%`, width: 22, height: 22, marginLeft: -11, marginTop: -11, borderRadius: "50%", background: p.color, boxShadow: `0 0 16px 6px ${p.color}`, transition: "left 60ms linear, top 60ms linear" }}>
-        <span style={{ position: "absolute", top: 26, fontSize: 12 }}>{players[id]?.nickname}</span>
+        <span style={{ position: "absolute", top: 26, fontSize: 28 }}>{players[id]?.nickname}</span>
       </div>)}
       <div style={{ position: "absolute", left: 16, top: 16, display: "grid", gap: 8, pointerEvents: "none" }}>
         {hovers.map((h) => <HoverCard key={`${dataMode}-${h.player}-${h.building}`} id={h.building} color={h.color} onError={factError} />)}
