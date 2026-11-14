@@ -59,7 +59,8 @@ def intro(dossier: dict) -> dict:
     text = "Bring me an idea. Let's make a deal."
     if fact:
         text = f"My dossier records {fact['key']}: {fact['say_as']}. {text}"
-    return {'text': text, 'audio_url': None,
+    text = (dossier.get('persona') or {}).get('intro_line') or text
+    return {'text': text, 'audio_url': dossier.get('intro_audio_url'),
             'mood': (dossier.get('persona') or {}).get('mood_baseline', 'hopeful')}
 
 

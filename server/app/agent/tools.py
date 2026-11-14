@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 from pathlib import Path
 
 from ..data import matterport, vexcel
@@ -49,7 +50,10 @@ class BuildingTools:
         self.facts = []
         for fact in self.dossier['facts']:
             key = fact['key']
-            if key in PROPERTY_KEYS | HISTORY_KEYS | {'matterport_models'} or key.startswith(('construction_', 'floor_')):
+            if (key in PROPERTY_KEYS | HISTORY_KEYS | {'matterport_models'}
+                    or re.fullmatch(r'floor_(?:-?\d+|id_\d+)_(?:size|available|occupied)_sqft', key)
+                    or key in {'construction_ConstructionComplete', 'construction_RenovationFinished',
+                               'construction_CommonAreaRenovated'}):
                 self.facts.append({k: fact.get(k) for k in
                     ('id', 'key', 'value', 'unit', 'source', 'source_field', 'kind', 'say_as')})
         path = ROOT / f'server/fixtures/vexcel/{property_id}.json'

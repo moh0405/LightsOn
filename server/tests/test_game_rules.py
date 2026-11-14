@@ -143,7 +143,17 @@ def test_keyword_classifier(text, category):
 
 
 def test_fake_agent_is_deterministic_grounded_and_rewards_counteroffer(dossier):
-    p = pitch(text='A gaming arena')
+    # Test the chosen hidden desire, which can now come from a prepared persona.
+    matching = {
+        'public_ground_floor': 'A shared space open to everyone',
+        'people_living_here': 'Housing and apartments',
+        'night_life': 'A night concert',
+        'feed_the_block': 'A food market',
+        'make_things': 'A maker studio',
+        'be_famous_again': 'An art gallery and culture space',
+    }
+    desire_key = (dossier.get('persona') or {}).get('desire_key', 'public_ground_floor')
+    p = pitch(text='An idea for this building')
     city = City()
     assert fake_agent.intro(dossier) == fake_agent.intro(dossier)
     challenge = fake_agent.challenge(p, dossier)
@@ -153,7 +163,7 @@ def test_fake_agent_is_deterministic_grounded_and_rewards_counteroffer(dossier):
     assert all(facts[fid]['say_as'] in challenge.line for fid in challenge.fact_ids)
     original = fake_agent.verdict([p], dossier, city)
     assert original == fake_agent.verdict([p], dossier, city)
-    revised = fake_agent.verdict([pitch(text='A gaming arena with a shared space open to everyone')], dossier, city)
+    revised = fake_agent.verdict([pitch(text=matching[desire_key])], dossier, city)
     assert revised.scores[0].neighborhood_fit > original.scores[0].neighborhood_fit
     assert set(original.fact_ids) <= facts.keys()
     empty = deepcopy(dossier)

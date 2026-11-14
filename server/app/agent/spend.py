@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Callable, TypeVar
 
 from langchain_aws import ChatBedrockConverse
+from langsmith import tracing_context
 
 log = logging.getLogger(__name__)
 ROOT = Path(__file__).resolve().parents[3]
@@ -29,7 +30,7 @@ class SpendUnavailable(RuntimeError):
 
 class SpendLedger:
     def __init__(self, path: Path | None = None, cap: float | None = None):
-        self.path = path or ROOT / 'server/state/bedrock_spend.json'
+        self.path = (path or ROOT / 'server/state/bedrock_spend.json').resolve()
         self.cap = float(os.getenv('BEDROCK_SPEND_CAP_USD', '3.00')) if cap is None else cap
         if not math.isfinite(self.cap) or not 0 <= self.cap <= 3:
             raise SpendUnavailable('Spend cap must be between zero and $3.')
@@ -97,12 +98,21 @@ class CappedBedrockConverse(ChatBedrockConverse):
     """Every supervisor/subagent request, including tool-bound copies, is metered."""
     spend_path: Path = ROOT / 'server/state/bedrock_spend.json'
 
+    def invoke(self, *args, **kwargs):
+        with tracing_context(enabled=bool(os.getenv('LANGSMITH_API_KEY'))):
+            return super().invoke(*args, **kwargs)
+
+    async def ainvoke(self, *args, **kwargs):
+        with tracing_context(enabled=bool(os.getenv('LANGSMITH_API_KEY'))):
+            return await super().ainvoke(*args, **kwargs)
+
     def _generate(self, messages, stop=None, run_manager=None, **kwargs):
         # UTF-8 byte length is a conservative token bound; include tool schemas and overhead.
-        payload = json.dumps([m.model_dump() for m in messages], default=str) + json.dumps(kwargs, default=str)
+        payload = (json.dumps([m.model_dump() for m in messages], default=str)
+                   + json.dumps(kwargs, default=str) + json.dumps(self.system, default=str))
         bound = len(payload.encode('utf-8')) + 8192
         return SpendLedger(self.spend_path).call(
-            self.model_id, bound, self.max_tokens or 4096,
+            self.model_id, bound, kwargs.get('max_tokens', kwargs.get('maxTokens', self.max_tokens or 4096)),
             lambda: super(CappedBedrockConverse, self)._generate(messages, stop, run_manager, **kwargs),
             lambda result: result.generations[0].message.usage_metadata or {},
         )
