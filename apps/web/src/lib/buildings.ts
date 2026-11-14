@@ -6,7 +6,7 @@ export interface Building {
 export interface Dossier {
   id: string; name: string | null; stories: number | null;
   floors: { number: number; available_sqft: number | null; source_status: Status }[] | null;
-  facts: { key: string; value: unknown; say_as: string | null }[] | null;
+  facts: { id?: string; key: string; value: unknown; say_as: string | null }[] | null;
 }
 /** Local data requests time out; callers own their visible fallback. */
 export async function getData<T>(url: string): Promise<T> {

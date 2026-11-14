@@ -4,6 +4,7 @@ import { CommandError } from "../lib/ws";
 import { safeGet, safeSet, useGame, useRoomSocket } from "../lib/store";
 import { ConnBanner, ErrorToast, PhaseBadge, button, input, page } from "../lib/ui";
 import { requestSensors } from "./pointer";
+import { Pitch, PowerUp, Result } from "./Round";
 import { Explore } from "./Explore";
 
 const playerKey = (room: string) => `lo.player.${room}`;
@@ -16,7 +17,7 @@ export function PlayApp() {
   const idRef = useRef(playerId);
   idRef.current = playerId;
   const sock = useRoomSocket(room, "play", () => idRef.current);
-  const { players, hasState, phase, conn } = useGame();
+  const { players, hasState, phase, conn, roundId, counteroffers } = useGame();
 
   useEffect(() => {
     if (room) safeSet("lo.room", room);
@@ -63,7 +64,11 @@ export function PlayApp() {
           {phase === "EXPLORE" ? (
             <Explore sock={sock} color={me.color} sensors={sensors} />
           ) : (
-            <p>{phase === "LOBBY" ? "Waiting for another player…" : "Round in progress. Watch the big screen."}</p>
+            phase === "PITCH" || phase === "NEGOTIATE" ? <Pitch key={`${roundId}-${phase}`} sock={sock} playerId={me.id} revision={phase === "NEGOTIATE"} /> :
+            phase === "POWER_UP" ? <PowerUp sock={sock} color={me.color} /> :
+            phase === "VERDICT" || phase === "REVIVED" ? <Result playerId={me.id} /> :
+            phase === "CHALLENGE" ? <section><h1>The city fights back</h1><p>{counteroffers[me.id]?.counteroffer ?? "The building is considering your pitch…"}</p><p>Get ready for one revision.</p></section> :
+            <p>{phase === "LOBBY" ? "Waiting for another player…" : "Meet the building on the big screen."}</p>
           )}
         </>
       )}

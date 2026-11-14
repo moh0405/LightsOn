@@ -54,7 +54,7 @@ describe("round events", () => {
     expect(reduce(initialGame, intro).intro).toEqual(intro);
     const pitch = { type: "pitch_received" as const, player_id: "p1", text: "A community art space", origin: "web" as const };
     const first = { ...initialGame, ...reduce(initialGame, pitch) };
-    expect(reduce(first, { ...pitch, text: "A public art space" }).pitches?.p1.text).toBe("A public art space");
+    expect(reduce(first, { ...pitch, text: "A public art space" }).pitches?.p1?.text).toBe("A public art space");
     const offer = { type: "counteroffer" as const, player_id: "p1", line: "Tell me more", counteroffer: "Who can join?", fact_ids: [], audio_url: null };
     expect(reduce(first, offer).counteroffers?.p1).toEqual(offer);
     const verdict = { type: "verdict" as const, round_id: "R1", winner_player_id: "p1", scores: [], reason_line: "I'm in.", fact_ids: [], category: "culture" as const, desire_met: false, desire_reveal: "", impact: null };
