@@ -679,3 +679,17 @@ def test_parking_limit_may_target_only_justified_categories():
     assert not limit_applies(narrowed, 'Apartments with 3 parking spaces per 1,000 sq ft', 'housing')
     with pytest.raises(ValueError):
         validate_persona({**persona, 'hard_limits': persona['hard_limits'][:1] + [{**parking, 'threshold': 5.0}]}, dossier)
+
+
+def test_challenge_keeps_narrowed_parking_limit_narrow():
+    from app.agent.fake_agent import challenge
+    from app.agent.persona import fake_persona, physical_limits
+    dossier = source_dossier()
+    persona = fake_persona(dossier).model_dump()
+    parking = next(l for l in physical_limits(dossier) if l['constraint'] == 'parking')
+    persona['hard_limits'] = [l for l in persona['hard_limits'] if l['constraint'] != 'parking'][:1] + [{**parking, 'applies_to': ['entertainment']}]
+    dossier['persona'] = persona
+    housing = challenge(pitch('Apartments with 3 parking spaces per 1,000 sq ft'), dossier)
+    assert parking['fact_ref'] not in housing.fact_ids and housing.line != parking['text']
+    hall = challenge(pitch('A concert hall with 3 parking spaces per 1,000 sq ft'), dossier)
+    assert hall.fact_ids == [parking['fact_ref']] and hall.line == parking['text']

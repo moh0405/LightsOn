@@ -72,7 +72,9 @@ def challenge(pitch: Pitch, dossier: dict) -> Challenge:
     counteroffer = f"Show me this in your plan: {desire(dossier)}"
     # The building's own limits first, then any other validated limit. A limit is used
     # only when the pitch states a number beyond its cited fact; a category alone proves nothing.
-    limits = ((dossier.get('persona') or {}).get('hard_limits') or []) + physical_limits(dossier)
+    own = (dossier.get('persona') or {}).get('hard_limits') or []
+    # A fallback limit is skipped when the persona already narrowed the same fact.
+    limits = own + [l for l in physical_limits(dossier) if l['fact_ref'] not in {o['fact_ref'] for o in own}]
     facts = {f['id']: f for f in dossier.get('facts', [])}
     for limit in limits:
         if limit['fact_ref'] in facts and limit_applies(limit, pitch.text, category):
