@@ -191,7 +191,10 @@ CLAIM_PATTERNS = [
     ('history', _W('was', 'were', "wasn't", "weren't", 'used to', 'had been', 'once', 'back in', 'back when',
                    'in my day', 'ago', 'since', 'years?', 'decades?', 'centur(?:y|ies)', 'built', 'constructed',
                    'completed', 'opened', r'renovat\w*', 'restored', 'founded', 'designed', 'erected',
-                   r'histor\w*', 'landmarks?', 'famous', 'heyday')),
+                   r'histor\w*', 'landmarks?', 'famous', 'heyday',
+                   # Bare past-tense event verbs state history without was/used to.
+                   'hosted', 'housed', 'dined', 'welcomed', 'employed', 'boasted', 'towered', 'stood', 'ruled',
+                   'sheltered', 'launched', 'anchored', 'hosting', 'galas?', 'kings?', 'queens?')),
     ('physical', _W('floors?', 'stor(?:ey|eys)', 'lobb(?:y|ies)', 'roofs?', 'rooftops?', 'pools?', 'basements?',
                     'garages?', 'parking', 'elevators?', 'lifts', 'windows?', 'fa[cç]ades?', 'terraces?',
                     r'balcon\w+', 'gardens?', 'atri(?:um|a)', 'ceilings?', 'walls?', 'brick', 'marble', 'granite',
@@ -204,7 +207,12 @@ CLAIM_PATTERNS = [
                    'empty', 'oil', 'gas', r'banks?', r'bankers?', r'lawyers?', 'law firms?', 'energy', 'insurance')),
 ]
 DENY = re.compile(r'\b(?:vacant|dossier|database|records show|property type|source_field)\b', re.I)
-SELF = {'I', "I'm", "I've", "I'll", "I'd"}
+SELF = {'I', "I'm", "I've", "I'll", "I'd", 'My'}
+# Sentence openers that are ordinary words, not names. Anything else capitalised is a proper noun.
+OPENERS = {w.casefold() for w in '''A An And Are As At Bold Bring But Can Come Darling Do Does Every Everyone For Give Go Good
+Great Hey Honey How If In Is It Just Kid Let Let's Listen Look More No Not Now Oh Okay Please Pitch Show So Sweetheart
+That That's The Then There These This Those To Tell Try Well What When Why Will Yes You Your Bring Make Save Earn Charm
+Bustle Ambition Pride Imagination Spotlight Honestly Maybe Perhaps Trust Nothing Nobody Some Keep Sugar Dollface Put Cool Skip Big Am On Surprise Hotshot Baby Pal Doll Buddy Champ Half Clever Money Something Anything Everything Everybody Anyone Someone Most Many Time Old New Small Timid Real Big Fortune Nerve Style Taste Class Wit Grit Heart Dreams Dream Ideas Idea Charm Courage Confidence Boldness Swagger Flattery Applause'''.split()}
 
 
 def fiction_claim(text: str, names: tuple[str, ...] = ()) -> str | None:
@@ -222,8 +230,11 @@ def fiction_claim(text: str, names: tuple[str, ...] = ()) -> str | None:
         return 'symbols'
     allowed = {word for name in names for word in re.findall(r"[A-Za-z']+", name)}
     for sentence in re.split(r'(?<=[.!?])\s+', text.strip()):
-        # Capitalised words after the first are names (tenants, places, companies).
-        for word in re.findall(r"[A-Za-z'’]+", sentence)[1:]:
+        # Capitalised words are names (tenants, places, companies); the first word is
+        # exempt only when it is the speaker (I/My) or an ordinary sentence opener.
+        for i, word in enumerate(re.findall(r"[A-Za-z'’]+", sentence)):
+            if i == 0 and word.casefold() in OPENERS:
+                continue
             if word[0].isupper() and word not in SELF and word not in allowed:
                 return 'proper noun'
     for reason, pattern in CLAIM_PATTERNS[2:]:

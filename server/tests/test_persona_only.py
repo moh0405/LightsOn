@@ -94,7 +94,7 @@ IN_CHARACTER = [
 ]
 UNCITED_CLAIMS = [
     ('I was the tallest address downtown.', 'history'),
-    ('Oil barons used to fill me up.', 'history'),
+    ('Oil barons used to fill me up.', 'proper noun'),
     ('Back in the forties I hosted galas.', 'number'),
     ('Two hundred lawyers worked here.', 'number'),
     ('Shell and Exxon both loved me, darling.', 'proper noun'),
@@ -102,6 +102,10 @@ UNCITED_CLAIMS = [
     ('My art-deco bones still shine.', 'architecture'),
     ('Half my tenants left last spring.', 'tenancy'),
     ('I opened in 1941.', 'number'),
+    ('Exxon adored me, darling.', 'proper noun'),
+    ('Texaco loved me.', 'proper noun'),
+    ('I hosted the grandest galas in town.', 'history'),
+    ('Kings dined in my shadow.', 'proper noun'),
 ]
 
 
