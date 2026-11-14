@@ -715,3 +715,137 @@ def test_failed_forced_prep_keeps_previous_trusted_cache(tmp_path, monkeypatch, 
     assert (dossier_path.read_text(), persona_path.read_text()) == before
     monkeypatch.undo()
     assert prep_agent.read_cached_building(PID, provider=kwargs['provider'], cache=kwargs['cache']) == first
+
+
+@pytest.mark.parametrize('text', ['A mural 300 ft wide', 'A 400 ft long indoor running track',
+                                  'A 350-foot-long banquet table', 'A plaza 500 ft by 400 ft',
+                                  'A 320 ft deep aquarium tunnel stretching across the block',
+                                  'A 600-foot zipline across the street'])
+def test_horizontal_feet_never_trigger_the_height_limit(text):
+    from app.agent.fake_agent import challenge
+    from app.agent.persona import fake_persona, limit_applies, physical_limits
+    dossier = source_dossier()
+    dossier['persona'] = fake_persona(dossier).model_dump()
+    height = next(l for l in physical_limits(dossier) if l['constraint'] == 'height')
+    assert not limit_applies(height, text, 'entertainment')
+    assert challenge(pitch(text), dossier).line != height['text']
+
+
+@pytest.mark.parametrize('text', ['A 350 ft tall spire', 'A sculpture rising 400 feet', 'A 300-foot-high light tower',
+                                  'An antenna 310 feet in height'])
+def test_vertical_feet_trigger_the_height_limit(text):
+    from app.agent.persona import fake_persona, limit_applies, physical_limits
+    dossier = source_dossier()
+    height = next(l for l in physical_limits(dossier) if l['constraint'] == 'height')
+    assert limit_applies(height, text, 'entertainment')
+
+
+def _boundary_text(limit, value):
+    n = f'{value:,.2f}'.rstrip('0').rstrip('.')
+    return {
+        'floor_plate': f'A single floor studio needing {n} sq ft',
+        'dark_area': (f'A studio on floor {limit["floor"]} needing {n} sq ft' if limit.get('floor') is not None
+                      else f'A {n} sq ft market across my dark floors'),
+        'stories': f'A {n}-story vertical farm',
+        'height': f'A spire {n} ft tall',
+        'parking': f'A food hall with {n} parking spaces per 1,000 sq ft',
+    }[limit['constraint']]
+
+
+def _every_limit():
+    from app.agent.persona import physical_limits
+    return physical_limits(source_dossier())
+
+
+@pytest.mark.parametrize('offset,fires', [(-1, False), (0, False), (1, True)])
+@pytest.mark.parametrize('index', range(13))
+def test_every_limit_is_strict_at_its_threshold(index, offset, fires):
+    from app.agent.fake_agent import challenge
+    from app.agent.persona import fake_persona, limit_applies
+    limits = _every_limit()
+    assert len(limits) == 13 and {l['constraint'] for l in limits} == {'floor_plate', 'dark_area', 'stories', 'height', 'parking'}
+    limit = limits[index]
+    step = 0.01 if limit['constraint'] == 'parking' else 1
+    text = _boundary_text(limit, limit['threshold'] + offset * step)
+    assert limit_applies(limit, text, 'food_retail') is fires, text
+    dossier = source_dossier()
+    dossier['persona'] = {**fake_persona(dossier).model_dump(), 'hard_limits': [limit]}
+    reply = challenge(pitch(text), dossier)
+    assert (reply.line == limit['text'] and reply.fact_ids == [limit['fact_ref']]) is fires, text
+
+
+def test_inner_scout_tool_events_carry_their_owner(tmp_path):
+    from app.agent.prep_agent import prep_building
+    from app.data.provider import provider_for_mode
+    events = []
+    prep_building(PID, provider=provider_for_mode('fixtures'), model=scripted_model(source_dossier()),
+                  cache=tmp_path / 'cache', personas=tmp_path / 'personas', emit=events.append)
+    owners = {}
+    for event in events:
+        owners.setdefault(event['tool'], set()).add(event['step'])
+    for tool in ['kit_get_building', 'kit_get_floor_status', 'kit_get_tenant_history', 'kit_get_matterport_models']:
+        assert owners[tool] == {'property_scout'}, tool
+    for tool in ['vexcel_property', 'vexcel_imagery', 'vexcel_detect', 'matterport_get_model']:
+        assert owners[tool] == {'spatial_scout'}, tool
+    assert owners['read_file'] == {'persona_writer'}
+    assert owners['task'] == {'property_scout', 'spatial_scout', 'persona_writer'}
+    inner_writes = [e['step'] for e in events if e['tool'] == 'write_file']
+    assert sorted(inner_writes) == ['persona_writer', 'property_scout', 'spatial_scout']
+
+
+@pytest.mark.parametrize('failure,status,code', [(ValueError('secret grounding detail'), 422, 'prep_grounding_failed'),
+                                                 (RuntimeError('secret upstream detail'), 503, 'prep_unavailable')])
+def test_prep_failures_toast_without_leaking_exception_text(monkeypatch, tmp_path, failure, status, code):
+    from fastapi.testclient import TestClient
+    from app.main import app
+    from app.agent import prep_agent
+    monkeypatch.setenv('STATE_DIR', str(tmp_path))
+    monkeypatch.setenv('DATA_MODE', 'fixtures')
+    monkeypatch.setenv('HOST_PIN', 'test-host')
+    def prepare(pid, force, **kwargs):
+        raise failure
+    floors = []
+    monkeypatch.setattr(prep_agent, 'prep_building', prepare)
+    monkeypatch.setattr(prep_agent, 'finalize_floors', lambda: floors.append(1))
+    with TestClient(app) as client:
+        room = client.post('/api/rooms').json()['room']
+        with client.websocket_connect(f'/ws/{room}?role=screen') as ws:
+            assert ws.receive_json()['type'] == 'room_state'
+            response = client.post(f'/api/buildings/{PID}/prep?force=true', headers={'X-Host-Pin': 'test-host'})
+            assert response.status_code == status
+            event = ws.receive_json()
+    assert event['type'] == 'error' and event['code'] == code and event['message']
+    assert 'secret' not in json.dumps(event) + response.text
+    assert floors == []
+
+
+def test_http_forced_prep_rebuilds_floor_artifacts_only_when_ready(monkeypatch, tmp_path):
+    from fastapi.testclient import TestClient
+    from app.main import app
+    from app.agent import prep_agent
+    from app.agent.persona import fake_persona
+    monkeypatch.setenv('STATE_DIR', str(tmp_path))
+    monkeypatch.setenv('DATA_MODE', 'fixtures')
+    monkeypatch.setenv('HOST_PIN', 'test-host')
+    status = ['ready']
+    def prepare(pid, force, **kwargs):
+        dossier = source_dossier()
+        return {**dossier, 'persona': fake_persona(dossier).model_dump(), 'prep_status': status[0]}
+    floors = []
+    monkeypatch.setattr(prep_agent, 'prep_building', prepare)
+    monkeypatch.setattr(prep_agent, 'finalize_floors', lambda: floors.append(1))
+    with TestClient(app) as client:
+        headers = {'X-Host-Pin': 'test-host'}
+        assert client.post(f'/api/buildings/{PID}/prep?force=true', headers=headers).status_code == 200
+        assert floors == [1]
+        status[0] = 'unavailable'
+        assert client.post(f'/api/buildings/{PID}/prep?force=true', headers=headers).status_code == 200
+        assert floors == [1]
+
+
+def test_finalize_floors_matches_the_committed_floor_artifact(tmp_path):
+    from app.agent import prep_agent
+    out = tmp_path / 'floors.geojson'
+    prep_agent.finalize_floors(output=out)
+    committed = prep_agent.ROOT / 'apps/web/public/floors.geojson'
+    assert json.loads(out.read_text()) == json.loads(committed.read_text())

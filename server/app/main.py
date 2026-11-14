@@ -104,17 +104,30 @@ async def prepare_building(property_id: str, request: Request, force: bool = Fal
             await room.broadcast('agent_step', event, to='screen')
     def emit(event):
         asyncio.run_coroutine_threadsafe(broadcast(event), loop)
+    async def toast(code: str, message: str):
+        for room in list(request.app.state.manager.rooms.values()):
+            await room.broadcast('error', {'code': code, 'message': message})
+    from .agent import prep_agent
     try:
         result = await asyncio.to_thread(prep_building, property_id, force, provider=provider, emit=emit)
-        if result.get('prep_status') == 'unavailable':
-            for room in list(request.app.state.manager.rooms.values()):
-                await room.broadcast('error', {'code': 'prep_unavailable', 'message': 'Building prep unavailable. Subtitles and offline play still work.'})
-        return result
     except ValueError:
+        log.error('Building prep grounding failed; game fallback remains available')
+        await toast('prep_grounding_failed', 'Building prep could not be grounded. Offline play still works.')
         raise HTTPException(status_code=422, detail='Prep grounding failed; game fallback remains available') from None
     except Exception:
         log.error('Building prep unavailable; game fallback remains available')
+        await toast('prep_unavailable', 'Building prep unavailable. Subtitles and offline play still work.')
         raise HTTPException(status_code=503, detail='Prep unavailable; retry later') from None
+    if result.get('prep_status') == 'unavailable':
+        await toast('prep_unavailable', 'Building prep unavailable. Subtitles and offline play still work.')
+    elif result.get('prep_status') == 'ready':
+        try:
+            # Same deterministic finalization as scripts/prep_building.py.
+            await asyncio.to_thread(prep_agent.finalize_floors)
+        except Exception:
+            log.error('Floor artifact rebuild failed; previous floors remain')
+            await toast('floors_unavailable', 'Floor map refresh failed. The previous floors remain.')
+    return result
 
 
 @app.get('/api/tts/{filename}')

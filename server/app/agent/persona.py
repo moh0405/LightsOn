@@ -206,6 +206,73 @@ CLAIM_PATTERNS = [
     ('tenancy', _W(r'tenan\w*', r'leas\w*', 'rent', 'rents', 'rented', 'rental', r'occup\w*', r'vacan\w*',
                    'empty', 'oil', 'gas', r'banks?', r'bankers?', r'lawyers?', 'law firms?', 'energy', 'insurance')),
 ]
+# A denylist alone cannot cover every claim, so fiction is also checked by shape:
+# a curated lexicon of building features (amenities, systems, materials, safety,
+# structure, rooms, tenants, events), first-person simple past, and possession
+# ("I have/contain/offer X", "my X") whose object is not an abstract feeling.
+CLAIM_PATTERNS += [
+    ('amenity', _W('gyms?', 'fitness', 'spas?', 'saunas?', r'caf[eé]s?', 'cafeterias?', 'restaurants?', 'showers?',
+                   'lockers?', 'bikes?', 'bicycles?', 'cyclists?', 'conference', 'auditori(?:um|ums|a)', 'theat(?:er|re)s?',
+                   'cinemas?', 'libraries', 'library', 'chapels?', 'helipads?', 'decks?', 'patios?', 'concierge',
+                   'doorm[ae]n', 'valet', 'mailrooms?', r'amenit\w*', 'wi-?fi', 'internet', 'fiber', 'fibre',
+                   'broadband', 'views?', 'vending', 'daycare', 'childcare', 'clinic')),
+    ('system', _W('hvac', r'air[ -]condition\w*', 'heating', 'heaters?', 'boilers?', 'furnaces?', 'plumbing', 'pipes?',
+                  'wiring', 'wired', 'electrical', 'electricity', 'generators?', 'solar', r'sprinkler\w*', 'alarms?',
+                  r'ventilat\w*', 'ducts?', 'vents?', 'chillers?', 'thermostats?', 'leed', r'certif\w*', 'utilit(?:y|ies)',
+                  'backup power', 'power (?:grid|supply|plant)', 'water', 'sewers?', 'drains?')),
+    ('material', _W('asbestos', 'mou?ld', 'wood', 'wooden', 'timber', 'copper', 'iron', 'alumin(?:um|ium)', 'terracotta',
+                    'tiles?', 'carpets?', 'plaster', 'bronze', r'insulat\w*', 'paint', 'lead[ -]free', r'\w+-free',
+                    r'\w*proof\w*')),
+    ('safety', _W('fires?', 'smoke', 'fire exits?', 'emergency', r'evacuat\w*', r'accessib\w*', 'wheelchairs?', 'ada',
+                  'ramps?', 'security', 'guards?', 'cameras?', 'cctv', 'codes?', r'inspect\w*', 'permits?', 'zoning',
+                  'seismic', 'earthquakes?', r'flood\w*', 'hurricanes?', 'storms?', r'damage\w*', r'hazard\w*', 'toxic',
+                  'safety', r'structur\w*', 'load-bearing', 'compliant', 'compliance')),
+    ('structure', _W('foundations?', 'frames?', 'framing', 'beams?', 'girders?', 'cladding', 'mezzanines?', 'wings?',
+                     'annex(?:es)?', 'podium', 'antennas?', 'clocks?', 'signs?', 'signage', 'neon', 'entrances?',
+                     'doors?', 'doorways?', 'revolving', 'gates?', 'levels?', 'corners?', 'streets?', 'avenues?',
+                     'blocks?', 'tunnels?', 'skybridges?', 'bridges?', r'overlook\w*', 'located', 'interiors?',
+                     'exteriors?', 'bones')),
+    ('room', _W('rooms?', 'offices?', 'suites?', 'kitchens?', 'bathrooms?', 'restrooms?', 'toilets?', 'vaults?',
+                'halls?', 'docks?', 'escalators?', 'corridors?', 'cellars?', 'attics?', 'mailboxes?')),
+    ('tenancy', _W('firms?', r'corporat\w*', 'headquarters', 'hq', 'retailers?', 'shops?', 'stores?', 'clients?',
+                   'residents?', 'workers?', 'employees?', 'staff', 'presidents?', 'mayors?', r'celebrit\w*', 'stars?')),
+    ('event', _W('survived', 'burn(?:ed|t)', 'bombed', 'sold', 'bought', 'purchased', 'acquired', 'demolished', 'rebuilt',
+                 r'remodel\w*', 'expanded', 'relocated', 'closed', 'reopened', 'abandoned', 'condemned', r'foreclos\w*',
+                 r'bankrupt\w*', 'auctioned', r'award\w*', 'prizes?', 'filmed', 'movies?', 'films?', 'visited',
+                 'visitors?', 'weathered', 'blackouts?', 'war', 'wars', 'explosions?', 'collapsed?')),
+    ('history', re.compile(r"\b(?:I|we|they|he|she|it|you)\s+(?:(?:never|once|really|just|always|even|still|also|only|"
+                           r"truly|nearly|almost|first)\s+)?(?:(?!(?:need|feed|speed|succeed|proceed|exceed|bleed|breed|"
+                           r"seed|heed|shed)\b)[a-z]{2,}ed|had|saw|made|took|got|went|came|held|kept|felt|knew|won|lost|"
+                           r"fought|stood|became|began|grew|ran|rose|fell|gave|met|paid|sat|slept|spent|thought|told|"
+                           r"wore|wrote|hid|left|brought|caught|taught|sang|drew|flew|shone)\b", re.I)),
+]
+# Possession/attribute shapes that state a feature unless their object is abstract.
+POSSESSION = re.compile(r"\b(?:I\s+(?:have|has|contain|feature|offer|include|boast|house|hold|host|provide|carry|keep|"
+                        r"come\s+with|am\s+home\s+to|am\s+equipped\s+with)|I've(?:\s+got)?|I\s+got|my|our)\s+"
+                        r"((?:(?:a|an|the|some|no|any|every|plenty|of|lots|little|few|many|own|best|only|whole|"
+                        r"undivided|full|great|real|quiet|big|very)\s+)*)([A-Za-z'’-]+)", re.I)
+ABSTRACT = set('''pride hope hopes patience standards standard time taste style class nerve faith doubt doubts question
+questions idea ideas dream dreams plan plans feeling feelings opinion opinions attention respect heart soul charm swagger
+confidence weakness hunch deal eye mood moods appetite ambition ambitions vision guts wit grit love fun reservations
+expectations needs demands priorities opportunity opportunities nothing something everything anything zero interest
+evening night dignity yes word mind friend friends neighbor neighbors darling dear sugar kid favorite favorites type
+kind offer game turn decision verdict terms price imagination curiosity trust blessing approval applause spotlight
+moment chance answer voice limit limits regrets thanks sympathy rivalry rival rivals reputation pitch pitches coffee'''.split())
+# "I have been/heard/seen" is perfect aspect, not possession; its words are checked by the lexicon.
+PARTICIPLE = re.compile(r"(?:been|heard|seen|known|done|gone|waited|waiting|never|always|just|to|got|a|an)$", re.I)
+
+
+def possession_claim(text: str) -> bool:
+    for match in POSSESSION.finditer(text):
+        head = match[2].casefold().strip("'’-")
+        if head in ABSTRACT:
+            continue
+        if re.match(r'(?:I\s+(?:have|has)|I\'ve)\b', match[0], re.I) and not match[1] and PARTICIPLE.fullmatch(head):
+            continue
+        return True
+    return False
+
+
 DENY = re.compile(r'\b(?:vacant|dossier|database|records show|property type|source_field)\b', re.I)
 SELF = {'I', "I'm", "I've", "I'll", "I'd", 'My'}
 # Sentence openers that are ordinary words, not names. Anything else capitalised is a proper noun.
@@ -240,6 +307,8 @@ def fiction_claim(text: str, names: tuple[str, ...] = ()) -> str | None:
     for reason, pattern in CLAIM_PATTERNS[2:]:
         if pattern.search(text):
             return reason
+    if possession_claim(text):
+        return 'feature'
     return None
 
 
@@ -254,6 +323,9 @@ FICTION_RULES = [
     'No history (was, were, used to, once, back in, built, opened, renovated, famous).',
     'No physical features (floors, lobby, roof, glass, tower, feet, tall) or architecture styles.',
     'No tenancy or occupancy words (tenant, lease, rent, occupied, empty) and never vacant.',
+    'No amenities, systems, materials, safety, rooms or events (gym, sprinklers, asbestos, fire, suite, survived).',
+    'No possession claims: "I have" or "my" only with feelings and attitude (pride, standards, patience, time).',
+    'No simple past about yourself or others (I survived, they loved me); speak in the present.',
     'At most two sentences. Era flavour comes from idiom and slang, never from claims.',
 ]
 
@@ -332,6 +404,26 @@ def _num(text: str) -> float:
     return float(text.replace(',', ''))
 
 
+_HORIZONTAL_AFTER = re.compile(r"[ -]*(?:wide|long|deep|across|in (?:length|width|diameter)|of frontage|by\b|x\b)", re.I)
+_HORIZONTAL_BEFORE = re.compile(r"\b(?:by|x|wide|long|deep|stretching|spanning|across|length of|width of)\s*$", re.I)
+_VERTICAL_AFTER = re.compile(r"[ -]*(?:tall|high|in height|up\b|above|skyward)", re.I)
+_VERTICAL_BEFORE = re.compile(r"\b(?:reaching|rising|rises|climbing|towering|soaring|height of|up to|stands?|standing)\s*$", re.I)
+_VERTICAL_CUE = re.compile(r"\b(?:tall|taller|high|higher|height|vertical|towers?|spires?|observation|on top|rooftop|sky\w*|antennas?|masts?)\b", re.I)
+
+
+def _vertical(text: str, m: re.Match) -> bool:
+    """A feet quantity is a height need only when it is stated vertically.
+
+    Explicit width/length/depth never counts; a bare quantity counts only when
+    the pitch itself talks about height (tall, tower, rooftop...). Anything
+    else is ambiguous and ignored rather than guessed.
+    """
+    before, after = text[max(0, m.start() - 30):m.start()], text[m.end():m.end() + 20]
+    if _HORIZONTAL_AFTER.match(after) or _HORIZONTAL_BEFORE.search(before):
+        return False
+    return bool(_VERTICAL_AFTER.match(after) or _VERTICAL_BEFORE.search(before) or _VERTICAL_CUE.search(text))
+
+
 def pitch_needs(text: str) -> dict:
     """Quantities a pitch explicitly states; nothing is inferred from category or tone."""
     rest = text
@@ -344,7 +436,7 @@ def pitch_needs(text: str) -> dict:
         ratios += [max(spaces) / (max(areas) / 1000)]
     named = [int(m[1] or m[2]) for m in re.finditer(r'\bfloor\s+(-?\d+)\b|\b(\d+)(?:st|nd|rd|th)\s+floor\b', rest, re.I)]
     stories = [int(m[1]) for m in re.finditer(r'\b(\d+)[ -](?:stor(?:y|ey|ies|eys)|floors?)\b', rest, re.I)] + named
-    feet = [_num(m[1]) for m in re.finditer(_NUM + r'[ -]?(?:ft|feet|foot)\b', rest, re.I)]
+    feet = [_num(m[1]) for m in re.finditer(_NUM + r'[ -]?(?:ft|feet|foot)\b', rest, re.I) if _vertical(rest, m)]
     single = bool(re.search(r'\b(?:single[ -]floor|one floor|a floor)\b', text, re.I)) or bool(named)
     return dict(areas=areas, floors=named, stories=stories, feet=feet, parking=ratios, single_floor=single)
 

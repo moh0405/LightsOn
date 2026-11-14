@@ -140,3 +140,69 @@ def test_era_lines_are_valid_fiction_for_every_voice():
     for voice, lines in ERA_LINES.items():
         assert len(lines) >= 3
         assert all(fiction_claim(line) is None for line in lines), voice
+
+
+# Final Codex review P1: uncited physical/history/safety assertions are not fiction.
+UNCITED_FEATURE_CLAIMS = [
+    'I have a gym.',
+    'I survived a fire.',
+    'I am wheelchair accessible.',
+    'I contain asbestos.',
+    'My interior is fireproof.',
+    'Darling, my fire stairs are a dream.',
+    'I am asbestos-free, darling.',
+    'I have a helipad, sugar.',
+    'My boilers still purr.',
+    'I offer valet service.',
+    'Every suite has a view, darling.',
+    'I come with fiber internet.',
+    'I weathered the hurricane like a lady.',
+    'My sprinklers never sleep.',
+    'I have showers for cyclists.',
+    'My doorman knows everyone.',
+    'I sit on the best corner in town.',
+    'I house a chapel.',
+    'I have a kitchen that sings.',
+    'They loved me, darling.',
+    'I hosted presidents.',
+    'My security guards adore me.',
+    'I keep a spa for my favorites.',
+    'Sugar, my generators never quit.',
+]
+# Character lines with the same shapes ("I have", "my", "I am") that must stay.
+FEATURE_SHAPED_FICTION = [
+    'I have a weakness for bold ideas.',
+    'I have a feeling about you, kid.',
+    'My answer depends on your nerve.',
+    'I am ready, sugar; are you?',
+    'My patience is thin and my standards are high.',
+    'I have no time for timid pitches.',
+]
+
+
+@pytest.mark.parametrize('line', UNCITED_FEATURE_CLAIMS)
+def test_uncited_feature_and_history_claims_are_not_fiction(tmp_path, line):
+    from app.agent.persona import fiction_claim, normalize_writer_persona, validate_persona
+    assert fiction_claim(line) is not None, line
+    dossier = cached_research(tmp_path / 'research')
+    value = fake_persona(dossier).model_dump()
+    bad = {**value, 'backstory': value['backstory'] + [dict(text=line, fact_ref=None, fiction=True)]}
+    with pytest.raises(ValueError):
+        validate_persona(bad, dossier)
+    dropped = []
+    normalized = normalize_writer_persona(bad, dossier, dropped=dropped)
+    assert line not in [beat['text'] for beat in normalized['backstory']]
+    assert [d['text'] for d in dropped] == [line]
+
+
+def test_feature_shaped_character_lines_survive():
+    from app.agent.persona import FICTION, ERA_LINES, fiction_claim
+    for line in FEATURE_SHAPED_FICTION + IN_CHARACTER + FICTION + [l for lines in ERA_LINES.values() for l in lines]:
+        assert fiction_claim(line) is None, line
+
+
+def test_shipped_hero_persona_fiction_still_validates():
+    from app.agent.persona import validate_persona
+    dossier = BuildingTools(PID, provider_for_mode('fixtures')).dossier
+    shipped = json.loads(Path('fixtures/personas/233953.json').read_text())
+    assert validate_persona(shipped, {**dossier, 'facts': BuildingTools(PID, provider_for_mode('fixtures')).facts})
