@@ -2,6 +2,7 @@
 import asyncio
 import copy
 import json
+import re
 from datetime import datetime, timezone
 
 import pytest
@@ -162,7 +163,7 @@ def test_stream_spend_reconciles_and_failure_retains_reservation(tmp_path):
     path = tmp_path / 'spend.json'
     client = Client()
     result = MeteredClient(client, path).converse_stream(timeout=1, modelId=FAST, inferenceConfig={'maxTokens': 100})
-    assert result['output']['message']['content'][0]['toolUse']['input'] == {'ok': True}
+    assert json.loads(result['output']['message']['content'][0]['toolUse']['input']) == {'ok': True}
     before = SpendLedger(path).snapshot()['total_usd']
     failed = Client(True)
     with pytest.raises(SpendUnavailable):
@@ -264,3 +265,337 @@ async def test_each_scored_pitch_moves_mood_while_revision_keeps_better_score(do
     assert room.verdict.scores[0].data_fit == 7  # the weaker revision cannot hurt the round score
     assert room.mood == 'proud'  # original: proud -> hopeful; revision: hopeful -> proud
     room.close()
+
+
+@pytest.mark.parametrize('wording', [
+    'Floor 6, with 31,503 sq ft, wants your area budget.',
+    'Floor 6 has about 31,500 square feet for your pitch.',
+    'Floor 6 has 31.5k square feet for your pitch.',
+    'Floor 6 has 31.5k; show me what fits.',
+])
+def test_source_area_formats(dossier, wording):
+    fact = next(f for f in dossier['facts'] if f['key'] == 'floor_6_available_sqft')
+    assert fact['value'] == 31503  # retained eval's actual sourced quantity
+    assert check_line(wording, [fact['id']], dossier) is None
+
+
+def test_floor_labels_cannot_be_reused_as_unrelated_quantities(dossier):
+    fact = next(f for f in dossier['facts'] if f['key'] == 'floor_6_available_sqft')
+    assert check_line('I have 6 secret tunnels.', [fact['id']], dossier)
+
+
+def test_year_is_exact_without_separators(dossier):
+    fact = next(f for f in dossier['facts'] if f['key'] == 'construction_ConstructionComplete')
+    assert check_line(f"I arrived in {fact['value']}, darling.", [fact['id']], dossier) is None
+    assert check_line(f"I arrived in {fact['value'] + 1}, darling.", [fact['id']], dossier)
+
+
+async def test_rejections_keep_candidate_and_failure_cause(dossier, tmp_path, monkeypatch):
+    monkeypatch.setenv('STATE_DIR', str(tmp_path))
+    c = fake_agent.challenge(pitch(), dossier).model_dump()
+    c['line'] = 'I stand 987654 feet tall.'  # deliberately unsupported candidate, never a building fact
+    agent = LiveAgent(model=Model([{'challenges': [c]}, {'challenges': [c]}]))
+    await agent.challenge([pitch()], dossier)
+    records = [json.loads(line) for line in (tmp_path / 'live_agent.jsonl').read_text().splitlines()]
+    rejected = [r for r in records if r['event'] == 'rejected']
+    assert len(rejected) == 2
+    assert all(r['cause'] == 'number_match' and r['line'].startswith(c['line'])
+               and r['fact_ids'] == c['fact_ids'] for r in rejected)
+    assert agent.fallback_causes == {'number_match': 1}
+
+
+async def test_timeout_is_reported_as_timeout(dossier, tmp_path, monkeypatch):
+    monkeypatch.setenv('STATE_DIR', str(tmp_path))
+    async def slow(*args):
+        await asyncio.sleep(1)
+    agent = LiveAgent(model=slow, challenge_timeout=.01)
+    await agent.challenge([pitch()], dossier)
+    assert agent.fallback_causes == {'timeout': 1}
+
+
+def test_number_parser_handles_percent_and_compact_units():
+    from app.agent.grounding import NUMBER, number_unit, number_value
+    # Parser syntax examples, not attributed building facts.
+    assert number_unit('% of the total') == 'percent'
+    assert number_unit(' percent of the total') == 'percent'
+    assert number_unit(' sq ft') == 'sqft'
+    assert number_value('31.5k') == 31500
+    assert NUMBER.findall('30 m') == ['30']  # metres in source aerial clauses, never millions
+
+
+async def test_budget_and_socket_failures_remain_distinguishable(dossier, tmp_path, monkeypatch):
+    from app.agent.spend import SpendLedger, SpendUnavailable
+    from app.agent.live_agent import FAST
+    monkeypatch.setenv('STATE_DIR', str(tmp_path))
+    ledger = SpendLedger(tmp_path / 'spend.json', cap=0)
+    with pytest.raises(SpendUnavailable) as budget:
+        ledger.call(FAST, 10, 10, lambda: None, lambda _: {})
+    agent = LiveAgent(model=Model([budget.value]))
+    await agent.challenge([pitch()], dossier)
+    assert agent.fallback_causes == {'budget': 1}
+    ledger.cap = 3
+    def timeout():
+        raise TimeoutError()
+    with pytest.raises(SpendUnavailable) as expired:
+        ledger.call(FAST, 10, 10, timeout, lambda _: {})
+    assert expired.value.cause == 'timeout'
+    assert ledger.snapshot()['calls'][-1]['status'] == 'unconfirmed'
+
+
+async def test_round_fallbacks_vary_and_keep_persona_and_desire(dossier):
+    from app.agent.prompts import persona_for
+    pitches = [pitch(player=f'p{i}') for i in range(4)]
+    agent = LiveAgent(model=Model([TimeoutError()]))
+    results = await agent.challenge(pitches, dossier)
+    assert len({c.line for c in results}) == len(results)
+    assert len({tuple(c.fact_ids) for c in results}) > 1
+    persona = persona_for(dossier)
+    assert all(persona['catchphrase'] in c.counteroffer for c in results)
+    assert all(check_line(c.line + ' ' + c.counteroffer, c.fact_ids, dossier) is None for c in results)
+    assert all('after sunset' in c.counteroffer for c in results)
+
+
+def test_fallback_prioritizes_triggered_limit_and_relevant_facts(dossier):
+    impossible = fake_agent.challenge(pitch('I need 9000000 square feet on a single floor for a restaurant.'), dossier)
+    assert impossible.fact_ids == ['F_233953_grossTypicalFloorSquareFeet']
+    assert '22,189' in impossible.line
+    assert dossier['persona']['catchphrase'] in impossible.counteroffer
+    housing = fake_agent.challenge(pitch('Homes where everyone can live'), dossier)
+    assert all('parking' not in fid for fid in housing.fact_ids)
+
+
+async def test_batched_challenges_accept_voice_and_hypothetical_counteroffers(dossier):
+    from app.agent.prompts import persona_for
+    from app.agent.persona import fact_line
+    fact = next(f for f in dossier['facts'] if f['key'] == 'grossTypicalFloorSquareFeet')
+    pitches = [pitch(player=f'p{i}') for i in range(4)]
+    calls = []
+    def model(step, system, content, schema, timeout):
+        calls.append(step)
+        if step == 'challenge':
+            assert all(f'player="{p.player_id}"' in content for p in pitches)
+            assert fact['say_as'] in system and fact_line(fact) in system
+            assert persona_for(dossier)['voice_style'] in system
+            return {'challenges': [dict(player_id=p.player_id,
+                line=f"Sugar, I have standards. {fact_line(fact)}", fact_ids=[fact['id']],
+                counteroffer='Could your studio welcome neighbors after sunset?', category_guess='work') for p in pitches]}
+        assert step == 'claim_check'
+        assert 'Fictional mood' in system and 'hypothetical counteroffers' in system
+        return {'checks': [{'supported': True, 'reason': ''} for _ in pitches]}
+    agent = LiveAgent(model=model)
+    result = await agent.challenge(pitches, dossier)
+    assert calls == ['challenge', 'claim_check']
+    assert agent.fallbacks == 0 and len(result) == 4
+
+
+def test_live_context_focuses_facts_but_keeps_requested_floor_and_persona_refs(game_mode):
+    from app.agent.prompts import persona_for
+    d = provider_for_mode(game_mode).dossier('233899')
+    # Use a real high floor from Wells' dossier, rather than inventing a floor.
+    fact = next(f for f in reversed(d['facts']) if re.fullmatch(r'floor_\d+_available_sqft', f['key'])
+                and f['value'] is not None)
+    floor = fact['key'].split('_')[1]
+    prompt = build_prompt(d, 'hopeful', City(), pitches=[pitch(f'A community studio on floor {floor}')])
+    assert fact['id'] in prompt and fact['say_as'] in prompt
+    assert all(limit['fact_ref'] in prompt for limit in persona_for(d)['hard_limits'])
+    assert len(prompt.encode()) < 16000
+
+
+@pytest.mark.parametrize('text', [
+    'Both of you pitched one idea for Floor 6.',
+    'No one can resist a little drama; could your studio welcome the two of you?',
+])
+def test_conversational_number_words_are_not_physical_claims(dossier, text):
+    assert check_line(text, ['F_233953_floor_6_available_sqft'], dossier) is None
+    assert check_line('I have two stories.', ['F_233953_floor_6_available_sqft'], dossier)
+
+
+@pytest.mark.parametrize('stop_reason', ['tool_use', 'max_tokens'])
+async def test_stream_schema_failure_retries_after_usage_reconciliation(tmp_path, monkeypatch, stop_reason):
+    import boto3
+    from time import monotonic
+    from app.agent.live_agent import Bedrock, Challenges
+    from app.agent.spend import SpendLedger
+    path = tmp_path / 'spend.json'
+    monkeypatch.setenv('BEDROCK_SPEND_LEDGER', str(path))
+    attempts = []
+    class Stream:
+        def __init__(self, first): self.first = first
+        def __iter__(self):
+            yield {'contentBlockStart': {'contentBlockIndex': 0, 'start': {'toolUse': {'name': 'answer', 'toolUseId': 't'}}}}
+            text = '{"challenges":[]}' if not self.first or stop_reason == 'max_tokens' else '{"challenges":['
+            yield {'contentBlockDelta': {'contentBlockIndex': 0, 'delta': {'toolUse': {'input': text}}}}
+            yield {'messageStop': {'stopReason': stop_reason if self.first else 'tool_use'}}
+            yield {'metadata': {'usage': {'inputTokens': 10, 'outputTokens': 5}}}
+        def close(self): pass
+    class Client:
+        def converse_stream(self, **kw):
+            attempts.append(kw)
+            return {'stream': Stream(len(attempts) == 1)}
+    monkeypatch.setattr(boto3, 'client', lambda *a, **kw: Client())
+    agent = LiveAgent(model=Bedrock())
+    result = await agent.call('challenge', 'system', 'pitches', Challenges, monotonic() + 2)
+    assert result.challenges == [] and len(attempts) == 2
+    assert agent.schema_failures == 1
+    assert all(c['status'] == 'complete' for c in SpendLedger(path).snapshot()['calls'])
+
+
+@pytest.mark.parametrize('phase', ['CHALLENGE', 'VERDICT'])
+async def test_unexpected_live_failure_recovers_and_arms_timer(dossier, monkeypatch, tmp_path, phase):
+    from app.rooms import Room, Conn
+    monkeypatch.setenv('AGENT_MODE', 'live')
+    async def broken(*args, **kwargs):
+        raise KeyError('unexpected judge failure')
+    monkeypatch.setattr(LiveAgent, 'challenge' if phase == 'CHALLENGE' else 'verdict_batches', broken)
+    room = Room(code='TEST', hero_ids=['233953'], state_dir=tmp_path,
+                durations={'CHALLENGE': 60, 'VERDICT': 60})
+    events = []
+    async def send(event): events.append(event)
+    room.conns.append(Conn('screen', send))
+    player = room.add_player('Ann')
+    room.round_id, room.building_id, room.dossier = 'TEST-1', '233953', dossier
+    room.pitches[player.id] = pitch(player=player.id)
+    await room.set_phase(phase)
+    try:
+        await asyncio.wait_for(room._agent_task, .5)
+        assert room.phase == phase
+        assert room.challenges if phase == 'CHALLENGE' else room.verdict
+        assert room.ends_at is not None and room._timer is not None
+        assert any(e['type'] == 'error' and e['code'] == 'agent_fallback' for e in events)
+    finally:
+        room.close()
+
+
+@pytest.mark.parametrize('retry_failure', ['number', 'timeout'])
+async def test_bad_candidate_does_not_replace_other_grounded_players(dossier, retry_failure):
+    players = [pitch(player=f'p{i}') for i in range(4)]
+    candidates = [fake_agent.challenge(p, dossier).model_copy(update={
+        'counteroffer': 'Could your studio welcome neighbors after sunset?'}) for p in players]
+    bad = candidates[-1].model_copy(update={'line': 'I stand 987654 feet tall.'})
+    retry = TimeoutError() if retry_failure == 'timeout' else {'challenges': [bad.model_dump()]}
+    model = Model([{'challenges': [c.model_dump() for c in candidates[:-1]] + [bad.model_dump()]},
+                   {'checks': [{'supported': True, 'reason': ''} for _ in range(3)]}, retry])
+    agent = LiveAgent(model=model)
+    results = await agent.challenge(players, dossier)
+    assert results[:3] == candidates[:3]
+    assert results[-1] != bad
+    assert agent.challenge_fallback_causes == {('timeout' if retry_failure == 'timeout' else 'number_match'): 1}
+    assert agent.fallback_player_ids == {'p3'}
+    assert 'player="p0"' not in model.calls[-1][1]
+
+
+def test_null_source_fields_are_explicitly_unknown_and_not_citable(dossier):
+    from app.agent.prompts import context_facts, persona_for, safe_facts
+    missing = next(f for f in safe_facts(dossier) if f['value'] is None
+                   and re.fullmatch(r'floor_\d+_occupied_sqft', f['key']))
+    pitches = [pitch(f"A studio on floor {missing['key'].split('_')[1]}")]
+    nulls = [f for f in context_facts(dossier, persona_for(dossier), pitches) if f['value'] is None]
+    assert nulls  # real missing source data, never filled with invented values
+    prompt = build_prompt(dossier, 'hopeful', City(), pitches=pitches)
+    assert all(f['id'] not in prompt for f in nulls)
+    assert all(f['key'] in prompt for f in nulls)
+    assert 'unknown, do not cite' in prompt
+
+
+def test_small_paid_check_plan_and_budget_ceiling(monkeypatch):
+    import sys
+    from pathlib import Path
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2]))
+    from evals.live_quality import budget_ceiling, challenge_plan
+    assert budget_ceiling(2.44) == pytest.approx(2.64)
+    assert budget_ceiling(2.60) < 2.70
+    plan = challenge_plan()
+    assert sum(len(rows) for rows in plan.values()) == 8
+    assert len(plan) == 2
+    assert all(not safety_reason(row['text']) for rows in plan.values() for row in rows)
+
+
+@pytest.mark.parametrize('unexpected', [False, True])
+async def test_eval_latency_excludes_fallback_only_batches(dossier, monkeypatch, unexpected):
+    from pathlib import Path
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2]))
+    from evals.run import measured_challenge
+    monkeypatch.setenv('AGENT_MODE', 'live')
+    async def offline(self, pitches, dossier, *args):
+        if unexpected:
+            raise KeyError('unexpected live failure')
+        self.fallback_player_ids = {p.player_id for p in pitches}
+        return [fake_agent.challenge(p, dossier) for p in pitches]
+    monkeypatch.setattr(LiveAgent, 'challenge', offline)
+    _, _, grounded_at, _, _, _, model_full, fallback_full = await measured_challenge([pitch()], dossier, City())
+    assert grounded_at is None and model_full is None
+    assert fallback_full is not None
+
+
+async def test_small_check_runs_exactly_two_batched_rounds_without_network(game_mode, monkeypatch):
+    import html
+    from pathlib import Path
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2]))
+    from evals import live_quality
+    calls = []
+    class Offline:
+        def __call__(self, step, system, content, schema, timeout):
+            calls.append(step)
+            if step == 'claim_check':
+                return {'checks': [{'supported': True, 'reason': ''} for _ in json.loads(content)]}
+            d = provider_for_mode(game_mode).dossier('233953' if 'Esperson' in system else '233899')
+            ps = [pitch(html.unescape(text), player=pid) for pid, text in
+                  re.findall(r'<pitch player="([^"]+)"[^>]*>(.*?)</pitch>', content)]
+            if step == 'challenge':
+                return {'challenges': [fake_agent.challenge(p, d).model_dump() for p in ps]}
+            return fake_agent.verdict(ps, d, City()).model_dump()
+    monkeypatch.setattr(live_quality, 'Bedrock', Offline)
+    result = await live_quality.evaluate(live_quality.challenge_plan())
+    assert calls.count('challenge') == 2 and calls.count('verdict') == 2
+    assert len(result['challenges']) == 8 and len(result['verdicts']) == 2
+    assert all(row['ground_error'] is None for row in result['challenges'] + result['verdicts'])
+    assert not any(row['fallback_cause'] for row in result['challenges'] + result['verdicts'])
+
+
+async def test_failure_during_fallback_validation_returns_to_explore(dossier, monkeypatch, tmp_path):
+    import app.rooms as rooms
+    from app.actions import ActionError
+    monkeypatch.setenv('AGENT_MODE', 'live')
+    async def proposals(self, originals, revised, dossier, city, *args):
+        return [(fake_agent.verdict(originals, dossier, city), originals)]
+    def reject(*args, **kwargs):
+        raise ActionError('deliberately invalid candidate')
+    monkeypatch.setattr(LiveAgent, 'verdict_batches', proposals)
+    monkeypatch.setattr(rooms, 'validate_verdict', reject)
+    room = rooms.Room(code='TEST', hero_ids=['233953'], state_dir=tmp_path, durations={})
+    events = []
+    async def send(event): events.append(event)
+    room.conns.append(rooms.Conn('screen', send))
+    player = room.add_player('Ann')
+    room.round_id, room.building_id, room.dossier = 'TEST-1', '233953', dossier
+    room.pitches[player.id] = pitch(player=player.id)
+    await room.set_phase('VERDICT')
+    task = room._agent_task
+    await asyncio.wait_for(task, .5)
+    assert room.phase == 'EXPLORE' and room.round_id is None
+    assert any(e['type'] == 'error' and e['code'] == 'invalid_verdict' for e in events)
+    room.close()
+
+
+def test_fallback_uses_the_floor_the_pitch_actually_requests(dossier):
+    for variant in range(4):
+        c = fake_agent.challenge(pitch('A community studio on floor 6'), dossier, variant=variant)
+        assert c.fact_ids == ['F_233953_floor_6_available_sqft']
+        assert check_line(c.line + ' ' + c.counteroffer, c.fact_ids, dossier) is None
+
+
+def test_paid_history_claim_is_rejected_even_when_cheap_checker_would_accept(dossier):
+    # Verbatim model line from the small paid check; current status proves no duration.
+    line = "Cats interviewing humans—charming, but I've been dark for years; will your café actually draw the neighbors in after sunset?"
+    assert check_line(line, ['F_233953_dark_floor_count'], dossier)
+
+
+def test_hypothetical_one_floor_plan_is_not_an_existing_floor_count(dossier):
+    line = 'Give me a pilot: start on one floor and prove your studio works.'
+    assert check_line(line, ['F_233953_dark_sqft'], dossier) is None
+    assert check_line('I have one floor.', ['F_233953_dark_sqft'], dossier)
+
+
+def test_paid_unsupported_pitch_quantity_still_fails(dossier):
+    line = "Nine million square feet on one floor? My typical floor gives you 22,189 square feet—let's talk real numbers, kid."
+    assert '9000000' in check_line(line, ['F_233953_grossTypicalFloorSquareFeet'], dossier)

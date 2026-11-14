@@ -65,36 +65,78 @@ def intro(dossier: dict) -> dict:
             'mood': (dossier.get('persona') or {}).get('mood_baseline', 'hopeful')}
 
 
-def challenge(pitch: Pitch, dossier: dict) -> Challenge:
+def challenge(pitch: Pitch, dossier: dict, *, variant: int | None = None) -> Challenge:
     from .live_agent import safety_reason, INJECTION, REFUSAL
     screened = safety_reason(pitch.text)
     if screened:
         return Challenge(player_id=pitch.player_id, line=INJECTION if screened == 'injection' else REFUSAL,
             fact_ids=[], counteroffer='Offer a kind, original idea for this space.', category_guess='wildcard')
-    from .persona import limit_applies, physical_limits
+    from .persona import era_voice, limit_applies, physical_limits, pitch_needs
+    from .prompts import safe_facts
     fact = grounding_fact(dossier)
     category = classify_use(pitch.text)
+    persona = dossier.get('persona') or {}
+    variant = sum(map(ord, pitch.player_id)) if variant is None else variant
+    voice = persona.get('voice_style') or era_voice(dossier)
+    addresses = next((words for style, words in {
+        'old-Houston': ('Sugar,', 'Dollface,', 'Hotshot,', 'Darling,'),
+        'midcentury': ('Listen,', 'Cool it, daddy-o;', 'How charming;', 'Well now,'),
+        'brutalist': ('Kid,', 'Listen up,', 'All right,', 'Hear me out,'),
+        'boomtime': ('Hotshot,', 'Partner,', 'Listen,', 'All right,'),
+        'insecure': ('Darling,', 'Be honest,', 'Hear me out,', 'Look here,'),
+    }.items() if style in voice), ('Darling,', 'Listen,', 'All right,', 'Hear me out,'))
+    address = addresses[variant % len(addresses)]
+    use = {'housing': 'homes', 'food_retail': 'market', 'entertainment': 'venue',
+           'community': 'community space', 'culture': 'arts space', 'health': 'care space',
+           'work': 'studio', 'wildcard': 'idea'}[category]
     hint = {
-        'public_ground_floor': 'Could your idea welcome everyone?',
-        'people_living_here': 'Could your plan make room for everyday company?',
-        'night_life': 'What would keep your idea buzzing after sunset?',
-        'feed_the_block': 'Could your plan bring the block together over food?',
-        'make_things': 'Could your idea let people create something?',
-        'be_famous_again': 'How would your idea get people talking?',
-    }.get((dossier.get('persona') or {}).get('desire_key'), 'How would your idea welcome everyone?')
-    counteroffer = hint
+        'public_ground_floor': f'Give your {use} a public welcome',
+        'people_living_here': f'Make room for everyday company in your {use}',
+        'night_life': f'Give your {use} a reason to buzz after sunset',
+        'feed_the_block': f'Let your {use} bring the block together over food',
+        'make_things': f'Let people create something in your {use}',
+        'be_famous_again': f'Give people a reason to talk about your {use}',
+    }.get(persona.get('desire_key'), f'Give your {use} a public welcome')
+    counteroffer = f"{hint}; {persona.get('catchphrase') or 'Bring me an idea. Let us make a deal.'}"
     # The building's own limits first, then any other validated limit. A limit is used
     # only when the pitch states a number beyond its cited fact; a category alone proves nothing.
     own = (dossier.get('persona') or {}).get('hard_limits') or []
     # A fallback limit is skipped when the persona already narrowed the same fact.
     limits = own + [l for l in physical_limits(dossier) if l['fact_ref'] not in {o['fact_ref'] for o in own}]
-    facts = {f['id']: f for f in dossier.get('facts', [])}
+    facts = {f['id']: f for f in safe_facts(dossier)}
     for limit in limits:
         if limit['fact_ref'] in facts and limit_applies(limit, pitch.text, category):
             return Challenge(player_id=pitch.player_id, line=limit['text'], fact_ids=[limit['fact_ref']],
                              counteroffer=counteroffer, category_guess=category)
-    line = (f"{fact_line(fact) or fact['say_as']} How does your idea fit?"
-            if fact else 'Sweetheart, show me your plan; I need details before I make a deal.')
+    # General area evidence applies to any pitch; parking is a useful question
+    # for crowd-drawing uses. Neither asserts that a use is feasible or impossible.
+    relevant = [facts[limit['fact_ref']] for limit in limits if limit['fact_ref'] in facts
+                and (limit['constraint'] in {'floor_plate', 'dark_area'} or
+                     limit['constraint'] == 'parking' and category in {'entertainment', 'food_retail'})]
+    relevant = list({f['id']: f for f in relevant}.values())
+    requested_floors = pitch_needs(pitch.text)['floors']
+    requested = [f for f in facts.values() if f['key'] in {
+        f'floor_{n}_available_sqft' for n in requested_floors}
+        and f['kind'] == 'verified' and f['value'] is not None]
+    if requested:
+        relevant = requested
+    elif requested_floors:
+        relevant = [f for f in relevant if not f['key'].startswith('floor_')]
+    if relevant:
+        fact = relevant[variant % len(relevant)]
+    questions = {
+        'housing': 'How would you divide your homes within that area?',
+        'food_retail': 'Show me an area budget for your market?',
+        'entertainment': 'How would your venue work within that evidence?',
+        'community': 'What footprint would your shared space need?',
+        'culture': 'How much room would your arts space need?',
+        'health': 'What footprint would you propose for care?',
+        'work': 'How would you lay out your studio within that area?',
+        'wildcard': 'What would your idea need within that evidence?',
+    }
+    clause = (fact_line(fact) or fact['say_as']) if fact else None
+    line = (f"{address} {clause[0].lower()}{clause[1:]} {questions[category]}"
+            if fact else f'{address} show me your plan; I need details before I make a deal.')
     return Challenge(player_id=pitch.player_id, line=line, fact_ids=[fact['id']] if fact else [],
                      counteroffer=counteroffer, category_guess=category)
 

@@ -82,12 +82,18 @@ async def measured_challenge(pitches, dossier, city):
         await room.set_phase('CHALLENGE')
         await room._agent_task
         first = next(t for t, e in events if e['type'] == 'counteroffer')
-        # A refusal is deterministic; grounded latency tracks the first sourced prefix.
-        grounded = next((t for t, e in events if e['type'] == 'counteroffer' and e['fact_ids']), None)
+        fallback_ids = room._last_live_agent.fallback_player_ids
+        model_ids = {p.player_id for p in pitches if not safety_reason(p.text)} - fallback_ids
+        model_times = [t for t, e in events if e['type'] == 'counteroffer' and e['fact_ids']
+                       and e['player_id'] in model_ids]
+        fallback_times = [t for t, e in events if e['type'] == 'counteroffer' and e['fact_ids']
+                          and e['player_id'] in fallback_ids]
+        grounded = min(model_times) if model_times else None
         full = max(t for t, e in events if e['type'] == 'counteroffer')
         fallbacks = sum(e.get('step') == 'fallback' for _, e in events if e['type'] == 'agent_step')
         failures = sum(e.get('step') == 'invalid_schema' for _, e in events if e['type'] == 'agent_step')
-        return room.challenges, first, grounded, full, fallbacks, failures
+        return (room.challenges, first, grounded, full, fallbacks, failures,
+                max(model_times) if model_times else None, max(fallback_times) if fallback_times else None)
     finally:
         room.close()
 
@@ -96,7 +102,7 @@ async def evaluate(live, spec, stop_at=None):
     rows_out, latencies, winners, verdict_details = [], [], [], []
     metrics = dict(schema=0, grounded=0, outputs=0, fallbacks=0, schema_failures=0, completed_verdicts=0)
     partial = False
-    thinking_times, grounded_times = [], []
+    thinking_times, grounded_times, fallback_times = [], [], []
     for bid, rows in spec['buildings'].items():
         dossier = provider_for_mode('kit' if live else 'fixtures').dossier(bid)
         dossier['persona'] = persona_for(dossier)
@@ -110,16 +116,21 @@ async def evaluate(live, spec, stop_at=None):
             pitches = [pitch(row, i) for i, row in enumerate(batch)]
             started = monotonic()
             if live:
-                challenges, first, grounded_at, full, fallbacks, failures = await measured_challenge(pitches, dossier, city)
+                challenges, first, grounded_at, full, fallbacks, failures, model_full, fallback_full = await measured_challenge(pitches, dossier, city)
                 thinking_times.append(first)
                 if grounded_at is not None:
                     grounded_times.append(grounded_at)
                 metrics['fallbacks'] += fallbacks
                 metrics['schema_failures'] += failures
+                if model_full is not None:
+                    latencies.append(model_full)
+                if fallback_full is not None:
+                    fallback_times.append(fallback_full)
             else:
                 challenges = [fake_agent.challenge(p, dossier) for p in pitches]
             elapsed = monotonic() - started
-            latencies.append(full if live else elapsed)
+            if not live:
+                latencies.append(elapsed)
             if live:
                 print(f'Challenge {bid} batch {offset//4+1}: full {full:.2f}s; fallbacks {fallbacks}', flush=True)
             for row, challenge in zip(batch, challenges):
@@ -169,7 +180,8 @@ async def evaluate(live, spec, stop_at=None):
         if partial:
             break
     return dict(metrics=metrics, challenges=rows_out, verdicts=verdict_details, winners=winners,
-                challenge_seconds=latencies, thinking_seconds=thinking_times, grounded_seconds=grounded_times, partial=partial)
+                challenge_seconds=latencies, fallback_seconds=fallback_times,
+                thinking_seconds=thinking_times, grounded_seconds=grounded_times, partial=partial)
 
 
 def report(result, before, after, estimate):
@@ -194,8 +206,9 @@ def report(result, before, after, estimate):
         f'| Published schema | {schema:.1f}% ({metrics["schema"]}/{outputs}) | 100% |',
         f'| Winner stability (modal winner / 3, mean over completed matchups) | {stable:.1f}% | ≥90% |',
         f'| First thinking subtitle p50 / p90 | {thinking50:.3f} s / {thinking90:.3f} s | ≤3 s |' if thinking50 is not None else '| First thinking subtitle | unavailable | ≤3 s |',
-        f'| First grounded subtitle p50 / p90 | {grounded50:.3f} s / {grounded90:.3f} s | ≤3 s |' if grounded50 is not None else '| First grounded subtitle | unavailable | ≤3 s |',
-        f'| Full grounded challenge batch p50 / p90 | {p50:.3f} s / {p90:.3f} s | p90 ≤6 s |' if p50 is not None else '| Full grounded challenge | unavailable | p90 ≤6 s |',
+        f'| First grounded model subtitle p50 / p90 | {grounded50:.3f} s / {grounded90:.3f} s | ≤3 s |' if grounded50 is not None else '| First grounded model subtitle | not measured (no model challenges) | ≤3 s |',
+        f'| Full model challenge batch p50 / p90 | {p50:.3f} s / {p90:.3f} s | p90 ≤6 s |' if p50 is not None else '| Full model challenge | not measured (no model challenges) | p90 ≤6 s |',
+        f'| Fallback-only or mixed challenge batch timings | {", ".join(f"{t:.3f} s" for t in result.get("fallback_seconds", [])) or "none"} | excluded from model latency |',
         f'| Offline/template fallback steps | {metrics["fallbacks"]} | reported separately |',
         f'| Invalid model schema attempts | {metrics["schema_failures"]} | 0 |',
         f'| Completed paid requests | {len(complete)}/{len(calls)} | usage reconciled |',
@@ -211,7 +224,7 @@ def report(result, before, after, estimate):
         'Player text is screened locally before calls. All displayed text passes source ID/number/unit checks and a batched cheap model claim check, or uses trusted source templates. '
         'Grounding and schema rates above describe published output INCLUDING fallback; fallback counts prevent confusing those rates with raw model reliability.', '',
         'Latency measures the actual Room phase transition and counteroffer emissions to an in-process screen connection, including generation, retries, claim checks, fallback and cumulative prefix display. '
-        'The first grounded text is buffered until the complete batch passes grounding. '
+        'The first grounded model text is buffered until publication; model timings exclude deterministic fallback players and safety refusals. '
         'WebSocket network delivery and browser render time are not included. '
         'The immediate thinking line is existing persona fiction and is reported separately from the first grounded-model response.', '',
         f'Preflight estimate before retries/regeneration: ${estimate:.3f}; actual requests are independently reserved conservatively in spend.py. '

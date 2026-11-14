@@ -29,6 +29,10 @@ T = TypeVar('T')
 class SpendUnavailable(RuntimeError):
     """Caller must return its ordinary offline fallback."""
 
+    def __init__(self, message: str, *, cause: str = 'unavailable'):
+        super().__init__(message)
+        self.cause = cause
+
 
 class SpendLedger:
     def __init__(self, path: Path | None = None, cap: float | None = None):
@@ -72,7 +76,7 @@ class SpendLedger:
             state = self.snapshot()
             if state['total_usd'] >= self.cap or state['total_usd'] + reservation > self.cap:
                 log.error('Bedrock spend cap reached; using offline fallback')
-                raise SpendUnavailable('Bedrock spend cap reached')
+                raise SpendUnavailable('Bedrock spend cap reached', cause='budget')
             row = dict(model=model, reserved_usd=reservation, status='unconfirmed')
             state['calls'].append(row)
             state['total_usd'] += reservation
@@ -109,7 +113,10 @@ class SpendLedger:
             except Exception as exc:
                 # Never log exception bodies: SDK errors can contain request content.
                 log.error('Bedrock call unavailable (%s); reservation retained', type(exc).__name__)
-                raise SpendUnavailable('Bedrock unavailable; using offline fallback') from None
+                from botocore.exceptions import ConnectTimeoutError, ReadTimeoutError
+                cause = ('timeout' if isinstance(exc, (TimeoutError, ConnectTimeoutError, ReadTimeoutError))
+                         else exc.cause if isinstance(exc, SpendUnavailable) else 'unavailable')
+                raise SpendUnavailable('Bedrock unavailable; using offline fallback', cause=cause) from None
 
 
 class CappedBedrockConverse(ChatBedrockConverse):
@@ -208,6 +215,7 @@ class MeteredClient:
                 stream = result['stream']
                 blocks = {}
                 usage = None
+                stop_reason = None
                 try:
                     for event in stream:
                         if time.monotonic() >= deadline:
@@ -228,15 +236,18 @@ class MeteredClient:
                                 tool['input'] = tool.get('input', '') + delta['toolUse'].get('input', '')
                         if 'metadata' in event:
                             usage = event['metadata'].get('usage')
+                        if 'messageStop' in event:
+                            stop_reason = event['messageStop'].get('stopReason')
                         if any(key.endswith('Exception') for key in event):
                             raise SpendUnavailable('Bedrock stream unavailable')
                     content = []
                     for _, block in sorted(blocks.items()):
-                        if 'toolUse' in block:
-                            block['toolUse']['input'] = json.loads(block['toolUse'].get('input', '{}'))
                         if block:
                             content.append(block)
-                    return {'output': {'message': {'role': 'assistant', 'content': content}}, 'usage': usage}
+                    # Raw tool JSON is validated AFTER accounting. Truncation with
+                    # usage is a schema failure, not an unconfirmed paid request.
+                    return {'output': {'message': {'role': 'assistant', 'content': content}},
+                            'usage': usage, 'stopReason': stop_reason}
                 finally:
                     stream.close()
 
