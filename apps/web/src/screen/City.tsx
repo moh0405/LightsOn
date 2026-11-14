@@ -75,6 +75,8 @@ export function City() {
         setReady(true);
       });
     });
+    const resize = new ResizeObserver(() => map.resize());
+    resize.observe(container.current!);
     let last = performance.now();
     const orbit = setInterval(() => {
       const now = performance.now();
@@ -82,7 +84,7 @@ export function City() {
       last = now;
     }, 100);
     return () => {
-      active = false; clearInterval(orbit); mapRef.current = null;
+      active = false; resize.disconnect(); clearInterval(orbit); mapRef.current = null;
       if (window.__lightsOnMap === map) delete window.__lightsOnMap;
       map.remove();
     };
@@ -106,7 +108,10 @@ export function City() {
     const update = () => {
       const next: Hover[] = [];
       for (const [player, p] of Object.entries(current.current.pointers)) {
-        const feature = map.queryRenderedFeatures([p.x * map.getCanvas().clientWidth, p.y * map.getCanvas().clientHeight], { layers: ["floors"] })[0];
+        // The visible beam is 22 px wide. A small hit area keeps its edge
+        // responsive while the attract camera orbits and touch rounds pixels.
+        const x = p.x * map.getCanvas().clientWidth, y = p.y * map.getCanvas().clientHeight;
+        const feature = map.queryRenderedFeatures([[x - 6, y - 6], [x + 6, y + 6]], { layers: ["floors"] })[0];
         const building = feature?.properties?.building_id as string | undefined;
         const layer = `hover-${player}`;
         if (!map.getLayer(layer)) map.addLayer({ id: layer, type: "line", source: "floors", filter: ["==", ["get", "building_id"], ""], paint: { "line-color": p.color, "line-width": 3, "line-offset": -3 } });
@@ -163,7 +168,7 @@ export function City() {
   return <>
     {error && <div role="alert" style={{ padding: 10, background: "#5a3b00" }}>{error}</div>}
     <div data-testid="field" className="city-field" data-facts-ready={ready && factsReady} style={{ position: "relative", height: "100%", minHeight: 0, borderRadius: 12, overflow: "hidden", background: "#10131c" }}>
-      {revival && flashPoint && <div key={revival.at} aria-hidden="true" style={{ position: "absolute", top: flashPoint.y, left: flashPoint.x - 32, width: 64, height: 24, zIndex: 1, background: "white", opacity: revival.auto_completed ? 0.25 : 1, filter: "blur(18px)", animation: `city-flash ${FLASH_MS}ms forwards`, pointerEvents: "none" }} />}
+      {revival && flashPoint && <div key={revival.at} data-testid="revival-flash" data-soft={revival.auto_completed} aria-hidden="true" style={{ position: "absolute", top: flashPoint.y, left: flashPoint.x - 32, width: 64, height: 24, zIndex: 1, background: revival.auto_completed ? "#ffffff40" : "white", filter: "blur(18px)", animation: `city-flash ${FLASH_MS}ms forwards`, pointerEvents: "none" }} />}
       <style>{`@keyframes city-flash { from { opacity: 0.9 } to { opacity: 0 } }`}</style>
       <div ref={container} style={{ position: "absolute", inset: 0 }} />
       <Sparks target={flashPoint} />

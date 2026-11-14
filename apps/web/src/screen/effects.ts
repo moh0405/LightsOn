@@ -1,5 +1,5 @@
 export const INTRO_DIVE_MS = 2500;
-export const MEDIA_BEAT_MS = 1500;
+export const MEDIA_BEAT_MS = 1250;
 export const FLOOR_STAGGER_MS = 60;
 export const FLOOR_FADE_MS = 600;
 export const FLASH_MS = 200;
@@ -24,12 +24,12 @@ export function mediaPlan(value: unknown, id: string): MediaBeat[] {
   }
   return result;
 }
+/** Reserve the interior beat within the server's eight-second INTRO. */
+export function boundMediaPlan(beats: MediaBeat[]): MediaBeat[] {
+  return [...beats.filter((b) => b.kind === "aerial").slice(0, 3), ...beats.filter((b) => b.kind === "matterport").slice(0, 1)];
+}
 export function mediaAt(beats: MediaBeat[], elapsed: number): MediaBeat | null {
   return elapsed < INTRO_DIVE_MS ? null : beats[Math.floor((elapsed - INTRO_DIVE_MS) / MEDIA_BEAT_MS)] ?? null;
-}
-export function floorProgress(floors: number[], floor: number, elapsed: number): number {
-  const index = [...floors].sort((a, b) => a - b).indexOf(floor);
-  return index < 0 ? 1 : Math.max(0, Math.min(1, (elapsed - index * FLOOR_STAGGER_MS) / FLOOR_FADE_MS));
 }
 export function lightUpDuration(floors: number[]): number {
   return floors.length ? FLOOR_FADE_MS + (floors.length - 1) * FLOOR_STAGGER_MS : 0;

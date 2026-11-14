@@ -51,7 +51,7 @@ export function ScreenApp() {
       <aside style={{ minHeight: 0, overflow: "hidden", display: "flex", flexDirection: "column", gap: 6 }}>
         {qr && (
           <>
-            <div data-testid="qr" style={{ background: "#fff", padding: 8, borderRadius: 8, width: 160, boxSizing: "border-box" }} dangerouslySetInnerHTML={{ __html: qr.svg }} />
+            <div data-testid="qr" style={{ background: "#fff", padding: 8, borderRadius: 8, width: 200, boxSizing: "border-box" }} dangerouslySetInnerHTML={{ __html: qr.svg }} />
             <p style={{ wordBreak: "break-all", fontSize: 28, margin: 0 }}>{qr.url}</p>
             <p style={{ margin: 0 }}>Room code: <strong>{room}</strong></p>
           </>
@@ -60,8 +60,8 @@ export function ScreenApp() {
         {!hasState && <p>…</p>}
         <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, fontSize: 28 }}>
           {Object.values(players).map((p) => (
-            <li key={p.id} style={{ opacity: p.connected ? 1 : 0.4 }}>
-              <span style={{ color: p.color }}>●</span> {p.nickname}
+            <li key={p.id} style={{ opacity: p.connected ? 1 : 0.4, display: "flex", gap: 6 }}>
+              <span style={{ color: p.color, flexShrink: 0 }}>●</span><div>{p.nickname}</div>
             </li>
           ))}
         </ul>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useGame } from "../lib/store";
 import { INTRO_DIVE_MS, MEDIA_BEAT_MS, mediaAt, type MediaBeat } from "./effects";
 import { loadMedia } from "./media";
@@ -6,15 +6,15 @@ import { loadMedia } from "./media";
 /** Sandboxed external adapter: bounded wait, caption fallback and a visible toast. */
 export function Matterport({ beat, onError }: { beat: MediaBeat; onError: (message: string) => void }) {
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
+  const loaded = useRef(false);
   useEffect(() => {
-    setState("loading");
+    loaded.current = false; setState("loading");
     const timer = setTimeout(() => {
-      setState((s) => {
-        if (s !== "loading") return s;
+      if (!loaded.current) {
         console.warn("Matterport showcase timed out; using caption");
         onError("Interior tour unavailable. Showing the source caption.");
-        return "failed";
-      });
+        setState("failed");
+      }
     }, 1000);
     return () => clearTimeout(timer);
   }, [beat.src, onError]);
@@ -27,7 +27,7 @@ export function Matterport({ beat, onError }: { beat: MediaBeat; onError: (messa
     {state !== "failed" && <iframe title="Matterport interior tour" src={beat.src} sandbox="allow-scripts allow-same-origin allow-pointer-lock" referrerPolicy="no-referrer" onLoad={() => {
       // Browsers deliberately hide cross-origin iframe failures. Keep the
       // source caption visible underneath and offer an explicit still fallback.
-      setState("ready");
+      loaded.current = true; setState("ready");
     }} onError={fail} style={{ opacity: state === "ready" ? 1 : 0 }} />}
     <figcaption>Matterport · {beat.caption ?? "Caption unavailable"}{state !== "failed" && <button onClick={fail}>Show caption still</button>}</figcaption>
   </figure>;
