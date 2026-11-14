@@ -35,6 +35,8 @@ DEFAULT_CACHE_DIR = ROOT / "server/cache/vexcel"
 DEFAULT_BASE_URL = "https://api.vexcelgroup.com/v2"
 DEFAULT_LAYERS = "urban,urban-r,wide-area,urban-g"
 DEFAULT_TIMEOUT = 60.0
+DETECTION_THRESHOLD = 0.5
+DETECTION_BUFFER = 30
 MAX_RETRIES = 5
 DEFAULT_LABELS = ["parking lot", "car", "rooftop terrace", "solar panel", "tree"]
 
@@ -78,6 +80,10 @@ class VexcelClient:
             dir_path = self.cache_dir / f"_key_{hashed}"
         dir_path.mkdir(parents=True, exist_ok=True)
         return dir_path
+
+    @staticmethod
+    def _request_key(request: dict[str, Any]) -> str:
+        return hashlib.sha256(json.dumps(request, sort_keys=True).encode()).hexdigest()[:24]
 
     def _send(
         self,
@@ -186,7 +192,7 @@ class VexcelClient:
     ) -> bytes | None:
         """Fetch ortho image clipped to parcel with outline."""
         wkt_str = to_wkt(parcel_wkt)
-        cache_path = self._get_cache_dir(property_id, f"ortho_{wkt_str}") / "ortho.jpg"
+        cache_path = self._get_cache_dir(property_id, f"ortho_{wkt_str}") / f"ortho_{self._request_key({'wkt': wkt_str})}.jpg"
         if cache_path.is_file():
             try:
                 return cache_path.read_bytes()
@@ -329,18 +335,11 @@ class VexcelClient:
     ) -> dict[str, Any]:
         """Detect custom elements via sam3 on parcel ortho imagery."""
         wkt_str = to_wkt(parcel_wkt)
-        detect_labels = labels or DEFAULT_LABELS
-        cache_path = self._get_cache_dir(property_id, f"detect_{wkt_str}") / "detect.json"
-        if cache_path.is_file():
-            try:
-                return json.loads(cache_path.read_text())
-            except Exception as exc:
-                logger.warning("Failed to read cached detect data at %s: %s", cache_path, exc)
-
+        detect_labels = sorted(set(DEFAULT_LABELS if labels is None else labels))
         body = {
             "wkt": wkt_str,
             "srid": 4326,
-            "buffer-meter": 30,
+            "buffer-meter": DETECTION_BUFFER,
             "images": [{
                 "endpoint": "ortho/extract",
                 "request": {
@@ -352,12 +351,19 @@ class VexcelClient:
             }],
             "model-input": {
                 "elements": [
-                    {"label": label, "model": "sam3", "detection-threshold": 0.5}
+                    {"label": label, "model": "sam3", "detection-threshold": DETECTION_THRESHOLD}
                     for label in detect_labels
                 ],
                 "include": ["bbox", "confidence"],
             },
         }
+        cache_path = self._get_cache_dir(property_id, f"detect_{wkt_str}") / f"detect_{self._request_key(body)}.json"
+        if cache_path.is_file():
+            try:
+                return json.loads(cache_path.read_text())
+            except Exception as exc:
+                logger.warning("Failed to read cached detect data: %s", exc.__class__.__name__)
+
         resp = self._send("POST", "elements/detect", json_body=body)
         if resp is None or not resp.is_success:
             logger.error("Vexcel elements/detect failed with status %s", getattr(resp, "status_code", "None"))

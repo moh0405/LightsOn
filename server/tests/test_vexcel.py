@@ -77,39 +77,27 @@ def test_timeout_fallback(tmp_path):
 
 def test_cache_hit_makes_no_call(tmp_path):
     pid = "233953"
-    cache_dir = tmp_path / pid
-    cache_dir.mkdir(parents=True)
-
-    # Pre-populate cache
-    (cache_dir / "property.json").write_text(json.dumps({"cached": True, "features": []}))
-    (cache_dir / "ortho.jpg").write_bytes(b"fake-ortho-bytes")
-    (cache_dir / "oriented_collections.json").write_text(json.dumps({
-        "features": [{"properties": {"product-type": "oblique-north", "last-capture-date": "2025-01-01"}}]
-    }))
-    obliques_dir = cache_dir / "obliques"
-    obliques_dir.mkdir()
-    (obliques_dir / "oblique-north.jpg").write_bytes(b"fake-oblique-bytes")
-    (cache_dir / "detect.json").write_text(json.dumps({"cached": True, "detections": []}))
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        raise AssertionError(f"Unexpected network call made on cache hit: {request.url}")
-
-    client = httpx.Client(transport=httpx.MockTransport(handler), base_url="https://api.vexcelgroup.com/v2")
-    vclient = VexcelClient(api_key="test-key", cache_dir=tmp_path, http_client=client)
-
-    # Calls should hit cache with ZERO network requests
-    prop = vclient.property(29.7588, -95.3651, property_id=pid)
-    assert prop.get("cached") is True
-
-    img = vclient.ortho("POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))", property_id=pid)
-    assert img == b"fake-ortho-bytes"
-
-    obls = vclient.obliques("POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))", property_id=pid)
-    assert "oblique-north" in obls
-    assert obls["oblique-north"] == b"fake-oblique-bytes"
-
-    det = vclient.detect("POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))", property_id=pid)
-    assert det.get("cached") is True
+    requests = []
+    def handler(request):
+        requests.append(request)
+        if request.url.path.endswith('oriented/collections'):
+            return httpx.Response(200, json={'features': [{'properties': {
+                'product-type': 'oblique-north', 'last-capture-date': '2023-08-02'}}]})
+        if request.url.path.endswith('extract') and not request.url.path.endswith('property/extract'):
+            return httpx.Response(200, content=b'recorded-test-image')
+        return httpx.Response(200, json={'features': []})
+    http = httpx.Client(transport=httpx.MockTransport(handler), base_url='https://test.invalid/v2/')
+    client = VexcelClient(api_key='test', cache_dir=tmp_path, http_client=http)
+    geometry = square_around(29.7588018, -95.3650891)
+    def fetch():
+        return (client.property(29.7588018, -95.3650891, property_id=pid),
+                client.ortho(geometry, property_id=pid),
+                client.obliques(geometry, property_id=pid),
+                client.detect(geometry, property_id=pid))
+    first = fetch()
+    assert len(requests) == 5
+    assert fetch() == first
+    assert len(requests) == 5
 
 
 def test_fact_building_estimate_kind_and_capture_date():
@@ -181,3 +169,39 @@ def test_vexcel_live_smoke():
     ]
     assert len(primary_structs) == 1
     assert "footprint.wkt" in primary_structs[0]
+
+
+@pytest.mark.parametrize('change', ['labels', 'geometry', 'threshold', 'buffer'])
+def test_detection_cache_keys_all_request_inputs(tmp_path, monkeypatch, change):
+    import app.data.vexcel as adapter
+    requests = []
+    def handler(request):
+        requests.append(json.loads(request.content))
+        return httpx.Response(200, json={'features': [], 'request_number': len(requests)})
+    http = httpx.Client(transport=httpx.MockTransport(handler), base_url='https://test.invalid/v2/')
+    client = VexcelClient(api_key='test', cache_dir=tmp_path, http_client=http)
+    geometry = square_around(29.7588018, -95.3650891)
+    first = client.detect(geometry, labels=['car', 'tree'], property_id='233953')
+    assert client.detect(geometry, labels=['tree', 'car'], property_id='233953') == first
+    assert len(requests) == 1
+    labels, pid = ['car', 'tree'], '233953'
+    if change == 'labels': labels = ['tree']
+    if change == 'geometry': geometry = square_around(29.7588018, -95.3650891, 50)
+    if change == 'property': pid = '233899'
+    if change == 'threshold': monkeypatch.setattr(adapter, 'DETECTION_THRESHOLD', 0.75, raising=False)
+    if change == 'buffer': monkeypatch.setattr(adapter, 'DETECTION_BUFFER', 0, raising=False)
+    assert client.detect(geometry, labels=labels, property_id=pid)['request_number'] == 2
+    assert len(requests) == 2
+
+
+def test_ortho_cache_changes_with_geometry(tmp_path):
+    requests = []
+    def handler(request):
+        requests.append(request)
+        return httpx.Response(200, content=f'image-{len(requests)}'.encode())
+    http = httpx.Client(transport=httpx.MockTransport(handler), base_url='https://test.invalid/v2/')
+    client = VexcelClient(api_key='test', cache_dir=tmp_path, http_client=http)
+    geometry = square_around(29.7588018, -95.3650891)
+    assert client.ortho(geometry, property_id='233953') == b'image-1'
+    assert client.ortho(geometry, property_id='233953') == b'image-1'
+    assert client.ortho(square_around(29.7588018, -95.3650891, 50), property_id='233953') == b'image-2'
