@@ -6,6 +6,7 @@
 # data (no trailing slash so symlinks in worktrees are ignored too)
 /data
 data/
+!server/app/data/
 /apps/web/public/media
 
 # generated

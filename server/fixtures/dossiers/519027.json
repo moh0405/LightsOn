@@ -1,0 +1,1625 @@
+{
+  "id": "519027",
+  "name": "717 Texas",
+  "address": "717 Texas Ave",
+  "lat": 29.761614,
+  "lng": -95.364271,
+  "footprint": null,
+  "stories": 33,
+  "floor_height_m": 3.8,
+  "floors": [
+    {
+      "floor_id": 1737355,
+      "number": 10,
+      "name": "TenthFloor",
+      "size_sqft": 21097.0,
+      "available_sqft": 0,
+      "occupied_sqft": 21097.0,
+      "source_status": "occupied",
+      "game_status": "lit",
+      "fact_ids": [
+        "F_519027_floor_10_size_sqft",
+        "F_519027_floor_10_available_sqft",
+        "F_519027_floor_10_occupied_sqft"
+      ]
+    },
+    {
+      "floor_id": 1081197,
+      "number": 11,
+      "name": "EleventhFloor",
+      "size_sqft": 21097.0,
+      "available_sqft": 0,
+      "occupied_sqft": 21097.0,
+      "source_status": "occupied",
+      "game_status": "lit",
+      "fact_ids": [
+        "F_519027_floor_11_size_sqft",
+        "F_519027_floor_11_available_sqft",
+        "F_519027_floor_11_occupied_sqft"
+      ]
+    },
+    {
+      "floor_id": 1081198,
+      "number": 12,
+      "name": "TwelfthFloor",
+      "size_sqft": 21097.0,
+      "available_sqft": 20597.0,
+      "occupied_sqft": 24206.0,
+      "source_status": "partial",
+      "game_status": "lit",
+      "fact_ids": [
+        "F_519027_floor_12_size_sqft",
+        "F_519027_floor_12_available_sqft",
+        "F_519027_floor_12_occupied_sqft"
+      ]
+    },
+    {
+      "floor_id": 1084995,
+      "number": 13,
+      "name": "ThirteenthFloor",
+      "size_sqft": 26798.0,
+      "available_sqft": 0,
+      "occupied_sqft": 26798.0,
+      "source_status": "occupied",
+      "game_status": "lit",
+      "fact_ids": [
+        "F_519027_floor_13_size_sqft",
+        "F_519027_floor_13_available_sqft",
+        "F_519027_floor_13_occupied_sqft"
+      ]
+    },
+    {
+      "floor_id": 1081199,
+      "number": 14,
+      "name": "FourteenthFloor",
+      "size_sqft": 26978.0,
+      "available_sqft": 0,
+      "occupied_sqft": 26978.0,
+      "source_status": "occupied",
+      "game_status": "lit",
+      "fact_ids": [
+        "F_519027_floor_14_size_sqft",
+        "F_519027_floor_14_available_sqft",
+        "F_519027_floor_14_occupied_sqft"
+      ]
+    },
+    {
+      "floor_id": 636471,
+      "number": 15,
+      "name": "FifteenthFloor",
+      "size_sqft": 21097.0,
+      "available_sqft": 0,
+      "occupied_sqft": 21097.0,
+      "source_status": "occupied",
+      "game_status": "lit",
+      "fact_ids": [
+        "F_519027_floor_15_size_sqft",
+        "F_519027_floor_15_available_sqft",
+        "F_519027_floor_15_occupied_sqft"
+      ]
+    },
+    {
+      "floor_id": 636472,
+      "number": 16,
+      "name": "SixteenthFloor",
+      "size_sqft": 27144.0,
+      "available_sqft": 0,
+      "occupied_sqft": 27144.0,
+      "source_status": "occupied",
+      "game_status": "lit",
+      "fact_ids": [
+        "F_519027_floor_16_size_sqft",
+        "F_519027_floor_16_available_sqft",
+        "F_519027_floor_16_occupied_sqft"
+      ]
+    },
+    {
+      "floor_id": 1084996,
+      "number": 17,
+      "name": "SeventeenthFloor",
+      "size_sqft": 27144.0,
+      "available_sqft": 12922.0,
+      "occupied_sqft": 14222.0,
+      "source_status": "partial",
+      "game_status": "lit",
+      "fact_ids": [
+        "F_519027_floor_17_size_sqft",
+        "F_519027_floor_17_available_sqft",
+        "F_519027_floor_17_occupied_sqft"
+      ]
+    },
+    {
+      "floor_id": 636473,
+      "number": 18,
+      "name": "EighteenthFloor",
+      "size_sqft": 27144.0,
+      "available_sqft": 0,
+      "occupied_sqft": 27144.0,
+      "source_status": "occupied",
+      "game_status": "lit",
+      "fact_ids": [
+        "F_519027_floor_18_size_sqft",
+        "F_519027_floor_18_available_sqft",
+        "F_519027_floor_18_occupied_sqft"
+      ]
+    },
+    {
+      "floor_id": 1084997,
+      "number": 19,
+      "name": "NineteenthFloor",
+      "size_sqft": 27114.0,
+      "available_sqft": 0,
+      "occupied_sqft": 27114.0,
+      "source_status": "occupied",
+      "game_status": "lit",
+      "fact_ids": [
+        "F_519027_floor_19_size_sqft",
+        "F_519027_floor_19_available_sqft",
+        "F_519027_floor_19_occupied_sqft"
+      ]
+    },
+    {
+      "floor_id": 1737356,
+      "number": 20,
+      "name": "TwentiethFloor",
+      "size_sqft": 27144.0,
+      "available_sqft": 0,
+      "occupied_sqft": 27144.0,
+      "source_status": "occupied",
+      "game_status": "lit",
+      "fact_ids": [
+        "F_519027_floor_20_size_sqft",
+        "F_519027_floor_20_available_sqft",
+        "F_519027_floor_20_occupied_sqft"
+      ]
+    },
+    {
+      "floor_id": 1737357,
+      "number": 21,
+      "name": "TwentyFirstFloor",
+      "size_sqft": 27250.0,
+      "available_sqft": 0,
+      "occupied_sqft": 27250.0,
+      "source_status": "occupied",
+      "game_status": "lit",
+      "fact_ids": [
+        "F_519027_floor_21_size_sqft",
+        "F_519027_floor_21_available_sqft",
+        "F_519027_floor_21_occupied_sqft"
+      ]
+    },
+    {
+      "floor_id": 636474,
+      "number": 22,
+      "name": "TwentySecondFloor",
+      "size_sqft": 27183.0,
+      "available_sqft": 0,
+      "occupied_sqft": 27183.0,
+      "source_status": "occupied",
+      "game_status": "lit",
+      "fact_ids": [
+        "F_519027_floor_22_size_sqft",
+        "F_519027_floor_22_available_sqft",
+        "F_519027_floor_22_occupied_sqft"
+      ]
+    },
+    {
+      "floor_id": 1737358,
+      "number": 23,
+      "name": "TwentyThirdFloor",
+      "size_sqft": 26780.0,
+      "available_sqft": 26780.0,
+      "occupied_sqft": 0,
+      "source_status": "dark",
+      "game_status": "dark",
+      "fact_ids": [
+        "F_519027_floor_23_size_sqft",
+        "F_519027_floor_23_available_sqft",
+        "F_519027_floor_23_occupied_sqft"
+      ]
+    },
+    {
+      "floor_id": 1081200,
+      "number": 24,
+      "name": "TwentyFourthFloor",
+      "size_sqft": 27795.0,
+      "available_sqft": 27795.0,
+      "occupied_sqft": 0,
+      "source_status": "dark",
+      "game_status": "dark",
+      "fact_ids": [
+        "F_519027_floor_24_size_sqft",
+        "F_519027_floor_24_available_sqft",
+        "F_519027_floor_24_occupied_sqft"
+      ]
+    },
+    {
+      "floor_id": 636475,
+      "number": 25,
+      "name": "TwentyFifthFloor",
+      "size_sqft": 27795.0,
+      "available_sqft": 27795.0,
+      "occupied_sqft": 0,
+      "source_status": "dark",
+      "game_status": "dark",
+      "fact_ids": [
+        "F_519027_floor_25_size_sqft",
+        "F_519027_floor_25_available_sqft",
+        "F_519027_floor_25_occupied_sqft"
+      ]
+    },
+    {
+      "floor_id": 636476,
+      "number": 26,
+      "name": "TwentySixthFloor",
+      "size_sqft": 27795.0,
+      "available_sqft": 27795.0,
+      "occupied_sqft": 0,
+      "source_status": "dark",
+      "game_status": "dark",
+      "fact_ids": [
+        "F_519027_floor_26_size_sqft",
+        "F_519027_floor_26_available_sqft",
+        "F_519027_floor_26_occupied_sqft"
+      ]
+    },
+    {
+      "floor_id": 1737359,
+      "number": 27,
+      "name": "TwentySeventhFloor",
+      "size_sqft": 27541.0,
+      "available_sqft": 0,
+      "occupied_sqft": 27541.0,
+      "source_status": "occupied",
+      "game_status": "lit",
+      "fact_ids": [
+        "F_519027_floor_27_size_sqft",
+        "F_519027_floor_27_available_sqft",
+        "F_519027_floor_27_occupied_sqft"
+      ]
+    },
+    {
+      "floor_id": 636477,
+      "number": 28,
+      "name": "TwentyEighthFloor",
+      "size_sqft": 27541.0,
+      "available_sqft": 0,
+      "occupied_sqft": 27541.0,
+      "source_status": "occupied",
+      "game_status": "lit",
+      "fact_ids": [
+        "F_519027_floor_28_size_sqft",
+        "F_519027_floor_28_available_sqft",
+        "F_519027_floor_28_occupied_sqft"
+      ]
+    },
+    {
+      "floor_id": 1084998,
+      "number": 29,
+      "name": "TwentyNinthFloor",
+      "size_sqft": 27795.0,
+      "available_sqft": 27795.0,
+      "occupied_sqft": 0,
+      "source_status": "dark",
+      "game_status": "dark",
+      "fact_ids": [
+        "F_519027_floor_29_size_sqft",
+        "F_519027_floor_29_available_sqft",
+        "F_519027_floor_29_occupied_sqft"
+      ]
+    },
+    {
+      "floor_id": 2855858,
+      "number": 30,
+      "name": "ThirtiethFloor",
+      "size_sqft": 27187.0,
+      "available_sqft": 27187.0,
+      "occupied_sqft": 0,
+      "source_status": "dark",
+      "game_status": "dark",
+      "fact_ids": [
+        "F_519027_floor_30_size_sqft",
+        "F_519027_floor_30_available_sqft",
+        "F_519027_floor_30_occupied_sqft"
+      ]
+    },
+    {
+      "floor_id": 3081471,
+      "number": 31,
+      "name": "ThirtyFirstFloor",
+      "size_sqft": 27187.0,
+      "available_sqft": 0,
+      "occupied_sqft": 26707.0,
+      "source_status": "occupied",
+      "game_status": "lit",
+      "fact_ids": [
+        "F_519027_floor_31_size_sqft",
+        "F_519027_floor_31_available_sqft",
+        "F_519027_floor_31_occupied_sqft"
+      ]
+    },
+    {
+      "floor_id": 2878373,
+      "number": 32,
+      "name": "ThirtySecondFloor",
+      "size_sqft": 21097.0,
+      "available_sqft": 0,
+      "occupied_sqft": 21097.0,
+      "source_status": "occupied",
+      "game_status": "lit",
+      "fact_ids": [
+        "F_519027_floor_32_size_sqft",
+        "F_519027_floor_32_available_sqft",
+        "F_519027_floor_32_occupied_sqft"
+      ]
+    },
+    {
+      "floor_id": 2693585,
+      "number": 33,
+      "name": "ThirtyThirdFloor",
+      "size_sqft": 21097.0,
+      "available_sqft": 0,
+      "occupied_sqft": 21097.0,
+      "source_status": "occupied",
+      "game_status": "lit",
+      "fact_ids": [
+        "F_519027_floor_33_size_sqft",
+        "F_519027_floor_33_available_sqft",
+        "F_519027_floor_33_occupied_sqft"
+      ]
+    },
+    {
+      "floor_id": 610262,
+      "number": null,
+      "name": "Lobby",
+      "size_sqft": 21097.0,
+      "available_sqft": 9080.0,
+      "occupied_sqft": 0,
+      "source_status": "partial",
+      "game_status": "lit",
+      "fact_ids": [
+        "F_519027_floor_id_610262_size_sqft",
+        "F_519027_floor_id_610262_available_sqft",
+        "F_519027_floor_id_610262_occupied_sqft"
+      ]
+    },
+    {
+      "floor_id": 1204662,
+      "number": null,
+      "name": "UnknownFloor",
+      "size_sqft": 26770.0,
+      "available_sqft": 0,
+      "occupied_sqft": 0,
+      "source_status": "unknown",
+      "game_status": "lit",
+      "fact_ids": [
+        "F_519027_floor_id_1204662_size_sqft",
+        "F_519027_floor_id_1204662_available_sqft",
+        "F_519027_floor_id_1204662_occupied_sqft"
+      ]
+    },
+    {
+      "floor_id": 2461304,
+      "number": null,
+      "name": "LowerLevel",
+      "size_sqft": 21097.0,
+      "available_sqft": 0,
+      "occupied_sqft": 0,
+      "source_status": "unknown",
+      "game_status": "lit",
+      "fact_ids": [
+        "F_519027_floor_id_2461304_size_sqft",
+        "F_519027_floor_id_2461304_available_sqft",
+        "F_519027_floor_id_2461304_occupied_sqft"
+      ]
+    }
+  ],
+  "facts": [
+    {
+      "id": "F_519027_buildingName",
+      "key": "buildingName",
+      "value": "717 Texas",
+      "unit": null,
+      "source": "costar",
+      "source_field": "commercial-property.buildingName",
+      "kind": "verified",
+      "say_as": "717 Texas"
+    },
+    {
+      "id": "F_519027_numStoriesAboveGrade",
+      "key": "numStoriesAboveGrade",
+      "value": 33,
+      "unit": null,
+      "source": "costar",
+      "source_field": "commercial-property.numStoriesAboveGrade",
+      "kind": "verified",
+      "say_as": "33"
+    },
+    {
+      "id": "F_519027_buildingHeightInFeet",
+      "key": "buildingHeightInFeet",
+      "value": null,
+      "unit": "ft",
+      "source": "costar",
+      "source_field": "commercial-property.buildingHeightInFeet",
+      "kind": "verified",
+      "say_as": null
+    },
+    {
+      "id": "F_519027_rentableBuildingAreaSquareFeet",
+      "key": "rentableBuildingAreaSquareFeet",
+      "value": 697887.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-property.rentableBuildingAreaSquareFeet",
+      "kind": "verified",
+      "say_as": "697,887.0 sqft"
+    },
+    {
+      "id": "F_519027_grossTypicalFloorSquareFeet",
+      "key": "grossTypicalFloorSquareFeet",
+      "value": 27795.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-property.grossTypicalFloorSquareFeet",
+      "kind": "verified",
+      "say_as": "27,795.0 sqft"
+    },
+    {
+      "id": "F_519027_parkingRatio",
+      "key": "parkingRatio",
+      "value": 1.4,
+      "unit": null,
+      "source": "costar",
+      "source_field": "commercial-property.parkingRatio",
+      "kind": "verified",
+      "say_as": "1.4"
+    },
+    {
+      "id": "F_519027_propertyType",
+      "key": "propertyType",
+      "value": "Office",
+      "unit": null,
+      "source": "costar",
+      "source_field": "commercial-property.propertyType",
+      "kind": "verified",
+      "say_as": "Office"
+    },
+    {
+      "id": "F_519027_buildingClass",
+      "key": "buildingClass",
+      "value": "A",
+      "unit": null,
+      "source": "costar",
+      "source_field": "commercial-property.buildingClass",
+      "kind": "verified",
+      "say_as": "A"
+    },
+    {
+      "id": "F_519027_construction_GroundBreaking",
+      "key": "construction_GroundBreaking",
+      "value": 2001,
+      "unit": "year",
+      "source": "costar",
+      "source_field": "commercial-property.constructionEvents.year",
+      "kind": "verified",
+      "say_as": "2,001 year"
+    },
+    {
+      "id": "F_519027_construction_ConstructionComplete",
+      "key": "construction_ConstructionComplete",
+      "value": 2003,
+      "unit": "year",
+      "source": "costar",
+      "source_field": "commercial-property.constructionEvents.year",
+      "kind": "verified",
+      "say_as": "2,003 year"
+    },
+    {
+      "id": "F_519027_construction_RenovationFinished",
+      "key": "construction_RenovationFinished",
+      "value": 2020,
+      "unit": "year",
+      "source": "costar",
+      "source_field": "commercial-property.constructionEvents.year",
+      "kind": "verified",
+      "say_as": "2,020 year"
+    },
+    {
+      "id": "F_519027_latitude",
+      "key": "latitude",
+      "value": 29.761614,
+      "unit": "degrees",
+      "source": "costar",
+      "source_field": "commercial-property.primaryAddress.latitude",
+      "kind": "verified",
+      "say_as": "29.761614 degrees"
+    },
+    {
+      "id": "F_519027_longitude",
+      "key": "longitude",
+      "value": -95.364271,
+      "unit": "degrees",
+      "source": "costar",
+      "source_field": "commercial-property.primaryAddress.longitude",
+      "kind": "verified",
+      "say_as": "-95.364271 degrees"
+    },
+    {
+      "id": "F_519027_floor_id_610262_size_sqft",
+      "key": "floor_id_610262_size_sqft",
+      "value": 21097.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-property.floors.floorSize.squareFeet",
+      "kind": "verified",
+      "say_as": "21,097.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_id_610262_available_sqft",
+      "key": "floor_id_610262_available_sqft",
+      "value": 9080.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-listing-summary.forLeaseSummary.spaces.squareFeetMax",
+      "kind": "verified",
+      "say_as": "9,080.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_id_610262_occupied_sqft",
+      "key": "floor_id_610262_occupied_sqft",
+      "value": 0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "location-occupancy.spaces.squareFeetOccupied",
+      "kind": "verified",
+      "say_as": "0 sqft"
+    },
+    {
+      "id": "F_519027_floor_15_size_sqft",
+      "key": "floor_15_size_sqft",
+      "value": 21097.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-property.floors.floorSize.squareFeet",
+      "kind": "verified",
+      "say_as": "21,097.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_15_available_sqft",
+      "key": "floor_15_available_sqft",
+      "value": 0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-listing-summary.forLeaseSummary.spaces.squareFeetMax|squareFeetMin",
+      "kind": "verified",
+      "say_as": "0 sqft"
+    },
+    {
+      "id": "F_519027_floor_15_occupied_sqft",
+      "key": "floor_15_occupied_sqft",
+      "value": 21097.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "location-occupancy.spaces.squareFeetOccupied",
+      "kind": "verified",
+      "say_as": "21,097.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_16_size_sqft",
+      "key": "floor_16_size_sqft",
+      "value": 27144.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-property.floors.floorSize.squareFeet",
+      "kind": "verified",
+      "say_as": "27,144.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_16_available_sqft",
+      "key": "floor_16_available_sqft",
+      "value": 0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-listing-summary.forLeaseSummary.spaces.squareFeetMax|squareFeetMin",
+      "kind": "verified",
+      "say_as": "0 sqft"
+    },
+    {
+      "id": "F_519027_floor_16_occupied_sqft",
+      "key": "floor_16_occupied_sqft",
+      "value": 27144.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "location-occupancy.spaces.squareFeetOccupied",
+      "kind": "verified",
+      "say_as": "27,144.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_18_size_sqft",
+      "key": "floor_18_size_sqft",
+      "value": 27144.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-property.floors.floorSize.squareFeet",
+      "kind": "verified",
+      "say_as": "27,144.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_18_available_sqft",
+      "key": "floor_18_available_sqft",
+      "value": 0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-listing-summary.forLeaseSummary.spaces.squareFeetMax|squareFeetMin",
+      "kind": "verified",
+      "say_as": "0 sqft"
+    },
+    {
+      "id": "F_519027_floor_18_occupied_sqft",
+      "key": "floor_18_occupied_sqft",
+      "value": 27144.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "location-occupancy.spaces.squareFeetOccupied",
+      "kind": "verified",
+      "say_as": "27,144.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_22_size_sqft",
+      "key": "floor_22_size_sqft",
+      "value": 27183.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-property.floors.floorSize.squareFeet",
+      "kind": "verified",
+      "say_as": "27,183.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_22_available_sqft",
+      "key": "floor_22_available_sqft",
+      "value": 0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-listing-summary.forLeaseSummary.spaces.squareFeetMax|squareFeetMin",
+      "kind": "verified",
+      "say_as": "0 sqft"
+    },
+    {
+      "id": "F_519027_floor_22_occupied_sqft",
+      "key": "floor_22_occupied_sqft",
+      "value": 27183.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "location-occupancy.spaces.squareFeetOccupied",
+      "kind": "verified",
+      "say_as": "27,183.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_25_size_sqft",
+      "key": "floor_25_size_sqft",
+      "value": 27795.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-property.floors.floorSize.squareFeet",
+      "kind": "verified",
+      "say_as": "27,795.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_25_available_sqft",
+      "key": "floor_25_available_sqft",
+      "value": 27795.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-listing-summary.forLeaseSummary.spaces.squareFeetMax",
+      "kind": "verified",
+      "say_as": "27,795.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_25_occupied_sqft",
+      "key": "floor_25_occupied_sqft",
+      "value": 0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "location-occupancy.spaces.squareFeetOccupied",
+      "kind": "verified",
+      "say_as": "0 sqft"
+    },
+    {
+      "id": "F_519027_floor_26_size_sqft",
+      "key": "floor_26_size_sqft",
+      "value": 27795.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-property.floors.floorSize.squareFeet",
+      "kind": "verified",
+      "say_as": "27,795.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_26_available_sqft",
+      "key": "floor_26_available_sqft",
+      "value": 27795.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-listing-summary.forLeaseSummary.spaces.squareFeetMax",
+      "kind": "verified",
+      "say_as": "27,795.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_26_occupied_sqft",
+      "key": "floor_26_occupied_sqft",
+      "value": 0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "location-occupancy.spaces.squareFeetOccupied",
+      "kind": "verified",
+      "say_as": "0 sqft"
+    },
+    {
+      "id": "F_519027_floor_28_size_sqft",
+      "key": "floor_28_size_sqft",
+      "value": 27541.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-property.floors.floorSize.squareFeet",
+      "kind": "verified",
+      "say_as": "27,541.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_28_available_sqft",
+      "key": "floor_28_available_sqft",
+      "value": 0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-listing-summary.forLeaseSummary.spaces.squareFeetMax|squareFeetMin",
+      "kind": "verified",
+      "say_as": "0 sqft"
+    },
+    {
+      "id": "F_519027_floor_28_occupied_sqft",
+      "key": "floor_28_occupied_sqft",
+      "value": 27541.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "location-occupancy.spaces.squareFeetOccupied",
+      "kind": "verified",
+      "say_as": "27,541.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_11_size_sqft",
+      "key": "floor_11_size_sqft",
+      "value": 21097.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-property.floors.floorSize.squareFeet",
+      "kind": "verified",
+      "say_as": "21,097.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_11_available_sqft",
+      "key": "floor_11_available_sqft",
+      "value": 0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-listing-summary.forLeaseSummary.spaces.squareFeetMax|squareFeetMin",
+      "kind": "verified",
+      "say_as": "0 sqft"
+    },
+    {
+      "id": "F_519027_floor_11_occupied_sqft",
+      "key": "floor_11_occupied_sqft",
+      "value": 21097.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "location-occupancy.spaces.squareFeetOccupied",
+      "kind": "verified",
+      "say_as": "21,097.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_12_size_sqft",
+      "key": "floor_12_size_sqft",
+      "value": 21097.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-property.floors.floorSize.squareFeet",
+      "kind": "verified",
+      "say_as": "21,097.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_12_available_sqft",
+      "key": "floor_12_available_sqft",
+      "value": 20597.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-listing-summary.forLeaseSummary.spaces.squareFeetMax",
+      "kind": "verified",
+      "say_as": "20,597.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_12_occupied_sqft",
+      "key": "floor_12_occupied_sqft",
+      "value": 24206.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "location-occupancy.spaces.squareFeetOccupied",
+      "kind": "verified",
+      "say_as": "24,206.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_14_size_sqft",
+      "key": "floor_14_size_sqft",
+      "value": 26978.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-property.floors.floorSize.squareFeet",
+      "kind": "verified",
+      "say_as": "26,978.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_14_available_sqft",
+      "key": "floor_14_available_sqft",
+      "value": 0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-listing-summary.forLeaseSummary.spaces.squareFeetMax|squareFeetMin",
+      "kind": "verified",
+      "say_as": "0 sqft"
+    },
+    {
+      "id": "F_519027_floor_14_occupied_sqft",
+      "key": "floor_14_occupied_sqft",
+      "value": 26978.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "location-occupancy.spaces.squareFeetOccupied",
+      "kind": "verified",
+      "say_as": "26,978.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_24_size_sqft",
+      "key": "floor_24_size_sqft",
+      "value": 27795.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-property.floors.floorSize.squareFeet",
+      "kind": "verified",
+      "say_as": "27,795.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_24_available_sqft",
+      "key": "floor_24_available_sqft",
+      "value": 27795.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-listing-summary.forLeaseSummary.spaces.squareFeetMax",
+      "kind": "verified",
+      "say_as": "27,795.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_24_occupied_sqft",
+      "key": "floor_24_occupied_sqft",
+      "value": 0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "location-occupancy.spaces.squareFeetOccupied",
+      "kind": "verified",
+      "say_as": "0 sqft"
+    },
+    {
+      "id": "F_519027_floor_13_size_sqft",
+      "key": "floor_13_size_sqft",
+      "value": 26798.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-property.floors.floorSize.squareFeet",
+      "kind": "verified",
+      "say_as": "26,798.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_13_available_sqft",
+      "key": "floor_13_available_sqft",
+      "value": 0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-listing-summary.forLeaseSummary.spaces.squareFeetMax|squareFeetMin",
+      "kind": "verified",
+      "say_as": "0 sqft"
+    },
+    {
+      "id": "F_519027_floor_13_occupied_sqft",
+      "key": "floor_13_occupied_sqft",
+      "value": 26798.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "location-occupancy.spaces.squareFeetOccupied",
+      "kind": "verified",
+      "say_as": "26,798.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_17_size_sqft",
+      "key": "floor_17_size_sqft",
+      "value": 27144.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-property.floors.floorSize.squareFeet",
+      "kind": "verified",
+      "say_as": "27,144.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_17_available_sqft",
+      "key": "floor_17_available_sqft",
+      "value": 12922.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-listing-summary.forLeaseSummary.spaces.squareFeetMax",
+      "kind": "verified",
+      "say_as": "12,922.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_17_occupied_sqft",
+      "key": "floor_17_occupied_sqft",
+      "value": 14222.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "location-occupancy.spaces.squareFeetOccupied",
+      "kind": "verified",
+      "say_as": "14,222.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_19_size_sqft",
+      "key": "floor_19_size_sqft",
+      "value": 27114.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-property.floors.floorSize.squareFeet",
+      "kind": "verified",
+      "say_as": "27,114.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_19_available_sqft",
+      "key": "floor_19_available_sqft",
+      "value": 0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-listing-summary.forLeaseSummary.spaces.squareFeetMax|squareFeetMin",
+      "kind": "verified",
+      "say_as": "0 sqft"
+    },
+    {
+      "id": "F_519027_floor_19_occupied_sqft",
+      "key": "floor_19_occupied_sqft",
+      "value": 27114.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "location-occupancy.spaces.squareFeetOccupied",
+      "kind": "verified",
+      "say_as": "27,114.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_29_size_sqft",
+      "key": "floor_29_size_sqft",
+      "value": 27795.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-property.floors.floorSize.squareFeet",
+      "kind": "verified",
+      "say_as": "27,795.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_29_available_sqft",
+      "key": "floor_29_available_sqft",
+      "value": 27795.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-listing-summary.forLeaseSummary.spaces.squareFeetMax",
+      "kind": "verified",
+      "say_as": "27,795.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_29_occupied_sqft",
+      "key": "floor_29_occupied_sqft",
+      "value": 0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "location-occupancy.spaces.squareFeetOccupied",
+      "kind": "verified",
+      "say_as": "0 sqft"
+    },
+    {
+      "id": "F_519027_floor_id_1204662_size_sqft",
+      "key": "floor_id_1204662_size_sqft",
+      "value": 26770.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-property.floors.floorSize.squareFeet",
+      "kind": "verified",
+      "say_as": "26,770.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_id_1204662_available_sqft",
+      "key": "floor_id_1204662_available_sqft",
+      "value": 0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-listing-summary.forLeaseSummary.spaces.squareFeetMax|squareFeetMin",
+      "kind": "verified",
+      "say_as": "0 sqft"
+    },
+    {
+      "id": "F_519027_floor_id_1204662_occupied_sqft",
+      "key": "floor_id_1204662_occupied_sqft",
+      "value": 0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "location-occupancy.spaces.squareFeetOccupied",
+      "kind": "verified",
+      "say_as": "0 sqft"
+    },
+    {
+      "id": "F_519027_floor_10_size_sqft",
+      "key": "floor_10_size_sqft",
+      "value": 21097.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-property.floors.floorSize.squareFeet",
+      "kind": "verified",
+      "say_as": "21,097.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_10_available_sqft",
+      "key": "floor_10_available_sqft",
+      "value": 0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-listing-summary.forLeaseSummary.spaces.squareFeetMax|squareFeetMin",
+      "kind": "verified",
+      "say_as": "0 sqft"
+    },
+    {
+      "id": "F_519027_floor_10_occupied_sqft",
+      "key": "floor_10_occupied_sqft",
+      "value": 21097.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "location-occupancy.spaces.squareFeetOccupied",
+      "kind": "verified",
+      "say_as": "21,097.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_20_size_sqft",
+      "key": "floor_20_size_sqft",
+      "value": 27144.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-property.floors.floorSize.squareFeet",
+      "kind": "verified",
+      "say_as": "27,144.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_20_available_sqft",
+      "key": "floor_20_available_sqft",
+      "value": 0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-listing-summary.forLeaseSummary.spaces.squareFeetMax|squareFeetMin",
+      "kind": "verified",
+      "say_as": "0 sqft"
+    },
+    {
+      "id": "F_519027_floor_20_occupied_sqft",
+      "key": "floor_20_occupied_sqft",
+      "value": 27144.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "location-occupancy.spaces.squareFeetOccupied",
+      "kind": "verified",
+      "say_as": "27,144.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_21_size_sqft",
+      "key": "floor_21_size_sqft",
+      "value": 27250.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-property.floors.floorSize.squareFeet",
+      "kind": "verified",
+      "say_as": "27,250.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_21_available_sqft",
+      "key": "floor_21_available_sqft",
+      "value": 0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-listing-summary.forLeaseSummary.spaces.squareFeetMax|squareFeetMin",
+      "kind": "verified",
+      "say_as": "0 sqft"
+    },
+    {
+      "id": "F_519027_floor_21_occupied_sqft",
+      "key": "floor_21_occupied_sqft",
+      "value": 27250.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "location-occupancy.spaces.squareFeetOccupied",
+      "kind": "verified",
+      "say_as": "27,250.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_23_size_sqft",
+      "key": "floor_23_size_sqft",
+      "value": 26780.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-property.floors.floorSize.squareFeet",
+      "kind": "verified",
+      "say_as": "26,780.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_23_available_sqft",
+      "key": "floor_23_available_sqft",
+      "value": 26780.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-listing-summary.forLeaseSummary.spaces.squareFeetMax",
+      "kind": "verified",
+      "say_as": "26,780.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_23_occupied_sqft",
+      "key": "floor_23_occupied_sqft",
+      "value": 0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "location-occupancy.spaces.squareFeetOccupied",
+      "kind": "verified",
+      "say_as": "0 sqft"
+    },
+    {
+      "id": "F_519027_floor_27_size_sqft",
+      "key": "floor_27_size_sqft",
+      "value": 27541.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-property.floors.floorSize.squareFeet",
+      "kind": "verified",
+      "say_as": "27,541.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_27_available_sqft",
+      "key": "floor_27_available_sqft",
+      "value": 0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-listing-summary.forLeaseSummary.spaces.squareFeetMax|squareFeetMin",
+      "kind": "verified",
+      "say_as": "0 sqft"
+    },
+    {
+      "id": "F_519027_floor_27_occupied_sqft",
+      "key": "floor_27_occupied_sqft",
+      "value": 27541.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "location-occupancy.spaces.squareFeetOccupied",
+      "kind": "verified",
+      "say_as": "27,541.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_id_2461304_size_sqft",
+      "key": "floor_id_2461304_size_sqft",
+      "value": 21097.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-property.floors.floorSize.squareFeet",
+      "kind": "verified",
+      "say_as": "21,097.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_id_2461304_available_sqft",
+      "key": "floor_id_2461304_available_sqft",
+      "value": 0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-listing-summary.forLeaseSummary.spaces.squareFeetMax|squareFeetMin",
+      "kind": "verified",
+      "say_as": "0 sqft"
+    },
+    {
+      "id": "F_519027_floor_id_2461304_occupied_sqft",
+      "key": "floor_id_2461304_occupied_sqft",
+      "value": 0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "location-occupancy.spaces.squareFeetOccupied",
+      "kind": "verified",
+      "say_as": "0 sqft"
+    },
+    {
+      "id": "F_519027_floor_33_size_sqft",
+      "key": "floor_33_size_sqft",
+      "value": 21097.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-property.floors.floorSize.squareFeet",
+      "kind": "verified",
+      "say_as": "21,097.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_33_available_sqft",
+      "key": "floor_33_available_sqft",
+      "value": 0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-listing-summary.forLeaseSummary.spaces.squareFeetMax|squareFeetMin",
+      "kind": "verified",
+      "say_as": "0 sqft"
+    },
+    {
+      "id": "F_519027_floor_33_occupied_sqft",
+      "key": "floor_33_occupied_sqft",
+      "value": 21097.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "location-occupancy.spaces.squareFeetOccupied",
+      "kind": "verified",
+      "say_as": "21,097.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_30_size_sqft",
+      "key": "floor_30_size_sqft",
+      "value": 27187.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-property.floors.floorSize.squareFeet",
+      "kind": "verified",
+      "say_as": "27,187.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_30_available_sqft",
+      "key": "floor_30_available_sqft",
+      "value": 27187.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-listing-summary.forLeaseSummary.spaces.squareFeetMax",
+      "kind": "verified",
+      "say_as": "27,187.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_30_occupied_sqft",
+      "key": "floor_30_occupied_sqft",
+      "value": 0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "location-occupancy.spaces.squareFeetOccupied",
+      "kind": "verified",
+      "say_as": "0 sqft"
+    },
+    {
+      "id": "F_519027_floor_32_size_sqft",
+      "key": "floor_32_size_sqft",
+      "value": 21097.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-property.floors.floorSize.squareFeet",
+      "kind": "verified",
+      "say_as": "21,097.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_32_available_sqft",
+      "key": "floor_32_available_sqft",
+      "value": 0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-listing-summary.forLeaseSummary.spaces.squareFeetMax|squareFeetMin",
+      "kind": "verified",
+      "say_as": "0 sqft"
+    },
+    {
+      "id": "F_519027_floor_32_occupied_sqft",
+      "key": "floor_32_occupied_sqft",
+      "value": 21097.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "location-occupancy.spaces.squareFeetOccupied",
+      "kind": "verified",
+      "say_as": "21,097.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_31_size_sqft",
+      "key": "floor_31_size_sqft",
+      "value": 27187.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-property.floors.floorSize.squareFeet",
+      "kind": "verified",
+      "say_as": "27,187.0 sqft"
+    },
+    {
+      "id": "F_519027_floor_31_available_sqft",
+      "key": "floor_31_available_sqft",
+      "value": 0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-listing-summary.forLeaseSummary.spaces.squareFeetMax|squareFeetMin",
+      "kind": "verified",
+      "say_as": "0 sqft"
+    },
+    {
+      "id": "F_519027_floor_31_occupied_sqft",
+      "key": "floor_31_occupied_sqft",
+      "value": 26707.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "location-occupancy.spaces.squareFeetOccupied",
+      "kind": "verified",
+      "say_as": "26,707.0 sqft"
+    },
+    {
+      "id": "F_519027_tenant_records",
+      "key": "tenant_records",
+      "value": 129,
+      "unit": "records",
+      "source": "costar",
+      "source_field": "location-occupancy.propertyId",
+      "kind": "verified",
+      "say_as": "129 records"
+    },
+    {
+      "id": "F_519027_current_tenants",
+      "key": "current_tenants",
+      "value": 21,
+      "unit": "records",
+      "source": "costar",
+      "source_field": "location-occupancy.toDate",
+      "kind": "verified",
+      "say_as": "21 records"
+    },
+    {
+      "id": "F_519027_tenant_industries",
+      "key": "tenant_industries",
+      "value": [
+        {
+          "industry": "ProfessionalScientificAndTechnicalServices",
+          "records": 25
+        },
+        {
+          "industry": "FinancialInstitutions",
+          "records": 16
+        },
+        {
+          "industry": "Utilities",
+          "records": 16
+        },
+        {
+          "industry": "MiningQuarryingAndOilAndGasExtraction",
+          "records": 15
+        },
+        {
+          "industry": "RealEstate",
+          "records": 12
+        },
+        {
+          "industry": "Transportation",
+          "records": 9
+        },
+        {
+          "industry": "AgriculturalOrMiningOrUtilities",
+          "records": 5
+        },
+        {
+          "industry": "AccommodationAndFoodServices",
+          "records": 3
+        },
+        {
+          "industry": "ManagementOfCompaniesAndEnterprises",
+          "records": 2
+        },
+        {
+          "industry": "Wholesaler",
+          "records": 2
+        },
+        {
+          "industry": "PersonalServices",
+          "records": 1
+        }
+      ],
+      "unit": null,
+      "source": "costar",
+      "source_field": "company-detail.profile.industryType",
+      "kind": "verified",
+      "say_as": "[{'industry': 'ProfessionalScientificAndTechnicalServices', 'records': 25}, {'industry': 'FinancialInstitutions', 'records': 16}, {'industry': 'Utilities', 'records': 16}, {'industry': 'MiningQuarryingAndOilAndGasExtraction', 'records': 15}, {'industry': 'RealEstate', 'records': 12}, {'industry': 'Transportation', 'records': 9}, {'industry': 'AgriculturalOrMiningOrUtilities', 'records': 5}, {'industry': 'AccommodationAndFoodServices', 'records': 3}, {'industry': 'ManagementOfCompaniesAndEnterprises', 'records': 2}, {'industry': 'Wholesaler', 'records': 2}, {'industry': 'PersonalServices', 'records': 1}]"
+    },
+    {
+      "id": "F_519027_tenant_exit_reasons",
+      "key": "tenant_exit_reasons",
+      "value": [
+        {
+          "reason": "MovingOutNewAddressUnknown",
+          "records": 44
+        },
+        {
+          "reason": "Unknown",
+          "records": 19
+        },
+        {
+          "reason": "MoveIntoAnotherProperty",
+          "records": 12
+        },
+        {
+          "reason": "Renewal",
+          "records": 12
+        },
+        {
+          "reason": "OccupancySplit",
+          "records": 10
+        },
+        {
+          "reason": "ClosedLocationOrBankrupt",
+          "records": 6
+        },
+        {
+          "reason": "MovingIntoSameBuilding",
+          "records": 3
+        },
+        {
+          "reason": "NoLongerInCustomerMarket",
+          "records": 2
+        }
+      ],
+      "unit": null,
+      "source": "costar",
+      "source_field": "location-occupancy.expirationReason",
+      "kind": "verified",
+      "say_as": "[{'reason': 'MovingOutNewAddressUnknown', 'records': 44}, {'reason': 'Unknown', 'records': 19}, {'reason': 'MoveIntoAnotherProperty', 'records': 12}, {'reason': 'Renewal', 'records': 12}, {'reason': 'OccupancySplit', 'records': 10}, {'reason': 'ClosedLocationOrBankrupt', 'records': 6}, {'reason': 'MovingIntoSameBuilding', 'records': 3}, {'reason': 'NoLongerInCustomerMarket', 'records': 2}]"
+    },
+    {
+      "id": "F_519027_available_sqft",
+      "key": "available_sqft",
+      "value": 207746.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "commercial-listing-summary.forLeaseSummary.spaces.squareFeetMax|squareFeetMin",
+      "kind": "verified",
+      "say_as": "207,746.0 sqft"
+    },
+    {
+      "id": "F_519027_occupied_sqft",
+      "key": "occupied_sqft",
+      "value": 442457.0,
+      "unit": "sqft",
+      "source": "costar",
+      "source_field": "location-occupancy.spaces.squareFeetOccupied",
+      "kind": "verified",
+      "say_as": "442,457.0 sqft"
+    },
+    {
+      "id": "F_519027_matterport_models",
+      "key": "matterport_models",
+      "value": [
+        "WAeBuPU2HLw"
+      ],
+      "unit": null,
+      "source": "costar",
+      "source_field": "commercial-properties.csv.MatterportModelId",
+      "kind": "verified",
+      "say_as": "['WAeBuPU2HLw']"
+    },
+    {
+      "id": "F_519027_address",
+      "key": "address",
+      "value": "717 Texas Ave",
+      "unit": null,
+      "source": "costar",
+      "source_field": "commercial-property.primaryAddress",
+      "kind": "verified",
+      "say_as": "717 Texas Ave"
+    }
+  ],
+  "tenant_history": {
+    "records": 129,
+    "current": 21,
+    "top_industries": [
+      {
+        "industry": "ProfessionalScientificAndTechnicalServices",
+        "records": 25
+      },
+      {
+        "industry": "FinancialInstitutions",
+        "records": 16
+      },
+      {
+        "industry": "Utilities",
+        "records": 16
+      },
+      {
+        "industry": "MiningQuarryingAndOilAndGasExtraction",
+        "records": 15
+      },
+      {
+        "industry": "RealEstate",
+        "records": 12
+      },
+      {
+        "industry": "Transportation",
+        "records": 9
+      },
+      {
+        "industry": "AgriculturalOrMiningOrUtilities",
+        "records": 5
+      },
+      {
+        "industry": "AccommodationAndFoodServices",
+        "records": 3
+      },
+      {
+        "industry": "ManagementOfCompaniesAndEnterprises",
+        "records": 2
+      },
+      {
+        "industry": "Wholesaler",
+        "records": 2
+      },
+      {
+        "industry": "PersonalServices",
+        "records": 1
+      }
+    ],
+    "top_exit_reasons": [
+      {
+        "reason": "MovingOutNewAddressUnknown",
+        "records": 44
+      },
+      {
+        "reason": "Unknown",
+        "records": 19
+      },
+      {
+        "reason": "MoveIntoAnotherProperty",
+        "records": 12
+      },
+      {
+        "reason": "Renewal",
+        "records": 12
+      },
+      {
+        "reason": "OccupancySplit",
+        "records": 10
+      },
+      {
+        "reason": "ClosedLocationOrBankrupt",
+        "records": 6
+      },
+      {
+        "reason": "MovingIntoSameBuilding",
+        "records": 3
+      },
+      {
+        "reason": "NoLongerInCustomerMarket",
+        "records": 2
+      }
+    ]
+  },
+  "media": {
+    "matterport": [
+      {
+        "model_id": "WAeBuPU2HLw",
+        "caption": null
+      }
+    ],
+    "photos": [],
+    "aerial": {
+      "ortho": null,
+      "obliques": []
+    }
+  },
+  "neighbors": [
+    "233953",
+    "233899",
+    "233918",
+    "233905",
+    "233935",
+    "233928"
+  ],
+  "data_mode": "kit"
+}

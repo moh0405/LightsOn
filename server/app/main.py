@@ -5,10 +5,11 @@ from pathlib import Path
 
 import segno
 from dotenv import dotenv_values, load_dotenv
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
 from .commands import CommandService
+from .data.provider import DataProvider, get_provider
 from .rooms import DEFAULT_DURATIONS, Conn, RoomError, RoomManager
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -57,6 +58,19 @@ def build_health() -> dict:
 @app.get("/api/health")
 def health() -> dict:
     return build_health()
+
+
+@app.get('/api/buildings')
+def buildings(provider: DataProvider = Depends(get_provider)) -> list[dict]:
+    return provider.buildings()
+
+
+@app.get('/api/buildings/{property_id}')
+def building(property_id: str, provider: DataProvider = Depends(get_provider)) -> dict:
+    dossier = provider.dossier(property_id)
+    if dossier is None:
+        raise HTTPException(status_code=404, detail='Unknown building')
+    return dossier
 
 
 class CreateRoom(BaseModel):
