@@ -35,3 +35,6 @@
   cache, Matterport adapter (kit ids/captions only). No images or keys committed. Esperson 6-8 still dark 31,503; footprint
   now from Vexcel. 133 pytest, 33 web pass. Note for review: detection say_as reads "31 car detected" / "no parking lot
   detected" (grammar; negative detections should not become claims the building states as fact).
+- 08:49 Scheduled resume fired late (the session was waiting out the Claude usage limit; nothing ran between ~00:15 and
+  08:49). Phase 4B prep deepagent started on Codex (gpt-6.1-sol, high) in worktree phase4-prep-agent, with the extra
+  instruction to fix Vexcel detection wording and keep negative detections out of citable facts.
