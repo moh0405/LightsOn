@@ -3,6 +3,7 @@ import { safeGet, safeSet, useGame } from "../lib/store";
 import { button, input } from "../lib/ui";
 import type { RoomSocket } from "../lib/ws";
 import { createFlickDetector } from "./gesture";
+import { createRecorder, submitAudio } from "./recorder";
 
 type SocketRef = MutableRefObject<RoomSocket | null>;
 export function Pitch({ sock, revision = false, playerId }: { sock: SocketRef; revision?: boolean; playerId: string }) {
@@ -12,6 +13,24 @@ export function Pitch({ sock, revision = false, playerId }: { sock: SocketRef; r
   const [sent, setSent] = useState(() => safeGet(key, "session") === "yes");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [listening, setListening] = useState(false);
+  const recorder = useRef<ReturnType<typeof createRecorder> | null>(null);
+  useEffect(() => {
+    const current = createRecorder({
+      onText: setText,
+      onListening: setListening,
+      onError: setError,
+      onAudio: (audio) => {
+        if (!room) return;
+        setBusy(true); setError(null);
+        void submitAudio(room, playerId, revision ? "NEGOTIATE" : "PITCH", roundId, audio).then((transcript) => {
+          setText(transcript); setSent(true); safeSet(key, "yes", "session");
+        }).catch((err: unknown) => setError(err instanceof Error ? err.message : "Type your pitch below.")).finally(() => setBusy(false));
+      },
+    });
+    recorder.current = current;
+    return () => { current.dispose(); recorder.current = null; };
+  }, [room, roundId, playerId, revision, key]);
   const offer = counteroffers[playerId];
   return <section style={{ display: "grid", gap: 16 }}>
     <h1>{revision ? "Make your deal" : "Pitch a new use"}</h1>
@@ -25,6 +44,14 @@ export function Pitch({ sock, revision = false, playerId }: { sock: SocketRef; r
       }).catch((err: unknown) => setError(err instanceof Error ? err.message : "Could not send. Try again.")).finally(() => setBusy(false));
     }}>
       <label htmlFor="pitch-text">{revision ? "Your revision" : "Your pitch"}</label>
+      <button type="button" style={{ ...button, touchAction: "none", background: listening ? "#39455a" : undefined }}
+        disabled={sent || busy || conn !== "open"} aria-pressed={listening}
+        onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); setError(null); void recorder.current?.start(); }}
+        onPointerUp={() => recorder.current?.stop()} onPointerCancel={() => recorder.current?.stop()}
+        onKeyDown={(e) => { if ((e.key === " " || e.key === "Enter") && !e.repeat) { e.preventDefault(); void recorder.current?.start(); } }}
+        onKeyUp={(e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); recorder.current?.stop(); } }}
+        onBlur={() => recorder.current?.stop()}>{listening ? "Listening… release to finish" : "Hold to talk"}</button>
+      <small>Browser dictation fills the text box for review. Recorded audio is sent on release. Typing always works.</small>
       <textarea id="pitch-text" style={{ ...input, minHeight: 150, resize: "vertical" }} maxLength={280} value={text} disabled={sent || busy}
         onChange={(e) => setText(e.target.value)} />
       <span>{text.length}/280</span>

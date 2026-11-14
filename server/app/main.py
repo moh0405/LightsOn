@@ -8,8 +8,8 @@ from pathlib import Path
 import segno
 from dotenv import dotenv_values, load_dotenv
 from fastapi.responses import FileResponse
-from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
+from pydantic import BaseModel, Field
 
 from .commands import CommandService
 from .data.provider import DataProvider, get_provider
@@ -139,6 +139,54 @@ def intro_audio(filename: str):
     if not path.is_file():
         raise HTTPException(status_code=404, detail='Unknown audio')
     return FileResponse(path, media_type='audio/mpeg')
+
+
+class SpeechRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)
+    voice_id: str = Field(default='', max_length=128)
+
+
+@app.post('/api/tts')
+async def speech(body: SpeechRequest) -> dict:
+    from .voice.tts import render_speech
+    return {'audio_url': await asyncio.to_thread(render_speech, body.text, body.voice_id)}
+
+
+@app.post('/api/rooms/{code}/pitch_audio')
+async def pitch_audio(code: str, request: Request, audio: UploadFile = File(),
+                      player_id: str = Form(), phase: str = Form(), round_id: str | None = Form(None)) -> dict:
+    from .voice import stt
+    room = request.app.state.manager.get(code)
+    if room is None:
+        raise HTTPException(404, detail={'code': 'no_room', 'message': 'Room not found.'})
+    if player_id not in room.players:
+        raise HTTPException(403, detail={'code': 'not_joined', 'message': 'Join the room first.'})
+    captured_round = round_id or room.round_id
+    if phase not in {'PITCH', 'NEGOTIATE'} or room.phase != phase or captured_round != room.round_id:
+        raise HTTPException(409, detail={'code': 'wrong_phase', 'message': 'This pitch window has ended.'})
+    try:
+        recording = await audio.read(stt.MAX_AUDIO + 1)
+    finally:
+        await audio.close()
+    if not recording or len(recording) > stt.MAX_AUDIO:
+        raise HTTPException(413, detail={'code': 'bad_audio', 'message': 'Record up to 30 seconds, then release.'})
+    if not (audio.content_type or '').startswith(('audio/', 'video/webm')):
+        raise HTTPException(415, detail={'code': 'bad_audio', 'message': 'Use an audio recording or type your pitch.'})
+    try:
+        text = await asyncio.to_thread(stt.transcribe, recording, audio.content_type)
+    except stt.SpeechUnavailable:
+        raise HTTPException(503, detail={'code': 'stt_unavailable', 'message': 'Use browser speech recognition or type your pitch.'}) from None
+    if room.round_id != captured_round or room.phase != phase:
+        raise HTTPException(409, detail={'code': 'wrong_phase', 'message': 'This pitch window has ended.'})
+    try:
+        result = await request.app.state.commands.handle({
+            'room': code, 'player_id': player_id, 'round_id': captured_round,
+            'type': 'revise_pitch' if phase == 'NEGOTIATE' else 'submit_pitch',
+            'text': text, 'nonce': secrets.token_hex(16),
+        }, 'voice')
+    except RoomError as exc:
+        raise HTTPException(409, detail={'code': exc.code, 'message': exc.message}) from None
+    return {'text': text, 'result': result}
 
 
 class CreateRoom(BaseModel):

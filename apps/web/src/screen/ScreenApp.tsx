@@ -4,8 +4,10 @@ import { City } from "./City";
 import { createRoom } from "../lib/api";
 import { safeGet, safeSet, useGame, useRoomSocket } from "../lib/store";
 import { ConnBanner, ErrorToast, PhaseBadge, page } from "../lib/ui";
+import { useScreenAudio } from "./music";
 
 export function ScreenApp() {
+  const audio = useScreenAudio();
   const [room, setRoom] = useState<string | null>(null);
   const [qr, setQr] = useState<{ svg: string; url: string } | null>(null);
   const [failed, setFailed] = useState(false);
@@ -34,6 +36,8 @@ export function ScreenApp() {
         <ConnBanner /><ErrorToast />
         {failed && <p role="alert">Could not reach the server.</p>}
         <h1>Lights On: screen</h1>
+        {!audio.ready && <button onClick={() => void audio.start()}>Start audio</button>}
+        {audio.error && <p role="alert">{audio.error}</p>}
         <PhaseBadge />
         {buildingId && <p>Waking building {buildingId}</p>}
         <div style={{ position: "relative" }}><City /><RoundOverlays /></div>
