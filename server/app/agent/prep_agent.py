@@ -199,7 +199,7 @@ def prep_building(property_id: str, force: bool = False, *, provider=None, model
         if result_path.is_file() and not force:
             if (result := cached_result(tools, result_path)) is not None:
                 return result
-        result_path.unlink(missing_ok=True)
+        # The previous trusted dossier stays in place until a new one is fully validated.
         workspace = directory / 'work'
         workspace.mkdir(exist_ok=True)
         steps = Steps(directory / 'agent_steps.json', emit)
@@ -239,8 +239,20 @@ def prep_building(property_id: str, force: bool = False, *, provider=None, model
         result['prep_status'] = 'ready'
         result['source_fingerprint'] = source_fingerprint(tools)
         # Published only after all validation; the model backend can never write here.
-        write_json((personas or PERSONAS) / f'{property_id}.json', result['persona'])
-        write_json(result_path, result)
+        persona_path = (personas or PERSONAS) / f'{property_id}.json'
+        staged = [(persona_path, result['persona']), (result_path, result)]
+        temps = []
+        try:
+            for path, value in staged:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                temp = path.with_name(path.name + '.new')
+                temp.write_text(json.dumps(value, indent=2) + '\n')
+                temps.append((temp, path))
+            for temp, path in temps:
+                temp.replace(path)
+        finally:
+            for temp, _ in temps:
+                temp.unlink(missing_ok=True)
         steps.record('complete', 'validate_persona')
         return result
 

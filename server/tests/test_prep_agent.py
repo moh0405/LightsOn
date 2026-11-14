@@ -693,3 +693,25 @@ def test_challenge_keeps_narrowed_parking_limit_narrow():
     assert parking['fact_ref'] not in housing.fact_ids and housing.line != parking['text']
     hall = challenge(pitch('A concert hall with 3 parking spaces per 1,000 sq ft'), dossier)
     assert hall.fact_ids == [parking['fact_ref']] and hall.line == parking['text']
+
+
+@pytest.mark.parametrize('failure', [SpendUnavailable('budget'), ValueError('bad persona')])
+def test_failed_forced_prep_keeps_previous_trusted_cache(tmp_path, monkeypatch, failure):
+    from app.agent import prep_agent
+    from app.data.provider import provider_for_mode
+    kwargs = dict(provider=provider_for_mode('fixtures'), cache=tmp_path / 'cache', personas=tmp_path / 'personas')
+    first = prep_agent.prep_building(PID, model=scripted_model(source_dossier()), **kwargs)
+    dossier_path = tmp_path / 'cache' / PID / 'dossier.json'
+    persona_path = tmp_path / f'personas/{PID}.json'
+    before = dossier_path.read_text(), persona_path.read_text()
+    class Failing:
+        def invoke(self, *args, **kwargs):
+            raise failure
+    monkeypatch.setattr(prep_agent, 'build_agent', lambda *args: Failing())
+    try:
+        prep_agent.prep_building(PID, force=True, **kwargs)
+    except ValueError:
+        pass
+    assert (dossier_path.read_text(), persona_path.read_text()) == before
+    monkeypatch.undo()
+    assert prep_agent.read_cached_building(PID, provider=kwargs['provider'], cache=kwargs['cache']) == first
