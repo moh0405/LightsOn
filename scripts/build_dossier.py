@@ -78,10 +78,46 @@ def build_dossier(db: sqlite3.Connection, pid: str, enums: dict) -> dict | None:
     fact('matterport_models', [m['model_id'] for m in models], 'commercial-properties.csv.MatterportModelId')
     street = ' '.join(str(address[k]) for k in ['streetNumber', 'streetName', 'streetType'] if address.get(k)) or None
     fact('address', street, 'commercial-property.primaryAddress')
+
+    # Merge Vexcel data if fixture exists
+    vexcel_path = ROOT / f'server/fixtures/vexcel/{pid}.json'
+    footprint = None
+    aerial = dict(ortho=None, obliques=[])
+    if vexcel_path.is_file():
+        vdata = json.loads(vexcel_path.read_text())
+        if vdata.get('footprint'):
+            footprint = dict(**vdata['footprint'], source='vexcel')
+        images = vdata.get('images', {})
+        ortho_path = f"/media/{pid}/{images['ortho']}" if images.get('ortho') else None
+        oblique_paths = [f"/media/{pid}/{img}" for img in images.get('obliques', [])]
+        aerial = dict(ortho=ortho_path, obliques=oblique_paths)
+        ortho_date = vdata.get('capture_dates', {}).get('ortho') or ''
+        year = ortho_date[:4] if ortho_date else 'recent'
+        for det in vdata.get('detections', []):
+            label = det['label']
+            count = det['count']
+            slug = label.replace(' ', '_')
+            if count == 0:
+                say_as = f"on the {year} flyover, no {label} detected"
+            elif count == 1:
+                say_as = f"on the {year} flyover, 1 {label} detected"
+            else:
+                say_as = f"on the {year} flyover, {count} {label} detected"
+            facts.append(dict(
+                id=f'F_{pid}_vexcel_detection_{slug}',
+                key=f'vexcel_detection_{slug}',
+                value=count,
+                unit='count',
+                source='vexcel+vision',
+                source_field='vexcel.elements/detect',
+                kind='estimate',
+                say_as=say_as,
+            ))
+
     return dict(id=str(pid), name=data['buildingName'], address=street,
-                lat=address['latitude'], lng=address['longitude'], footprint=None,
+                lat=address['latitude'], lng=address['longitude'], footprint=footprint,
                 stories=stories, building_height_ft=height, render=render, floors=floors, facts=facts,
-                tenant_history=history, media=dict(matterport=models, photos=[], aerial=dict(ortho=None, obliques=[])),
+                tenant_history=history, media=dict(matterport=models, photos=[], aerial=aerial),
                 neighbors=[other for other in property_ids() if other != str(pid)], data_mode='kit')
 
 

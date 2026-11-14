@@ -23,3 +23,11 @@
   Bedrock waits for Codex (~02:51) with a hard in-app spend cap. Decisions: no LangSmith key -> tracing optional, agent_step
   always; no ElevenLabs -> no intro audio yet (subtitles only), Polly not used (budget); no Matterport zip -> kit model
   ids + captions only.
+- 00:10 Phase 4A completed by Antigravity:
+  - Vexcel adapter implemented in server/app/data/vexcel.py with X-API-KEY header (never logged, never in URLs), 429 exponential backoff with jitter, 60s timeout, typed fallbacks, and disk caching under server/cache/vexcel/<propertyId>/.
+  - Matterport adapter stub in server/app/data/matterport.py returning kit model IDs and captions with fallback.
+  - scripts/fetch_vexcel.py executed for heroes 233953 (Esperson) and 233899 (Wells Fargo Plaza):
+    * 233953: footprint YES (primary structure), ortho YES, 4 obliques (N/S/E/W), detections: 31 cars.
+    * 233899: footprint YES (primary structure), ortho YES, 4 obliques (N/S/E/W), detections: 8 cars, 2 trees.
+  - Detections merged into dossiers as facts (source: "vexcel+vision", kind: "estimate", capture date in say_as); hero footprints merged with source: "vexcel"; floors.geojson regenerated with footprint_source="vexcel" for heroes.
+  - All test suites green: 133 passed (1 skipped opt-in live test) in server pytest, 33 passed in pnpm test, 14 passed in Playwright e2e.
