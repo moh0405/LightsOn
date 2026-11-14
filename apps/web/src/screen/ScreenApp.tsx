@@ -41,11 +41,9 @@ export function ScreenApp() {
       <section className="screen-stage">
         <ConnBanner /><ErrorToast />
         {failed && <p role="alert">Could not reach the server.</p>}
-        <header className="screen-heading"><h1>Lights On</h1><span>Your city needs you.</span></header>
-        {!audio.ready && <button onClick={() => void audio.start()}>Start audio</button>}
+        <header className="screen-heading"><h1>Lights On</h1>{!audio.ready && <button onClick={() => void audio.start()}>Start audio</button>}<span>Your city needs you.</span></header>
         {audio.error && <p role="alert">{audio.error}</p>}
-        <PhaseBadge />
-        {buildingId && <p className="building-label">Waking building {buildingId}</p>}
+        <div className="screen-status"><PhaseBadge />{buildingId && <p className="building-label">Waking building {buildingId}</p>}</div>
         <div className="city-stage"><City /><IntroMedia onError={onMediaError} /><RoundOverlays /></div>
         {mediaError && <div className="screen-toast" role="alert">{mediaError}<button aria-label="Dismiss media notice" onClick={() => setMediaError(null)}>×</button></div>}
       </section>

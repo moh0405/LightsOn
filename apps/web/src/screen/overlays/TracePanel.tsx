@@ -66,7 +66,7 @@ export function TracePanel() {
 
   return <>
     <button aria-expanded={open} aria-controls="trace-panel" onClick={() => setOpen((value) => !value)}
-      style={{ ...button, position: "fixed", bottom: 16, left: 16, zIndex: 30 }}>Agent trace · T</button>
+      style={{ ...button, fontSize: 28, padding: "4px 12px", position: "fixed", bottom: 16, right: 16, zIndex: 30 }}>Agent trace · T</button>
     {open && <section id="trace-panel" role="region" aria-label="Agent trace" data-testid="trace-panel"
       style={{ fontFamily: "system-ui, sans-serif", fontSize: 16, lineHeight: 1.25, position: "fixed", inset: 32, zIndex: 40, background: "#0c1220f8", color: "#f2f6ff", border: "1px solid #637a9d", borderRadius: 18, padding: 24, boxSizing: "border-box", boxShadow: "0 16px 80px #000b", display: "flex", flexDirection: "column", gap: 18 }}>
       <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
