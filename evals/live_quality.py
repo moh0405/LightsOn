@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Explicit paid latency check: eight challenges, two verdicts, <= $0.12, ledger < $2.70."""
+"""Explicit paid latency check: eight challenges, two verdicts, <= $0.12, ledger < configured cap minus $0.30."""
 from __future__ import annotations
 
 import argparse
@@ -26,8 +26,12 @@ from app.data.provider import provider_for_mode
 from app.models import Pitch
 
 
-def budget_ceiling(total: float) -> float:
-    return min(total + .12, 2.70 - .000001)
+RUN_MARGIN_USD = .30  # the eval's ledger ceiling stays this far below the configured cap
+
+
+def budget_ceiling(total: float, cap: float | None = None) -> float:
+    cap = SpendLedger().cap if cap is None else cap
+    return min(total + .12, cap - RUN_MARGIN_USD - .000001)
 
 
 def percentile(samples, quantile):
@@ -114,7 +118,7 @@ def report(result, before, after, ceiling):
     for cause in ('timeout', 'invalid_schema', 'fact_id', 'number_match', 'claim_check', 'safety', 'budget', 'unavailable'):
         lines.append(f'| {cause} | {counts[cause]} | {verdict_counts[cause]} |')
     lines += ['', f'Run spend including retained reservations: **${spend:.6f}** (limit $0.12).',
-        f"Shared ledger: **${before['total_usd']:.6f} → ${after['total_usd']:.6f}**; run cap ${ceiling:.6f}, below $2.70.",
+        f"Shared ledger: **${before['total_usd']:.6f} → ${after['total_usd']:.6f}**; run cap ${ceiling:.6f}, ${RUN_MARGIN_USD:.2f} below the configured cap.",
         f"Paid requests: {len(calls)}, reconciled {sum(c['status'] == 'complete' for c in calls)}, "
         f"unconfirmed {sum(c['status'] != 'complete' for c in calls)}.", '',
         '## Per-player model latency', '',
