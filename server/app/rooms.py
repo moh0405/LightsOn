@@ -328,7 +328,8 @@ class Room:
                     await publish_challenge(c)
             else:
                 result = await agent.verdict_batches(originals, revised, self.dossier, self.city,
-                                                      self.challenges, self.mood, memory)
+                                                      self.challenges, self.mood, memory,
+                                                      impact_sqft=target_sqft(self.dossier, self.target_floors))
             async with self._lock:
                 if (self.round_id, self._round_seq, self.phase) != token:
                     return

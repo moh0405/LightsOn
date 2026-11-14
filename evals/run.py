@@ -154,7 +154,8 @@ async def evaluate(live, spec, stop_at=None):
                     break
                 if live:
                     agent = LiveAgent()
-                    batches = await agent.verdict_batches(pitches, [], dossier, city, challenges)
+                    batches = await agent.verdict_batches(pitches, [], dossier, city, challenges,
+                        impact_sqft=target_sqft(dossier, select_target_floors(dossier)))
                     metrics['fallbacks'] += agent.fallbacks
                     metrics['schema_failures'] += agent.schema_failures
                 else:
