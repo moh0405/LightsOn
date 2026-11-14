@@ -35,7 +35,7 @@ for (const mode of ["kit", "fixtures"]) test(`connected phone drops exhausted bu
       await phone.getByRole("button", { name: "Submit pitch", exact: true }).click();
       await expect(phone.getByRole("status")).toContainText("Pitch sent");
       if (round === 0) {
-        const subtitles = await screen.getByTestId("subtitles").innerText();
+        const subtitles = (await screen.getByTestId("subtitles").textContent()) ?? "";
         await screen.reload();
         await expect(phase(screen)).toHaveText("PITCH");
         await expect(screen.getByTestId("subtitles")).toHaveText(subtitles);
