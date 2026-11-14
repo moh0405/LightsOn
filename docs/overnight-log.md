@@ -92,3 +92,4 @@
   205 pytest passed (1 opt-in live test skipped), 20 prep checks passed, 34 web tests + messaging typecheck passed.
 - Full post-rebase Playwright passed 18/18 on LO_E2E_API_PORT=18201 and LO_E2E_WEB_PORT=15374, including prepared
   intro subtitles in kit and fixtures modes. Spend remains $1.6183695 across the same 27 completed Bedrock calls.
+- 10:4x PR #11 (prep deepagent) merged as faaf76c; 205 pytest pass. Esperson persona is grounded but reads like a database ("My dossier records...") and hard_limits restate facts, flagged for review. Started Phase 4 reviews (Codex high + Claude Opus) and a Phase 4 QA sweep (no Bedrock calls). Spend ledger: $1.62 of the $3 cap.
