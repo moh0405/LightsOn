@@ -18,3 +18,8 @@
 - 23:47 Claude worker finished Phase 3 fixes 2-5 → PR #9 merged (approved additive city.song_categories). main green:
   122 pytest, 33 web tests, build; worker reported e2e 14/14 three times and QA sweep 17/17 in kit and fixtures.
   Codex still rate-limited until ~02:43, so the post-merge review went to Antigravity.
+- 00:0x Antigravity post-merge review of PR #9: pass, 0 findings (122 pytest, 33 web, 14 e2e). PHASE 3 DONE.
+- 00:0x Phase 4 split: 4A Vexcel adapter/media/footprints (no AWS) started on Antigravity now; 4B prep deepagent on
+  Bedrock waits for Codex (~02:51) with a hard in-app spend cap. Decisions: no LangSmith key -> tracing optional, agent_step
+  always; no ElevenLabs -> no intro audio yet (subtitles only), Polly not used (budget); no Matterport zip -> kit model
+  ids + captions only.
