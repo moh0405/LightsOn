@@ -14,6 +14,7 @@ class RoundServer {
   players: PlayerView[] = [];
   sockets = new Set<WebSocketRoute>();
   commands: Record<string, unknown>[] = [];
+  intro: RoomStateMsg["intro"] = null;
   charge = 0;
   revivedAt = 0;
   revived: RoomStateMsg["revived"] = {};
@@ -32,7 +33,7 @@ class RoundServer {
     await context.routeWebSocket("**/ws/TEST?*", (ws) => {
       this.sockets.add(ws);
       let playerId = new URL(ws.url()).searchParams.get("player_id");
-      ws.send(JSON.stringify({ type: "room_state", room: "TEST", phase: this.phase, round_id: this.phase === "LOBBY" ? null : "R1", building_id: "233953", target_floors: [6, 7, 8], ends_at: null, data_mode: this.mode, data_mode_scope: "process", hero_building_ids: ["233953"], players: this.players, city: this.city, revived: this.revived, floor_states: this.floorStates, charge: this.charge } satisfies RoomStateMsg));
+      ws.send(JSON.stringify({ type: "room_state", room: "TEST", phase: this.phase, round_id: this.phase === "LOBBY" ? null : "R1", building_id: "233953", target_floors: [6, 7, 8], ends_at: null, data_mode: this.mode, data_mode_scope: "process", hero_building_ids: ["233953"], players: this.players, intro: this.intro, city: this.city, revived: this.revived, floor_states: this.floorStates, charge: this.charge } satisfies RoomStateMsg));
       ws.onClose(() => this.sockets.delete(ws));
       ws.onMessage((raw) => {
         const cmd = JSON.parse(String(raw)) as Record<string, unknown>;
@@ -87,9 +88,13 @@ for (const mode of ["kit", "fixtures"]) test(`Phase 3 complete round UI (${mode}
     }
     server.emit({ type: "round_started", round_id: "R1", building_id: "233953", target_floors: [6, 7, 8] });
     server.go("INTRO");
-    server.emit({ type: "building_intro", text: "Your city needs you.", audio_url: null, mood: "hopeful", analyst_line: "Bring me something fun." });
+    server.intro = { text: "Your city needs you.", audio_url: null, mood: "hopeful", analyst_line: "Bring me something fun." };
+    server.emit({ type: "building_intro", ...server.intro });
     await expect(screen.getByTestId("subtitles")).toContainText("Your city needs you.");
     server.go("PITCH");
+    await screen.reload();
+    await expect(screen.getByTestId("subtitles")).toContainText("Your city needs you.");
+    await expect(screen.getByTestId("subtitles")).toContainText("Bring me something fun.");
     await expect(phones[0]!.getByLabel("Your pitch")).toHaveAttribute("maxlength", "280");
     await expect(phones[0]!.getByRole("button", { name: "Submit pitch" })).toBeDisabled();
     for (const [i, text] of ["A public games space", "A community art space"].entries()) {

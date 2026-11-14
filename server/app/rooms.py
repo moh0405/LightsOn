@@ -90,6 +90,7 @@ class Room:
     challenges: list[Challenge] = field(default_factory=list)
     verdict: Verdict | None = None
     dossier: dict | None = None
+    intro: dict | None = None
     charge: int = 0
     auto_completed: bool = False
     city: City = field(default_factory=City)
@@ -126,6 +127,7 @@ class Room:
             "revisions": [p.model_dump(mode='json') for p in self.revisions.values()],
             "challenges": [c.model_dump() for c in self.challenges],
             "verdict": self.verdict.model_dump() if self.verdict else None,
+            "intro": self.intro if self.round_id and self.phase not in ("LOBBY", "EXPLORE") else None,
             "charge": self.charge,
             "auto_completed": self.auto_completed,
             "city": self.city.snapshot(),
@@ -189,6 +191,7 @@ class Room:
             await self._set_phase('INTRO', announce_round=True)
 
     def _clear_round_inputs(self) -> None:
+        self.intro = None
         self.pitches.clear()
         self.revisions.clear()
         self.challenges.clear()
@@ -231,6 +234,8 @@ class Room:
                 await self.broadcast('error', {'code': 'invalid_verdict', 'message': 'The judge could not validate a verdict. Try another round.'})
                 await self._set_phase('EXPLORE')
                 return
+        if phase == "INTRO" and self.dossier:
+            self.intro = {**fake_agent.intro(self.dossier), "analyst_line": analyst_line(self.city.needs)}
         seconds = self.durations.get(phase)
         self.ends_at = utcnow() + timedelta(seconds=seconds) if seconds is not None else None
         self._save()
@@ -243,8 +248,7 @@ class Room:
             'ends_at': self.ends_at.isoformat() if self.ends_at else None,
         })
         if phase == 'INTRO' and self.dossier:
-            await self.broadcast('building_intro', {**fake_agent.intro(self.dossier),
-                'analyst_line': analyst_line(self.city.needs)}, to='screen')
+            await self.broadcast('building_intro', self.intro, to='screen')
         elif phase == 'CHALLENGE':
             for challenge in self.challenges:
                 payload = challenge.model_dump(exclude={'category_guess'})
@@ -349,6 +353,7 @@ class Room:
         await self.broadcast('neighborhood_updated', {'needs': dict(self.city.needs), 'most_needed': most_needed(self.city.needs)}, to='screen')
         await self.broadcast('phase_changed', {'round_id': self.round_id, 'phase': self.phase,
             'ends_at': self.ends_at.isoformat() if self.ends_at else None})
+        await self.broadcast('room_state', self.snapshot(), to='play')
         self._arm_timer(seconds)
 
     # ---- timers ------------------------------------------------------
@@ -409,6 +414,7 @@ class Room:
         ends = data.get("ends_at")
         room.ends_at = datetime.fromisoformat(ends) if ends else None
         room.dossier = data.get('dossier')
+        room.intro = data.get('intro')
         room.pitches = {p['player_id']: Pitch.model_validate(p) for p in data.get('pitches', [])}
         room.revisions = {p['player_id']: Pitch.model_validate(p) for p in data.get('revisions', [])}
         room.challenges = [Challenge.model_validate(c) for c in data.get('challenges', [])]
@@ -421,7 +427,7 @@ class Room:
         if 'city' in data:
             city = data['city']
             room.city = City(needs=city['needs'], buildings_revived=city['buildings_revived'],
-                sqft_reimagined=city['sqft_reimagined'], song_layers=city['song_layers'], counted=data.get('counted_floors', {}))
+                sqft_reimagined=city['sqft_reimagined'], song_categories=list(city.get('song_categories', [])), counted=data.get('counted_floors', {}))
         room.energy_nonces = {pid: set(nonces) for pid, nonces in data.get('energy_nonces', {}).items()}
         room.energy_at = {pid: datetime.fromisoformat(at) for pid, at in data.get('energy_at', {}).items()}
         for pid, at in room.energy_at.items():

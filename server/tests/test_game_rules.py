@@ -38,7 +38,7 @@ def test_city_rules_and_tie_order():
     city = City()
     assert city.snapshot() == dict(buildings_revived=0, sqft_reimagined=0,
         needs=dict(housing=40, food_retail=30, entertainment=15, community=35),
-        most_needed='entertainment', song_layers=0)
+        most_needed='entertainment', song_layers=0, song_categories=[])
     assert most_needed(dict(housing=1, food_retail=1, entertainment=1, community=1)) == 'housing'
     assert needs_bonus('culture', city.needs) == 2
     assert needs_bonus('entertainment', city.needs) == 2
@@ -56,6 +56,15 @@ def test_city_rules_and_tie_order():
     assert city.needs['housing'] == 100
     assert housing_impact(94509) == dict(kind='housing_estimate', sqft=94509, units=83,
         residents=158, label='rough game estimate, not a feasibility claim')
+
+
+def test_song_layers_count_distinct_categories():
+    city = City()
+    city.revive('a', [6], 'culture', 1000)
+    city.revive('b', [6], 'culture', 1000)
+    assert city.snapshot()['song_layers'] == 1
+    city.revive('c', [6], 'housing', 1000)
+    assert city.snapshot()['song_layers'] == 2
 
 
 def test_targets_are_lowest_contiguous_dark_verified_and_skip_revived(dossier):

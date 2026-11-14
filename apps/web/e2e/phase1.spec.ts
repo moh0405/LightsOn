@@ -41,6 +41,8 @@ for (const mode of ["kit", "fixtures"] as const) {
       for (const name of ["Ann", "Bo", "Cy"]) await expect(screen.locator("aside li").filter({ hasText: name })).toBeVisible();
       const colors = await screen.locator("aside li span").evaluateAll((nodes) => nodes.map((node) => getComputedStyle(node).color));
       expect(new Set(colors).size).toBe(3);
+      // Row order follows server join order, not the test's; compare against Ann's own row.
+      const annColor = await screen.locator("aside li").filter({ hasText: "Ann" }).locator("span").evaluate((node) => getComputedStyle(node).color);
       for (const page of [screen, ...phones]) await expect(phase(page)).toHaveText("EXPLORE");
 
       // Send a real touch drag through Chromium's input pipeline, producing pointer events.
@@ -52,7 +54,7 @@ for (const mode of ["kit", "fixtures"] as const) {
       await touch.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: point(0.2) });
       const dot = screen.getByTestId("dot").filter({ hasText: "Ann" });
       await expect(dot).toBeVisible();
-      await expect(dot).toHaveCSS("background-color", colors[0]!);
+      await expect(dot).toHaveCSS("background-color", annColor);
       await expect.poll(() => dot.evaluate((node) => (node as HTMLElement).style.left)).toBe("20%");
       for (const fraction of [0.3, 0.45, 0.6, 0.75]) {
         await ann.waitForTimeout(50); // a human drag spans multiple 33ms pointer throttle windows
