@@ -6,9 +6,8 @@ from app.commands import CommandService
 from app.rooms import Conn, RoomError, RoomManager
 
 
-@pytest.fixture(params=['kit', 'fixtures'])
-def game(request, tmp_path, monkeypatch):
-    monkeypatch.setenv('DATA_MODE', request.param)
+@pytest.fixture
+def game(game_mode, tmp_path):
     manager = RoomManager(['233953', '233899'], tmp_path, durations={})
     room = manager.create('ABCD')
     room.durations = {}  # all phases under test control
@@ -197,3 +196,58 @@ async def test_repeated_building_uses_fresh_floors_and_exhaustion(game):
     assert room.city.buildings_revived == 1
     assert '233953' not in room.snapshot()['hero_building_ids']
     assert any(bid not in ['233953', '233899'] for bid in room.snapshot()['hero_building_ids'])
+
+
+async def test_stale_power_timer_cannot_skip_revived_and_reset_keeps_city(game, monkeypatch):
+    room, _, _, _ = game
+    a, b = await pitch_to_power(game)
+    stale_token = (room.phase, room._round_seq, room.ends_at)
+    now = [10.0]
+    monkeypatch.setattr('app.rooms.monotonic', lambda: now[0])
+    for pid in [a, b]: await command(game, pid, 'contribute_energy', nonce='first')
+    now[0] += .6  # the boundary itself is accepted
+    for pid in [a, b]: await command(game, pid, 'contribute_energy', nonce='second')
+    await room.advance(expected=stale_token)
+    assert room.phase == 'REVIVED'
+    city = room.city.snapshot()
+    await room.reset_round()
+    assert not room.pitches and not room.revisions and room.verdict is None and room.charge == 0
+    assert room.city.snapshot() == city and room.revived
+    await room.reset_room()
+    assert room.phase == 'LOBBY' and not room.revived and room.city.sqft_reimagined == 0
+
+
+async def test_context_buildings_can_be_woken_with_their_own_facts(game):
+    room, commands, events, _ = game
+    a, _ = await setup(game)
+    await room.reset_round()
+    context = next(bid for bid in room.snapshot()['hero_building_ids'] if bid not in room.hero_ids)
+    await commands.handle(dict(type='wake', room=room.code, player_id=a, building_id=context), 'web')
+    assert room.building_id == context and room.target_floors
+    await room.advance()
+    await command(game, a, 'submit_pitch', text='A library')
+    await room.advance()
+    challenge = next(e for e in reversed(events) if e['type'] == 'counteroffer')
+    assert challenge['fact_ids'] and all(context in fid for fid in challenge['fact_ids'])
+
+
+async def test_different_winner_colors_survive_reload(game):
+    room, commands, _, manager = game
+    a, b = await setup(game)
+    for index, winner in enumerate([a, b]):
+        if index:
+            await commands.handle(dict(type='wake', room=room.code, player_id=b, building_id='233953'), 'web')
+        await room.advance()
+        await command(game, winner, 'submit_pitch', text='A community library open to everyone')
+        for _ in range(5): await room.advance()
+        assert room.phase == 'REVIVED' and room.verdict.winner_player_id == winner
+        await room.advance()
+    assert room.floor_states['233953']['6']['color'] == room.players[a].color
+    assert room.floor_states['233953']['17']['color'] == room.players[b].color
+    assert room.revived['233953']['floors'] == [6, 7, 8, 17, 18]
+    manager.close()
+    restored = RoomManager(manager.hero_ids, manager.state_dir)
+    state = restored.get(room.code).snapshot()
+    assert state['floor_states'] == room.floor_states
+    assert state['city']['sqft_reimagined'] == 127569
+    restored.close()

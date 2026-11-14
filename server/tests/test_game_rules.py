@@ -11,9 +11,9 @@ from app.data.provider import provider_for_mode
 from app.models import Pitch, ProposalScore, VerdictProposal
 
 
-@pytest.fixture(params=['fixtures', 'kit'])
-def dossier(request):
-    return provider_for_mode(request.param).dossier('233953')
+@pytest.fixture
+def dossier(game_mode):
+    return provider_for_mode(game_mode).dossier('233953')
 
 
 def pitch(pid='a', text='A community space open to everyone', seconds=0, revision=False):
@@ -150,3 +150,43 @@ def test_fake_agent_is_deterministic_grounded_and_rewards_counteroffer(dossier):
     empty = deepcopy(dossier)
     empty['facts'] = []
     assert fake_agent.challenge(p, empty).fact_ids == []
+
+
+def test_fractional_needs_small_area_and_health_bonus():
+    city = City()
+    city.revive('233899', [3], 'food_retail', 24570)
+    assert city.needs['food_retail'] == 54.57
+    city.needs['community'] = 0
+    assert needs_bonus('health', city.needs) == needs_bonus('community', city.needs) == 2
+
+
+def test_four_floor_cap_uses_actual_contiguous_dossier_floors():
+    dossier = provider_for_mode('fixtures').dossier('233899')
+    already = {f['number'] for f in dossier['floors'] if f['number'] is not None and f['number'] < 43}
+    assert select_target_floors(dossier, already) == [43, 44, 45, 46]
+
+
+def test_revival_action_rejects_stale_round_and_target_tampering(dossier):
+    from app.actions import validate_revival
+    p = pitch()
+    verdict = validate(dossier, [(proposal([p]), [p])])
+    args = dict(round_id='R-1', committed_rounds=set(), dossier=dossier, target_floors=[6, 7, 8],
+                revived_floors=set(), verdict=verdict, player_colors={'a': '#ff5d73'}, auto_completed=False)
+    event = validate_revival(**args)
+    assert event == dict(building_id='233953', floors=[6, 7, 8], color='#ff5d73',
+                         category='community', sqft=94509, auto_completed=False)
+    assert validate_revival(**{**args, 'committed_rounds': {'R-1'}}) is None
+    for change in [{'round_id': 'R-2'}, {'target_floors': [1]}, {'target_floors': [6, 6]},
+                   {'target_floors': [6, 7, 8, 17]}, {'player_colors': {}}, {'revived_floors': {6}}]:
+        with pytest.raises(ActionError): validate_revival(**{**args, **change})
+
+
+def test_fake_agent_grounding_for_every_available_building():
+    provider = provider_for_mode('fixtures')
+    for building in provider.buildings():
+        d = provider.dossier(building['id'])
+        c = fake_agent.challenge(pitch(), d)
+        v = fake_agent.verdict([pitch()], d, City())
+        ids = {f['id'] for f in d['facts']}
+        assert set(c.fact_ids) <= ids and set(v.fact_ids) <= ids
+        assert v == fake_agent.verdict([pitch()], d, City())

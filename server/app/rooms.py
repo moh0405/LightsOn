@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Awaitable, Callable
 
 from .models import Phase, Pitch, Challenge, Verdict
-from .actions import ActionError, select_target_floors, target_sqft, validate_verdict
+from .actions import ActionError, select_target_floors, target_sqft, validate_verdict, validate_revival
 from .agent import fake_agent
 from .city import City, analyst_line, most_needed
 from .data.provider import provider_for_mode
@@ -316,13 +316,18 @@ class Room:
             return
         if not self.verdict or not self.dossier or not self.building_id:
             raise RoomError('no_verdict', 'A validated verdict is required to revive floors.')
+        try:
+            event = validate_revival(round_id=self.round_id, committed_rounds=self.committed_rounds,
+                dossier=self.dossier, target_floors=self.target_floors,
+                revived_floors=set(self.revived.get(self.building_id, {}).get('floors', [])),
+                verdict=self.verdict, player_colors={pid: p.color for pid, p in self.players.items()},
+                auto_completed=auto_completed)
+        except ActionError as exc:
+            raise RoomError('invalid_revival', str(exc)) from exc
+        if event is None:
+            return
         self._cancel_timer()
-        bid = self.building_id
-        floors = [n for n in self.target_floors if n not in self.revived.get(bid, {}).get('floors', [])]
-        sqft = target_sqft(self.dossier, floors)
-        if not floors or not sqft:
-            raise RoomError('no_dark_floors', 'There are no remaining verified dark floors.')
-        color = self.players[self.verdict.winner_player_id].color
+        bid, floors, sqft, color = (event[key] for key in ('building_id', 'floors', 'sqft', 'color'))
         self.city.revive(bid, floors, self.verdict.category, sqft)
         self.revived[bid] = {'floors': sorted(set(self.revived.get(bid, {}).get('floors', [])) | set(floors)), 'color': color}
         states = self.floor_states.setdefault(bid, {})
@@ -340,8 +345,7 @@ class Room:
         self._save()
         if old_charge < 100:
             await self.broadcast('energy_updated', {'charge': 100, 'by_player_id': None})
-        await self.broadcast('building_revived', {'building_id': bid, 'floors': floors, 'color': color,
-            'category': self.verdict.category, 'sqft': sqft, 'auto_completed': auto_completed})
+        await self.broadcast('building_revived', event)
         await self.broadcast('neighborhood_updated', {'needs': dict(self.city.needs), 'most_needed': most_needed(self.city.needs)}, to='screen')
         await self.broadcast('phase_changed', {'round_id': self.round_id, 'phase': self.phase,
             'ends_at': self.ends_at.isoformat() if self.ends_at else None})

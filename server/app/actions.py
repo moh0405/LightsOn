@@ -78,3 +78,22 @@ def validate_verdict(batches: list[tuple[VerdictProposal, list[Pitch]]], *, doss
         reason_line=proposal.reason_line, fact_ids=cited, category=category,
         desire_met=desire_met(pitch.text, dossier), desire_reveal=desire(dossier),
         impact=housing_impact(sqft) if category == 'housing' else None)
+
+
+def validate_revival(*, round_id: str, committed_rounds: set[str], dossier: dict,
+                     target_floors: list[int], revived_floors: set[int], verdict: Verdict,
+                     player_colors: dict[str, str], auto_completed: bool) -> dict | None:
+    """Build the physical action from trusted floors, guarded by the round's idempotency key."""
+    if round_id in committed_rounds:
+        return None
+    if (not round_id or verdict.round_id != round_id or verdict.winner_player_id not in player_colors
+            or not any(score.player_id == verdict.winner_player_id for score in verdict.scores)):
+        raise ActionError('Revival requires this round and its validated winner.')
+    if not target_floors or target_floors != select_target_floors(dossier, revived_floors):
+        raise ActionError('Revival targets must be the server-selected fresh dark floors.')
+    sqft = target_sqft(dossier, target_floors)
+    if not sqft:
+        raise ActionError('Revival requires verified floor area.')
+    return {'building_id': dossier['id'], 'floors': list(target_floors),
+            'color': player_colors[verdict.winner_player_id], 'category': verdict.category,
+            'sqft': sqft, 'auto_completed': auto_completed}
