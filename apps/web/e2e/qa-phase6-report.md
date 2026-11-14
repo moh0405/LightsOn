@@ -1,5 +1,11 @@
 # Phase 6 QA sweep
 
+> **Resolved on `phase6/fixes`:** F1 (Tone loads lazily inside Start; no Web Audio shows a toast), F2 (compact
+> four-player CHALLENGE cards fit 1920×1080 at ≥28 px), F3 (every error event toasts, identical ones deduped) and F4
+> (persona voice read from the dossier, so no 404; Matterport preloads hidden at INTRO start with a silent 5 s caption
+> fallback). Every regression in `qa-phase6-evidence.spec.ts` now passes; the persona check now wakes TC Energy Center
+> (233905) because Wells Fargo Plaza is no longer wakeable without a persona, and counts app-origin console errors only.
+
 **Result: acceptance checks fail; no product code changed.** Tested main `688f908c952d96515c834326b7d42ce76ada7f6f` with the real CoStar kit and committed fixtures. Branch: `qa/phase6-sweep`.
 
 ## Setup and method
