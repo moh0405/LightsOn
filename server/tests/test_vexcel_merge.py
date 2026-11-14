@@ -30,15 +30,16 @@ def builder(tmp_path, monkeypatch):
         CREATE TABLE matterport(property_id INTEGER, model_id TEXT);
     ''')
     # Nulls deliberately supply no invented building facts.
-    db.execute('INSERT INTO properties VALUES (?, ?)', ('233953', json.dumps({
-        'buildingName': None, 'primaryAddress': {'latitude': None, 'longitude': None}, 'constructionEvents': []})))
-    db.execute('INSERT INTO tenant_history VALUES (?, ?)', ('233953', json.dumps({
-        'records': None, 'current': None, 'top_industries': None, 'top_exit_reasons': None})))
+    for pid in ('233953', '233899'):
+        db.execute('INSERT INTO properties VALUES (?, ?)', (pid, json.dumps({
+            'buildingName': None, 'primaryAddress': {'latitude': None, 'longitude': None}, 'constructionEvents': []})))
+        db.execute('INSERT INTO tenant_history VALUES (?, ?)', (pid, json.dumps({
+            'records': None, 'current': None, 'top_industries': None, 'top_exit_reasons': None})))
     fixtures = tmp_path / 'server/fixtures/vexcel'
     fixtures.mkdir(parents=True)
-    def merge(fixture):
-        (fixtures / '233953.json').write_text(json.dumps(fixture))
-        return module.build_dossier(db, '233953', {'FloorName': {}})
+    def merge(fixture, pid='233953'):
+        (fixtures / f'{pid}.json').write_text(json.dumps(fixture))
+        return module.build_dossier(db, pid, {'FloorName': {}})
     yield merge, fixtures
     db.close()
 
@@ -52,14 +53,21 @@ def test_merge_requires_real_capture_date(builder, capture):
 
 def test_merge_only_positive_counts_and_natural_wording(builder):
     merge, _ = builder
-    dossier = merge({'capture_dates': {'ortho': '2023-08-02T00:00:00'}, 'detections': [
-        {'label': 'car', 'count': 31}, {'label': 'tree', 'count': 2},
-        {'label': 'parking lot', 'count': 0}, {'label': 'solar panel', 'count': None}]})
+    # Match the recorded captures: Esperson has 31 cars (2023),
+    # Wells Fargo has 8 cars and 2 trees (2022).
+    esperson = merge({'capture_dates': {'ortho': '2023-08-02T00:00:00'},
+                      'detections': [{'label': 'car', 'count': 31}]})
+    esperson_facts = [f for f in esperson['facts'] if f['source'] == 'vexcel+vision']
+    assert '31 cars' in esperson_facts[0]['say_as']
+    assert 'on the 2023 flyover' in esperson_facts[0]['say_as']
+    dossier = merge({'capture_dates': {'ortho': '2022-02-19T00:00:00'}, 'detections': [
+        {'label': 'car', 'count': 8}, {'label': 'tree', 'count': 2},
+        {'label': 'parking lot', 'count': 0}, {'label': 'solar panel', 'count': None}]}, pid='233899')
     facts = [f for f in dossier['facts'] if f['source'] == 'vexcel+vision']
-    assert [f['value'] for f in facts] == [31, 2]
-    assert '31 cars' in facts[0]['say_as']
+    assert [f['value'] for f in facts] == [8, 2]
+    assert '8 cars' in facts[0]['say_as']
     assert '2 trees' in facts[1]['say_as']
-    assert 'on the 2023 flyover' in facts[0]['say_as']
+    assert 'on the 2022 flyover' in facts[0]['say_as']
 
 
 @pytest.mark.parametrize('features,counts', [([], [None, None]),
