@@ -319,7 +319,9 @@ def regenerate_persona(property_id: str, research: Path, *, provider=None, model
         for filename, selection in selections.items():
             write_json(workspace / filename, selection)
         write_json(workspace / 'persona_proposal.json', value)
-        value = normalize_writer_persona(value, dossier)
+        dropped = []
+        value = normalize_writer_persona(value, dossier, dropped=dropped)
+        write_json(workspace / 'persona_dropped.json', {'dropped': dropped})
         write_json(workspace / 'persona.json', value)
         result = merge_research(tools, workspace)
         from ..voice.tts import render_intro

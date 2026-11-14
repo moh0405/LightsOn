@@ -453,7 +453,7 @@ def normalize_writer_persona(value: dict, dossier: dict, dropped: list | None = 
     dropped = [] if dropped is None else dropped
     def drop(field: str, text: str, reason: str) -> None:
         dropped.append(dict(field=field, text=text, reason=reason))
-        log.info('Persona line dropped from %s (%s): %s', field, reason, text)
+        log.warning('Persona line dropped from %s (%s): %s', field, reason, text)
     result = copy.deepcopy(value)
     names = (dossier['name'],)
     facts = {fact['id']: fact for fact in dossier['facts']}

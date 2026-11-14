@@ -45,6 +45,7 @@ def test_persona_only_reads_cached_research_and_never_rescouts(tmp_path, monkeyp
     assert writer.calls == 1 and result['prep_status'] == 'ready'
     assert (tmp_path / 'personas' / f'{PID}.json').is_file()
     assert result['persona']['backstory'][1]['fact_ref'].endswith('dark_floor_count')
+    assert json.loads((tmp_path / 'cache' / PID / 'work' / 'persona_dropped.json').read_text()) == {'dropped': []}
 
 
 def test_persona_only_estimate_refuses_above_weekend_threshold(tmp_path):
