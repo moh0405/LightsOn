@@ -10,9 +10,16 @@ from .persona import fact_line
 
 NUMBER = re.compile(r'(?<![\w])[-+]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:\s*[kK]\b)?')
 NUMBER_WORDS = dict(zero=0, one=1, two=2, three=3, four=4, five=5, six=6, seven=7,
-                    eight=8, nine=9, ten=10, eleven=11, twelve=12, twenty=20, hundred=100, thousand=1000, million=1000000)
+                    eight=8, nine=9, ten=10, eleven=11, twelve=12, thirteen=13, fourteen=14, fifteen=15,
+                    sixteen=16, seventeen=17, eighteen=18, nineteen=19, twenty=20, thirty=30, forty=40,
+                    fifty=50, sixty=60, seventy=70, eighty=80, ninety=90,
+                    hundred=100, thousand=1000, million=1000000)
+_WORD = '(?:' + '|'.join(sorted(NUMBER_WORDS, key=len, reverse=True)) + ')'
+# Unit words that may follow a hyphenated number: "twenty-seven-story", "nine-million-square-foot".
+_HYPHEN_UNIT = r'(?:square|sq\b|stor(?:y|ey|ies|eys)\b|floors?\b|foot\b|feet\b|ft\b|years?\b|percent\b)'
+HYPHEN_NUMBER = re.compile(rf'\b{_WORD}(?:-{_WORD})+\b', re.I)
 UNITS = {'sqft': r'(?:sq\.?\s*ft\.?|square\s+feet|square\s+foot)', 'ft': r'(?:ft\.?|feet|foot)',
-         'stories': r'(?:stories|storeys|floors)', 'year': r'(?:years?)',
+         'stories': r'(?:stories|storeys|story|storey|floors)', 'year': r'(?:years?)',
          'percent': r'(?:%|percent\b|per\s+cent\b)',
          'spaces_per_1000_sqft': r'(?:spaces?\s+per\s+(?:1,?000|thousand)\s+(?:sq\.?\s*ft\.?|square\s+feet))'}
 
@@ -40,6 +47,38 @@ def number_unit(text: str) -> str | None:
                  if re.match(pattern + r'(?!\w)', tail)), None)
 
 
+def words_value(words: str) -> int:
+    """Value of number words joined by hyphens or spaces: "twenty-seven" -> 27, "nine-million" -> 9000000."""
+    total = current = 0
+    for word in re.split(r'[-\s]+', words.strip().lower()):
+        value = NUMBER_WORDS[word]
+        if value == 100:
+            current = (current or 1) * 100
+        elif value >= 1000:
+            total += (current or 1) * value
+            current = 0
+        else:
+            current += value
+    return total + current
+
+
+def _compound(words: str) -> bool:
+    """A real compound ("twenty-seven", "one-hundred-twenty"), not a phrase like "one-two"."""
+    values = [NUMBER_WORDS[w] for w in words.lower().split('-')]
+    return len(values) > 1 and all(not (a < 100 and b < 100) or (a % 10 == 0 and 20 <= a <= 90 and 1 <= b <= 9)
+                                   for a, b in zip(values, values[1:]))
+
+
+def hyphen_numbers(line: str) -> str:
+    """Rewrite hyphenated number words as digits so they get the same check as "27 stories".
+    Conversational hyphens ("one-of-a-kind", "one-two punch") are left alone."""
+    line = HYPHEN_NUMBER.sub(lambda m: str(words_value(m[0])) if _compound(m[0]) else m[0], line)
+    # "27-story" and "forty-story" read as "27 story" and "forty story"; a single word stays a word
+    # so the plan rules below still treat "a one-floor pilot" as a proposal.
+    line = re.sub(rf'(\d|\b{_WORD})-(?={_HYPHEN_UNIT})', r'\1 ', line, flags=re.I)
+    return re.sub(r'\bsquare-(foot|feet)\b', r'square \1', line, flags=re.I)
+
+
 SCORE_MAX = 40  # four 0-10 scores; the server clamps and totals them
 
 
@@ -63,7 +102,22 @@ def game_number(text: str, start: int, end: int, value: float, unit: str | None)
                 and re.match(r'(?:\s*$|\s*[,.;:!?)\u2014\u2013]|\s+points?\b|\s+(?:and|for|in|from|to|with)\b)', after, re.I))
 
 
-def check_line(line: str, fact_ids: list[str], dossier: dict, impact: dict | None = None) -> str | None:
+def quoted_numbers(texts: list[str] | None) -> set[tuple[float, str | None]]:
+    """(value, unit) pairs written in player pitches, normalized like dialogue."""
+    found = set()
+    for text in texts or []:
+        text = hyphen_numbers(text)
+        text = re.sub(r'\b(' + '|'.join(NUMBER_WORDS) + r')\b', lambda m: str(NUMBER_WORDS[m[0].lower()]), text, flags=re.I)
+        text = re.sub(r'(\d[\d,]*(?:\.\d+)?)\s+(1000|1000000)\b',
+                      lambda m: str(float(m[1].replace(',', '')) * float(m[2])), text)
+        found |= {(number_value(m[0]), number_unit(text[m.end():])) for m in NUMBER.finditer(text)}
+    return found
+
+
+def check_line(line: str, fact_ids: list[str], dossier: dict, impact: dict | None = None,
+               quoted: list[str] | None = None) -> str | None:
+    """quoted: this round's pitch texts. A verdict may restate a player's own number with its unit
+    ("a nine-million-square-foot restaurant"); that quotes the pitch, it is not a building fact."""
     facts = {f['id']: f for f in safe_facts(dossier)}
     if any(fid not in facts or facts[fid]['value'] is None for fid in fact_ids):
         return 'Unknown or null fact ID'
@@ -98,9 +152,10 @@ def check_line(line: str, fact_ids: list[str], dossier: dict, impact: dict | Non
                     or re.search(r'\bfloor\s*$', before, re.I))
         return str(NUMBER_WORDS[match[0].lower()]) if physical else match[0]
     normalized = re.sub(r'\b(' + '|'.join(NUMBER_WORDS) + r')\b',
-                        spoken_number, line, flags=re.I)
+                        spoken_number, hyphen_numbers(line), flags=re.I)
     normalized = re.sub(r'(\d[\d,]*(?:\.\d+)?)\s+(1000|1000000)\b',
                         lambda m: str(float(m[1].replace(',', '')) * float(m[2])), normalized)
+    pitched = quoted_numbers(quoted)
     for match in NUMBER.finditer(normalized):
         value = number_value(match[0])
         unit = number_unit(normalized[match.end():])
@@ -128,6 +183,8 @@ def check_line(line: str, fact_ids: list[str], dossier: dict, impact: dict | Non
                 supported = True
             if value == 1000 and fact['key'] == 'parkingRatio' and re.search(r'per\s*$', normalized[:match.start()], re.I):
                 supported = True
+        if unit is not None and (value, unit) in pitched:
+            supported = True
         if game_number(normalized, match.start(), match.end(), value, unit):
             supported = True
         if impact and 'looks like' in line.casefold() and value in [v for v in impact.values() if type(v) in (int, float)]:
