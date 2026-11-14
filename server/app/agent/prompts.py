@@ -21,8 +21,12 @@ def persona_for(dossier: dict) -> dict:
     return dossier.get('persona') or fake_persona(dossier).model_dump()
 
 
-def pitch_data(pitches) -> str:
-    return '\n'.join(f'<pitch player="{html.escape(p.player_id, quote=True)}" revision="{str(p.revision).lower()}">{html.escape(p.text)}</pitch>' for p in pitches)
+def pitch_data(pitches, names: dict[str, str] | None = None) -> str:
+    """`player` is an internal key for the JSON reply; `nickname` is how dialogue names the player."""
+    def nickname(p):
+        name = (names or {}).get(p.player_id)
+        return f' nickname="{html.escape(name, quote=True)}"' if name else ''
+    return '\n'.join(f'<pitch player="{html.escape(p.player_id, quote=True)}"{nickname(p)} revision="{str(p.revision).lower()}">{html.escape(p.text)}</pitch>' for p in pitches)
 
 
 def context_facts(dossier: dict, persona: dict, pitches=()) -> list[dict]:
@@ -74,7 +78,7 @@ RULES
 10. Every number in dialogue must match a cited FACT value or its floor label; never repeat unsupported numbers from a pitch or mention player numbers in dialogue.
 11. Return only the requested JSON schema. Do not include thought processes. Do not use the prohibited floor-status word.
 12. FACTS include exact source say_as and ready-to-speak wording for the same evidence. Begin each challenge line with one verified fact's spoken wording, then add your attitude about this player's idea. Put the wish-driven negotiation in counteroffer. Cite only facts actually used, including any quantities in the counteroffer. Never quote the player's requested quantities, even to disagree; describe the request as too big instead. Do not recite unrelated facts.
-13. Current floor status does not establish how long a floor has been dark; never invent durations or past use. Never mention candidate aliases or player IDs in spoken dialogue; refer to the idea instead.
+13. Current floor status does not establish how long a floor has been dark; never invent durations or past use. Never mention candidate aliases or player IDs in spoken dialogue; name a player by the pitch nickname attribute, or refer to the idea ("the first pitch").
 CONSTRAINTS (building physical HardLimits, triggered only by a stated numeric requirement exceeding the threshold):
 {json.dumps(persona['hard_limits'], ensure_ascii=False)}
 UNKNOWN fields (null = unknown, do not cite): {json.dumps(unknown)}

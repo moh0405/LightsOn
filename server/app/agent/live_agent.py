@@ -18,7 +18,7 @@ from pydantic import BaseModel, ConfigDict, TypeAdapter
 from ..city import housing_impact
 from ..models import Challenge, Pitch, VerdictProposal
 from . import fake_agent
-from .grounding import ClaimChecks, check_line, fallback_line
+from .grounding import ClaimChecks, check_line, fallback_line, name_players
 from .prompts import CachedPrompt, build_prompt, challenge_prompt, persona_for, pitch_data, safe_facts
 from .spend import MeteredClient, SpendUnavailable
 
@@ -219,7 +219,9 @@ class LiveAgent:
         log.error('Live %s unavailable (%s); using deterministic fallback', step, cause)
         await self.event('fallback', step, started, cause=cause)
 
-    async def challenge(self, pitches: list[Pitch], dossier: dict, city=None, mood='hopeful', memory='') -> list[Challenge]:
+    async def challenge(self, pitches: list[Pitch], dossier: dict, city=None, mood='hopeful', memory='',
+                        names: dict[str, str] | None = None) -> list[Challenge]:
+        names = names or {}
         self.challenge_latencies = {}
         self.fallback_player_ids.clear()
         self.fallback_player_causes.clear()
@@ -235,7 +237,7 @@ class LiveAgent:
                     fact_ids=[], counteroffer='Offer a kind, original idea for this space.', category_guess='wildcard')
             else:
                 system = challenge_prompt(dossier, mood, pitches=[p])
-                content = pitch_data([p])
+                content = pitch_data([p], names)
                 cause = 'unavailable'
                 try:
                     for attempt in range(2):
@@ -246,11 +248,16 @@ class LiveAgent:
                         candidate = result.challenges[0]
                         issues = await self.grounded_each([(candidate.line + ' ' + candidate.counteroffer, candidate.fact_ids)],
                             dossier, deadline, step='challenge', attempt=attempt)
+                        label = {p.player_id: names.get(p.player_id) or 'friend'}
+                        line, offer = name_players(candidate.line, label), name_players(candidate.counteroffer, label)
+                        if issues[0] is None and (line is None or offer is None):
+                            issues[0] = ('Internal player label in dialogue; name the player by nickname', 'player_label')
                         if issues[0] is None:
+                            candidate = candidate.model_copy(update={'line': line, 'counteroffer': offer})
                             from_model = True
                             break
                         reason, cause = issues[0]
-                        content = pitch_data([p]) + '\nRegenerate this player. Grounding failure: ' + reason[:240]
+                        content = pitch_data([p], names) + '\nRegenerate this player. Grounding failure: ' + reason[:240]
                 except Exception as exc:
                     cause = failure_cause(exc)
                 if not from_model:
@@ -284,7 +291,7 @@ class LiveAgent:
             await asyncio.gather(*tasks, return_exceptions=True)
 
     async def verdict_batches(self, originals, revisions, dossier, city, challenges, mood='hopeful', memory='',
-                              impact_sqft=None):
+                              impact_sqft=None, names: dict[str, str] | None = None):
         started = monotonic()
         deadline = started + self.verdict_timeout
         pitches = originals + revisions
@@ -292,11 +299,17 @@ class LiveAgent:
         # They are mapped back before actions.py receives the two proposal batches.
         candidates = [p.model_copy(update={'player_id': f'candidate_{i}'}) for i, p in enumerate(pitches)]
         safe = [p for p, source in zip(candidates, pitches) if not safety_reason(source.text)]
+        # Players never see internal labels: the prompt shows nicknames and any alias
+        # or player id left in dialogue is replaced by the nickname (or rejected).
+        names = names or {}
+        aliases = {p.player_id: names.get(p.player_id) or 'that pitch' for p in pitches}
+        aliases.update({c.player_id: names.get(p.player_id) or 'that pitch' for c, p in zip(candidates, pitches)})
+        nicknames = {c.player_id: names[p.player_id] for c, p in zip(candidates, pitches) if names.get(p.player_id)}
         try:
             if not safe:
                 raise ValueError('Only screened pitches')
             system = build_prompt(dossier, mood, city, memory, pitches=safe)
-            content = pitch_data(safe) + '\nScore every candidate separately, including originals and revisions. Challenges: ' + json.dumps([c.model_dump() for c in challenges])
+            content = pitch_data(safe, nicknames) + '\nScore every candidate separately, including originals and revisions. Challenges: ' + json.dumps([c.model_dump() for c in challenges])
             for attempt in range(2):
                 proposal = await self.call('verdict', system, content, VerdictProposal, deadline)
                 ids = [s.player_id for s in proposal.scores]
@@ -317,7 +330,13 @@ class LiveAgent:
                                              step='verdict', attempt=attempt, impact=impact,
                                              quoted=[p.text for p in safe])
                 if not reason:
-                    break
+                    line, reveal = name_players(proposal.reason_line, aliases), name_players(proposal.desire_reveal, aliases)
+                    if line is not None and reveal is not None:
+                        proposal = proposal.model_copy(update={'reason_line': line, 'desire_reveal': reveal})
+                        break
+                    reason = 'Internal player label in dialogue; name players by nickname'
+                    diagnostic('rejected', 'player_label', step='verdict', attempt=attempt + 1,
+                               building_id=dossier['id'], line=proposal.reason_line, fact_ids=proposal.fact_ids, reason=reason)
                 if attempt:
                     refs = [f['id'] for f in safe_facts(dossier) if f['id'] in proposal.fact_ids and f['value'] is not None]
                     proposal = proposal.model_copy(update={'reason_line': fallback_line(refs, dossier), 'fact_ids': refs})

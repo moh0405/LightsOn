@@ -122,7 +122,7 @@ async def test_room_reset_interrupts_live_judge_and_discards_late_result(dossier
     monkeypatch.setenv('AGENT_MODE', 'live')
     started = asyncio.Event()
     release = asyncio.Event()
-    async def slow(self, pitches, *args):
+    async def slow(self, pitches, *args, **kwargs):
         started.set()
         await release.wait()
         return [fake_agent.challenge(p, dossier) for p in pitches]
@@ -177,9 +177,9 @@ def test_stream_spend_reconciles_and_failure_retains_reservation(tmp_path):
 async def test_live_room_round_passes_actions_and_persists_mood(dossier, monkeypatch, tmp_path):
     from app.rooms import Room, Conn
     monkeypatch.setenv('AGENT_MODE', 'live')
-    async def challenges(self, pitches, *args):
+    async def challenges(self, pitches, *args, **kwargs):
         return [fake_agent.challenge(p, dossier) for p in pitches]
-    async def verdicts(self, originals, revised, dossier, city, *args):
+    async def verdicts(self, originals, revised, dossier, city, *args, **kwargs):
         return [(fake_agent.verdict(batch, dossier, city), batch) for batch in (originals, revised) if batch]
     monkeypatch.setattr(LiveAgent, 'challenge', challenges)
     monkeypatch.setattr(LiveAgent, 'verdict_batches', verdicts)
@@ -578,7 +578,7 @@ async def test_failure_during_fallback_validation_returns_to_explore(dossier, mo
     import app.rooms as rooms
     from app.actions import ActionError
     monkeypatch.setenv('AGENT_MODE', 'live')
-    async def proposals(self, originals, revised, dossier, city, *args):
+    async def proposals(self, originals, revised, dossier, city, *args, **kwargs):
         return [(fake_agent.verdict(originals, dossier, city), originals)]
     def reject(*args, **kwargs):
         raise ActionError('deliberately invalid candidate')

@@ -203,3 +203,24 @@ def fallback_line(fact_ids: list[str], dossier: dict) -> str:
     if fact['kind'] == 'estimate' and 'looks like' not in line.casefold():
         line = 'It looks like ' + line[0].lower() + line[1:]
     return line
+
+
+INTERNAL_LABEL = r'candidate[_ ]?\d+|p\d+'
+
+
+def name_players(text: str, aliases: dict[str, str]) -> str | None:
+    """Replace internal player labels (candidate_N, pN, player ids) with nicknames.
+    Returns None when a label remains that maps to no player, so the line is rejected."""
+    lookup = {' '.join(k.lower().replace('_', ' ').split()): v for k, v in aliases.items()}
+    known = sorted((re.escape(k) for k in aliases), key=len, reverse=True)
+    pattern = re.compile(r'\b(' + '|'.join([*known, INTERNAL_LABEL]) + r')\b', re.I)
+    unknown = False
+    def swap(match):
+        nonlocal unknown
+        name = lookup.get(' '.join(match.group(1).lower().replace('_', ' ').split()))
+        if name is None:
+            unknown = True
+            return match.group(1)
+        return name
+    named = pattern.sub(swap, text)
+    return None if unknown else named

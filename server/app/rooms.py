@@ -365,13 +365,15 @@ class Room:
         memory = f'{self.city.buildings_revived} buildings revived in this game; {self.city.sqft_reimagined} square feet reimagined.'
         try:
             if phase == 'CHALLENGE':
-                result = await agent.challenge(originals, self.dossier, self.city, self.mood, memory)
+                names = {pid: player.nickname for pid, player in self.players.items()}
+                result = await agent.challenge(originals, self.dossier, self.city, self.mood, memory, names=names)
                 for c in result:
                     await publish_challenge(c)
             else:
                 result = await agent.verdict_batches(originals, revised, self.dossier, self.city,
                                                       self.challenges, self.mood, memory,
-                                                      impact_sqft=target_sqft(self.dossier, self.target_floors))
+                                                      impact_sqft=target_sqft(self.dossier, self.target_floors),
+                                                      names={pid: player.nickname for pid, player in self.players.items()})
             async with self._lock:
                 if (self.round_id, self._round_seq, self.phase) != token:
                     return
