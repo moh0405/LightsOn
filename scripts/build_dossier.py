@@ -121,19 +121,19 @@ def build_dossier(db: sqlite3.Connection, pid: str, enums: dict) -> dict | None:
         ortho_path = f"/media/{pid}/{images['ortho']}" if images.get('ortho') else None
         oblique_paths = [f"/media/{pid}/{img}" for img in images.get('obliques', [])]
         aerial = dict(ortho=ortho_path, obliques=oblique_paths)
-        ortho_date = vdata.get('capture_dates', {}).get('ortho') or ''
-        try:
-            year = datetime.fromisoformat(ortho_date).year
-        except (ValueError, TypeError):
-            year = None
         for det in vdata.get('detections', []):
-            label = det['label']
-            count = det['count']
-            if type(count) is not int or count <= 0 or year is None:
+            label, count = det['label'], det['count']
+            if type(count) is not int or count <= 0:
                 continue
+            # Dates belong to the detection's own capture, never property/extract's ortho.
+            try:
+                detected_on = datetime.fromisoformat(det.get('capture_date') or '').date().isoformat()
+            except (TypeError, ValueError):
+                detected_on = None
+            when = f'on the {detected_on} flyover' if detected_on else 'in imagery with an unknown capture date'
             slug = label.replace(' ', '_')
             noun = label if count == 1 else label + ('es' if label.endswith(('s', 'x', 'ch', 'sh')) else 's')
-            say_as = f"on the {year} flyover, {count} {noun} detected within about 30 m of the parcel"
+            say_as = f"{when}, {count} {noun} detected within about 30 m of the parcel"
             facts.append(dict(
                 id=f'F_{pid}_vexcel_detection_{slug}',
                 key=f'vexcel_detection_{slug}',

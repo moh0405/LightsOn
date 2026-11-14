@@ -35,14 +35,15 @@ test("Vexcel ScoreCard evidence preserves flyover date and labels its estimate",
     await expect(evidence).toContainText(aerial.say_as);
     expect(aerial.kind).toBe("estimate");
     const year = aerial.say_as.match(/\d{4}/)?.[0];
-    expect(year).toBeTruthy();
-    await expect(evidence).toContainText(`${year} flyover`);
+    if (year) {
+      const capture = aerial.say_as.match(/\d{4}(?:-\d{2}(?:-\d{2})?)?/)?.[0];
+      await expect(evidence).toContainText(`${capture} flyover`);
+    } else {
+      await expect(evidence).toContainText("unknown capture date");
+    }
     await page.screenshot({ path: testInfo.outputPath("vexcel-estimate-label.png") });
     mkdirSync(new URL("screenshots/qa-phase4/", import.meta.url), { recursive: true });
     await page.screenshot({ path: new URL("screenshots/qa-phase4/vexcel-estimate-label.png", import.meta.url).pathname });
-    // Known product finding: Evidence renders say_as but drops Fact.kind.
-    // Keep this narrowly expected until the product follow-up adds the label.
-    test.fail(true, "Evidence omits the estimate label for Vexcel facts; see qa-phase4-report.md");
     await expect(evidence).toContainText(/estimate/i, { timeout: 1000 });
   } finally {
     await context.close();

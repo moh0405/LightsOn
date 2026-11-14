@@ -2298,7 +2298,7 @@
       "source": "vexcel+vision",
       "source_field": "vexcel.elements/detect",
       "kind": "estimate",
-      "say_as": "on the 2023 flyover, 31 cars detected within about 30 m of the parcel"
+      "say_as": "in imagery with an unknown capture date, 31 cars detected within about 30 m of the parcel"
     }
   ],
   "tenant_history": {

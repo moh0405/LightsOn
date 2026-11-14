@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties } from "react";
-import { getDossier, type Dossier } from "../../lib/buildings";
+import { factDescription, getDossier, type Dossier } from "../../lib/buildings";
 import { useGame } from "../../lib/store";
 import type { Need } from "../../lib/protocol";
 const card: CSSProperties = { background: "#171e2de8", border: "1px solid #39455a", borderRadius: 16, padding: 20 };
@@ -29,7 +29,7 @@ export function Evidence({ ids }: { ids: string[] }) {
     if (buildingId) void getDossier(buildingId).then((d) => { if (active) setDossier(d); }).catch(() => { if (active) setFailed(true); });
     return () => { active = false; };
   }, [buildingId, dataMode]);
-  return <div aria-label="Cited evidence">{ids.map((id) => <p key={id}><small>{id}: {dossier?.facts?.find((f) => f.id === id)?.say_as ?? (failed ? "Evidence unavailable" : dossier ? "Source text unavailable" : "Loading evidence…")}</small></p>)}</div>;
+  return <div aria-label="Cited evidence">{ids.map((id) => <p key={id}><small>{id}: {(dossier?.facts?.find((f) => f.id === id) ? factDescription(dossier.facts.find((f) => f.id === id)!) : null) ?? (failed ? "Evidence unavailable" : dossier ? "Source text unavailable" : "Loading evidence…")}</small></p>)}</div>;
 }
 export function ScoreCard() {
   const { verdict, players, phase } = useGame();

@@ -3795,7 +3795,7 @@
       "source": "vexcel+vision",
       "source_field": "vexcel.elements/detect",
       "kind": "estimate",
-      "say_as": "on the 2022 flyover, 8 cars detected within about 30 m of the parcel"
+      "say_as": "in imagery with an unknown capture date, 8 cars detected within about 30 m of the parcel"
     },
     {
       "id": "F_233899_vexcel_detection_tree",
@@ -3805,7 +3805,7 @@
       "source": "vexcel+vision",
       "source_field": "vexcel.elements/detect",
       "kind": "estimate",
-      "say_as": "on the 2022 flyover, 2 trees detected within about 30 m of the parcel"
+      "say_as": "in imagery with an unknown capture date, 2 trees detected within about 30 m of the parcel"
     }
   ],
   "tenant_history": {

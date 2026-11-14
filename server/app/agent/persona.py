@@ -113,7 +113,8 @@ def fact_clauses(fact: dict) -> list[str]:
         area = {'size': 'total', 'available': 'listed available', 'occupied': 'recorded occupied'}[floor[2]]
         return [f'Floor {floor[1]} has {n} {area} square feet.']
     if fact.get('source') == 'vexcel+vision' and type(value) is int and value > 0:
-        return [f"It looks like {fact['say_as']}."]
+        wording = fact['say_as'].replace(', ', ', it looks like ', 1)
+        return [wording[0].upper() + wording[1:] + '.']
     return []
 
 
