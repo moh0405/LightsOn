@@ -9,7 +9,7 @@ import { getData, prefetchDossiers, type Building } from "../lib/buildings";
 import { useGame } from "../lib/store";
 import { HoverCard } from "./overlays/HoverCard";
 import { Sparks } from "./Sparks";
-import { FLASH_MS, INTRO_DIVE_MS, lightUpDuration } from "./effects";
+import { FLASH_MS, firstFloorAt, INTRO_DIVE_MS, lightUpDuration } from "./effects";
 
 declare global { interface Window { __lightsOnMap?: CityMap } }
 const CENTER: [number, number] = [-95.3650891, 29.7588018];
@@ -133,13 +133,13 @@ export function City() {
   useEffect(() => {
     const map = mapRef.current;
     if (!ready || !map?.getLayer("floors")) return;
-        map.setPaintProperty("floors", "fill-extrusion-color-transition", { duration: 0 });
+    map.setPaintProperty("floors", "fill-extrusion-color-transition", { duration: 0 });
     let frame = 0;
     const paint = () => {
       // Paint and scheduling must share one clock read so the final frame
       // cannot be dropped when the deadline is crossed during setPaintProperty.
       const now = Date.now();
-      map.setPaintProperty("floors", "fill-extrusion-color", floorColorExpression(revivedColors, revival ?? undefined, now));
+      map.setPaintProperty("floors", "fill-extrusion-color", floorColorExpression(revivedColors, revival ? { ...revival, at: firstFloorAt(revival.at) } : undefined, now));
       if (revival && now - revival.at < lightUpDuration(revival.floors)) frame = requestAnimationFrame(paint);
     };
     paint();

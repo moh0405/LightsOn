@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { boundMediaPlan, INTRO_DIVE_MS, MEDIA_BEAT_MS, lightUpDuration, mediaAt, mediaPlan } from "./effects";
+import { boundMediaPlan, firstFloorAt, INTRO_DIVE_MS, MEDIA_BEAT_MS, lightUpDuration, mediaAt, mediaPlan } from "./effects";
 
 describe("payoff timing", () => {
   it("waits for the final staggered floor fade before the concept card", () => {
-    expect(lightUpDuration([8, 6, 7])).toBe(720);
+    expect(lightUpDuration([8, 6, 7])).toBe(920);
     expect(lightUpDuration([])).toBe(0);
+    expect(firstFloorAt(1000)).toBe(1200);
   });
   it("plays camera, ortho, obliques, tour then subtitles without owning the phase", () => {
     const beats = mediaPlan({ aerial: { ortho: "/media/233953/ortho.jpg", obliques: ["/media/233953/oblique-east.jpg"] }, matterport: [{ model_id: "Wtxv2Mp8uQE", caption: null }] }, "233953");

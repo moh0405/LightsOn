@@ -31,6 +31,9 @@ export function boundMediaPlan(beats: MediaBeat[]): MediaBeat[] {
 export function mediaAt(beats: MediaBeat[], elapsed: number): MediaBeat | null {
   return elapsed < INTRO_DIVE_MS ? null : beats[Math.floor((elapsed - INTRO_DIVE_MS) / MEDIA_BEAT_MS)] ?? null;
 }
+export function firstFloorAt(revivedAt: number): number {
+  return revivedAt + FLASH_MS;
+}
 export function lightUpDuration(floors: number[]): number {
-  return floors.length ? FLOOR_FADE_MS + (floors.length - 1) * FLOOR_STAGGER_MS : 0;
+  return floors.length ? FLASH_MS + FLOOR_FADE_MS + (floors.length - 1) * FLOOR_STAGGER_MS : 0;
 }

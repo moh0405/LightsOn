@@ -57,8 +57,10 @@ for (const mode of ["kit", "fixtures"]) test(`media approach, instant light-up, 
       const map = window.__lightsOnMap!;
       const original = map.setPaintProperty;
       Object.assign(window, { firstMediaLight: 0 });
+      const fading = (value: unknown): boolean => Array.isArray(value) &&
+        ((value[0] === "literal" && typeof value[1] === "number" && value[1] > 0 && value[1] < 1) || value.some(fading));
       Object.defineProperty(map, "setPaintProperty", { value: (...args: [string, string, unknown]) => {
-        if (args[1] === "fill-extrusion-color" && JSON.stringify(args[2]).includes("#00ccff")) {
+        if (args[1] === "fill-extrusion-color" && JSON.stringify(args[2]).includes("#00ccff") && fading(args[2])) {
           const target = window;
           if (!target.firstMediaLight) target.firstMediaLight = Date.now();
         }
@@ -70,7 +72,9 @@ for (const mode of ["kit", "fixtures"]) test(`media approach, instant light-up, 
     server.emit({ type: "neighborhood_updated", needs: { housing: 40, food_retail: 30, entertainment: 45, community: 35 }, most_needed: "food_retail" });
     server.phase("REVIVED");
     await expect.poll(() => page.evaluate(() => window.firstMediaLight)).toBeGreaterThan(0);
-    expect(await page.evaluate(() => window.firstMediaLight) - at).toBeLessThan(300);
+    const latency = await page.evaluate(() => window.firstMediaLight) - at;
+    expect(latency).toBeGreaterThanOrEqual(200);
+    expect(latency).toBeLessThan(300);
     await expect(page.getByTestId("concept-card")).toContainText("Game concept, not a real renovation");
     await expect(page.getByRole("meter", { name: "Entertainment", exact: true })).toHaveAttribute("value", "45");
     await expect(page.getByTestId("city-meter")).toContainText("94,509");
