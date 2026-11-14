@@ -31,6 +31,7 @@ export interface RoomStateMsg {
   data_mode_scope: "process";
   hero_building_ids: string[];
   players: PlayerView[];
+  intro?: Intro | null;
   city?: CityState;
   pitches?: Pitch[];
   revisions?: Pitch[];

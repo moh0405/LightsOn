@@ -109,3 +109,10 @@ it("restores two winners on one building from per-floor ownership, with legacy f
   expect(reduce(initialGame, { ...state, revived }).revivedColors).toEqual(revived);
   expect(floor_states["233953"]["6"].source_status).toBe("dark");
 });
+
+
+it("restores intro subtitles from a PITCH reconnect snapshot", () => {
+  const intro = { text: "Bring me an idea", audio_url: null, mood: "hopeful", analyst_line: "City needs (game simulation)" };
+  expect(reduce(initialGame, { ...state, phase: "PITCH", round_id: "R1", intro }).intro).toEqual(intro);
+  expect(reduce(initialGame, { ...state, intro: null }).intro).toBeNull();
+});

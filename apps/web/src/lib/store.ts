@@ -96,7 +96,7 @@ export function reduce(s: GameState, msg: ServerMessage, now = Date.now()): Part
         players: Object.fromEntries(msg.players.map((p) => [p.id, p])),
         pointers: {},
         revivedColors: restoreRevivedColors(msg.revived ?? {}, msg.floor_states), city: msg.city ?? null,
-        intro: null,
+        intro: msg.intro ?? null,
         pitches: Object.fromEntries([...(msg.pitches ?? []), ...(msg.revisions ?? [])].map((p) => [p.player_id, p])),
         counteroffers: Object.fromEntries((msg.challenges ?? []).map((c) => [c.player_id, { ...c, audio_url: null }])),
         verdict: msg.verdict ?? null, charge: msg.charge ?? 0, revival: null, lastError: null,

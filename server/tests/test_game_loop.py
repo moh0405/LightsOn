@@ -251,3 +251,23 @@ async def test_different_winner_colors_survive_reload(game):
     assert state['floor_states'] == room.floor_states
     assert state['city']['sqft_reimagined'] == 127569
     restored.close()
+
+
+async def test_intro_survives_pitch_snapshot_and_restart(game):
+    room, _, events, manager = game
+    await setup(game)
+    intro = {k: v for k, v in events[-1].items() if k != 'type'}
+    assert room.snapshot()['intro'] == intro
+    await room.advance()
+    assert room.snapshot()['intro'] == intro
+    manager.close()
+    restored = RoomManager(manager.hero_ids, manager.state_dir, durations={})
+    back = restored.get(room.code)
+    assert back.phase == 'PITCH' and back.snapshot()['intro'] == intro
+    await back.reset_round()
+    assert back.snapshot()['intro'] is None
+    await back.start_round('233899')
+    assert back.snapshot()['intro'] != intro
+    await back.reset_room()
+    assert back.snapshot()['intro'] is None
+    restored.close()
