@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Build deterministic, source-attributed fixture dossiers from the office index."""
 import argparse
+from datetime import datetime
 import json
 import os
 from pathlib import Path
@@ -92,17 +93,18 @@ def build_dossier(db: sqlite3.Connection, pid: str, enums: dict) -> dict | None:
         oblique_paths = [f"/media/{pid}/{img}" for img in images.get('obliques', [])]
         aerial = dict(ortho=ortho_path, obliques=oblique_paths)
         ortho_date = vdata.get('capture_dates', {}).get('ortho') or ''
-        year = ortho_date[:4] if ortho_date else 'recent'
+        try:
+            year = datetime.fromisoformat(ortho_date).year
+        except (ValueError, TypeError):
+            year = None
         for det in vdata.get('detections', []):
             label = det['label']
             count = det['count']
+            if type(count) is not int or count <= 0 or year is None:
+                continue
             slug = label.replace(' ', '_')
-            if count == 0:
-                say_as = f"on the {year} flyover, no {label} detected"
-            elif count == 1:
-                say_as = f"on the {year} flyover, 1 {label} detected"
-            else:
-                say_as = f"on the {year} flyover, {count} {label} detected"
+            noun = label if count == 1 else label + ('es' if label.endswith(('s', 'x', 'ch', 'sh')) else 's')
+            say_as = f"on the {year} flyover, {count} {noun} detected within about 30 m of the parcel"
             facts.append(dict(
                 id=f'F_{pid}_vexcel_detection_{slug}',
                 key=f'vexcel_detection_{slug}',

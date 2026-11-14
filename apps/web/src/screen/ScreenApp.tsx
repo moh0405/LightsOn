@@ -49,7 +49,7 @@ export function ScreenApp() {
         )}
         <h3 style={{ margin: 0 }}>Players ({Object.keys(players).length}/4)</h3>
         {!hasState && <p>…</p>}
-        <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, fontSize: 22 }}>
+        <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, fontSize: 28 }}>
           {Object.values(players).map((p) => (
             <li key={p.id} style={{ opacity: p.connected ? 1 : 0.4 }}>
               <span style={{ color: p.color }}>●</span> {p.nickname}

@@ -131,8 +131,11 @@ export function City() {
     map.setPaintProperty("floors", "fill-extrusion-color-transition", { duration: 0 });
     let frame = 0;
     const paint = () => {
-      map.setPaintProperty("floors", "fill-extrusion-color", floorColorExpression(revivedColors, revival ?? undefined));
-      if (revival && Date.now() - revival.at < 600 + Math.max(0, revival.floors.length - 1) * 60) frame = requestAnimationFrame(paint);
+      // Paint and scheduling must share one clock read so the final frame
+      // cannot be dropped when the deadline is crossed during setPaintProperty.
+      const now = Date.now();
+      map.setPaintProperty("floors", "fill-extrusion-color", floorColorExpression(revivedColors, revival ?? undefined, now));
+      if (revival && now - revival.at < 600 + Math.max(0, revival.floors.length - 1) * 60) frame = requestAnimationFrame(paint);
     };
     paint();
     return () => cancelAnimationFrame(frame);

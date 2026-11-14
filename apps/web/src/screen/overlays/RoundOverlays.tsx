@@ -52,12 +52,12 @@ export function EnergyMeter() {
 export function CityMeter() {
   const city = useGame((s) => s.city);
   if (!city) return null;
-  return <section data-testid="city-meter" style={{ ...card, padding: 12, fontSize: 28 }}><h2 style={{ fontSize: 32, margin: 0 }}>City progress</h2><p style={{ margin: "2px 0", fontSize: 22 }}>game simulation</p><p style={{ margin: "2px 0" }}><strong>{city.buildings_revived}</strong> buildings revived</p><p style={{ margin: "2px 0" }}><strong>{city.sqft_reimagined.toLocaleString()}</strong> sq ft reimagined</p><p style={{ margin: "2px 0" }}>{city.song_layers} city song layers</p><NeedsBars /></section>;
+  return <section data-testid="city-meter" style={{ ...card, padding: 12, fontSize: 28 }}><h2 style={{ fontSize: 32, margin: 0 }}>City progress</h2><p style={{ margin: "2px 0", fontSize: 28 }}>game simulation</p><p style={{ margin: "2px 0" }}><strong>{city.buildings_revived}</strong> buildings revived</p><p style={{ margin: "2px 0" }}><strong>{city.sqft_reimagined.toLocaleString()}</strong> sq ft reimagined</p><p style={{ margin: "2px 0" }}>{city.song_layers} city song layers</p><NeedsBars /></section>;
 }
 export function NeedsBars() {
   const city = useGame((s) => s.city);
   if (!city) return null;
-  return <section aria-label="City needs"><h3 style={{ fontSize: 28, margin: "8px 0 4px" }}>City needs</h3>{(Object.keys(labels) as Need[]).map((key) => <label key={key} style={{ display: "block", marginTop: 2, fontSize: 24 }}>{labels[key]}: {Math.round(city.needs[key])}<meter aria-label={labels[key]} min={0} max={100} value={Math.round(city.needs[key])} style={{ display: "block", width: "100%", height: 16 }} /></label>)}<p>Most needed: {labels[city.most_needed]}</p></section>;
+  return <section aria-label="City needs"><h3 style={{ fontSize: 28, margin: "8px 0 4px" }}>City needs</h3>{(Object.keys(labels) as Need[]).map((key) => <label key={key} style={{ display: "block", marginTop: 2, fontSize: 28 }}>{labels[key]}: {Math.round(city.needs[key])}<meter aria-label={labels[key]} min={0} max={100} value={Math.round(city.needs[key])} style={{ display: "block", width: "100%", height: 16 }} /></label>)}<p style={{ margin: "8px 0 0" }}>Most needed: {labels[city.most_needed]}</p></section>;
 }
 export function RoundOverlays() {
   return <div style={{ position: "absolute", bottom: 12, left: 12, right: 12, maxHeight: "90%", overflowY: "auto", display: "grid", gap: 12, fontSize: 28 }}><Subtitles /><Bubbles /><ChallengeCards /><ScoreCard /><EnergyMeter /></div>;

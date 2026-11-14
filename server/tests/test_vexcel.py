@@ -24,7 +24,7 @@ def test_auth_header_set_and_never_in_url(tmp_path):
     client = httpx.Client(transport=httpx.MockTransport(handler), base_url="https://api.vexcelgroup.com/v2")
     vclient = VexcelClient(api_key=secret_key, cache_dir=tmp_path, http_client=client)
 
-    result = vclient.property(29.7588, -95.3651, property_id="test_pid")
+    result = vclient.property(29.7588, -95.3651, property_id="233953")
     assert result == {"type": "FeatureCollection", "features": []}
     assert len(recorded_requests) == 1
     assert "X-API-KEY" in recorded_requests[0].headers
@@ -48,7 +48,7 @@ def test_429_backoff_and_retry(tmp_path, monkeypatch):
     client = httpx.Client(transport=httpx.MockTransport(handler), base_url="https://api.vexcelgroup.com/v2")
     vclient = VexcelClient(api_key="test-key", cache_dir=tmp_path, http_client=client)
 
-    result = vclient.property(29.7588, -95.3651, property_id="retry_prop")
+    result = vclient.property(29.7588, -95.3651, property_id="233953")
     assert attempts == 3
     assert len(sleep_calls) == 2
     assert result.get("features", [])[0]["id"] == "success"
@@ -62,54 +62,42 @@ def test_timeout_fallback(tmp_path):
     vclient = VexcelClient(api_key="test-key", cache_dir=tmp_path, http_client=client)
 
     # Every method must return a typed fallback, never raise into caller
-    prop = vclient.property(29.7588, -95.3651, property_id="timeout_prop")
+    prop = vclient.property(29.7588, -95.3651, property_id="233953")
     assert prop == {"type": "FeatureCollection", "features": []}
 
-    ortho_img = vclient.ortho("POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))", property_id="timeout_prop")
+    ortho_img = vclient.ortho("POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))", property_id="233953")
     assert ortho_img is None
 
-    obls = vclient.obliques("POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))", property_id="timeout_prop")
+    obls = vclient.obliques("POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))", property_id="233953")
     assert obls == {}
 
-    det = vclient.detect("POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))", property_id="timeout_prop")
+    det = vclient.detect("POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))", property_id="233953")
     assert det == {"type": "FeatureCollection", "features": []}
 
 
 def test_cache_hit_makes_no_call(tmp_path):
     pid = "233953"
-    cache_dir = tmp_path / pid
-    cache_dir.mkdir(parents=True)
-
-    # Pre-populate cache
-    (cache_dir / "property.json").write_text(json.dumps({"cached": True, "features": []}))
-    (cache_dir / "ortho.jpg").write_bytes(b"fake-ortho-bytes")
-    (cache_dir / "oriented_collections.json").write_text(json.dumps({
-        "features": [{"properties": {"product-type": "oblique-north", "last-capture-date": "2025-01-01"}}]
-    }))
-    obliques_dir = cache_dir / "obliques"
-    obliques_dir.mkdir()
-    (obliques_dir / "oblique-north.jpg").write_bytes(b"fake-oblique-bytes")
-    (cache_dir / "detect.json").write_text(json.dumps({"cached": True, "detections": []}))
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        raise AssertionError(f"Unexpected network call made on cache hit: {request.url}")
-
-    client = httpx.Client(transport=httpx.MockTransport(handler), base_url="https://api.vexcelgroup.com/v2")
-    vclient = VexcelClient(api_key="test-key", cache_dir=tmp_path, http_client=client)
-
-    # Calls should hit cache with ZERO network requests
-    prop = vclient.property(29.7588, -95.3651, property_id=pid)
-    assert prop.get("cached") is True
-
-    img = vclient.ortho("POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))", property_id=pid)
-    assert img == b"fake-ortho-bytes"
-
-    obls = vclient.obliques("POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))", property_id=pid)
-    assert "oblique-north" in obls
-    assert obls["oblique-north"] == b"fake-oblique-bytes"
-
-    det = vclient.detect("POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))", property_id=pid)
-    assert det.get("cached") is True
+    requests = []
+    def handler(request):
+        requests.append(request)
+        if request.url.path.endswith('oriented/collections'):
+            return httpx.Response(200, json={'features': [{'properties': {
+                'product-type': 'oblique-north', 'last-capture-date': '2023-08-02'}}]})
+        if request.url.path.endswith('extract') and not request.url.path.endswith('property/extract'):
+            return httpx.Response(200, content=b'recorded-test-image')
+        return httpx.Response(200, json={'features': []})
+    http = httpx.Client(transport=httpx.MockTransport(handler), base_url='https://test.invalid/v2/')
+    client = VexcelClient(api_key='test', cache_dir=tmp_path, http_client=http)
+    geometry = square_around(29.7588018, -95.3650891)
+    def fetch():
+        return (client.property(29.7588018, -95.3650891, property_id=pid),
+                client.ortho(geometry, property_id=pid),
+                client.obliques(geometry, property_id=pid),
+                client.detect(geometry, property_id=pid))
+    first = fetch()
+    assert len(requests) == 5
+    assert fetch() == first
+    assert len(requests) == 5
 
 
 def test_fact_building_estimate_kind_and_capture_date():
@@ -181,3 +169,189 @@ def test_vexcel_live_smoke():
     ]
     assert len(primary_structs) == 1
     assert "footprint.wkt" in primary_structs[0]
+
+
+@pytest.mark.parametrize('change', ['labels', 'geometry', 'threshold', 'buffer'])
+def test_detection_cache_keys_all_request_inputs(tmp_path, monkeypatch, change):
+    import app.data.vexcel as adapter
+    requests = []
+    def handler(request):
+        requests.append(json.loads(request.content))
+        return httpx.Response(200, json={'features': [], 'request_number': len(requests)})
+    http = httpx.Client(transport=httpx.MockTransport(handler), base_url='https://test.invalid/v2/')
+    client = VexcelClient(api_key='test', cache_dir=tmp_path, http_client=http)
+    geometry = square_around(29.7588018, -95.3650891)
+    first = client.detect(geometry, labels=['car', 'tree'], property_id='233953')
+    assert client.detect(geometry, labels=['tree', 'car'], property_id='233953') == first
+    assert len(requests) == 1
+    labels, pid = ['car', 'tree'], '233953'
+    if change == 'labels': labels = ['tree']
+    if change == 'geometry': geometry = square_around(29.7588018, -95.3650891, 50)
+    if change == 'property': pid = '233899'
+    if change == 'threshold': monkeypatch.setattr(adapter, 'DETECTION_THRESHOLD', 0.75, raising=False)
+    if change == 'buffer': monkeypatch.setattr(adapter, 'DETECTION_BUFFER', 0, raising=False)
+    assert client.detect(geometry, labels=labels, property_id=pid)['request_number'] == 2
+    assert len(requests) == 2
+
+
+def test_ortho_cache_changes_with_geometry(tmp_path):
+    requests = []
+    def handler(request):
+        requests.append(request)
+        return httpx.Response(200, content=f'image-{len(requests)}'.encode())
+    http = httpx.Client(transport=httpx.MockTransport(handler), base_url='https://test.invalid/v2/')
+    client = VexcelClient(api_key='test', cache_dir=tmp_path, http_client=http)
+    geometry = square_around(29.7588018, -95.3650891)
+    assert client.ortho(geometry, property_id='233953') == b'image-1'
+    assert client.ortho(geometry, property_id='233953') == b'image-1'
+    assert client.ortho(square_around(29.7588018, -95.3650891, 50), property_id='233953') == b'image-2'
+
+
+@pytest.mark.parametrize('failure', ['timeout', 'transport', 'missing-key'])
+def test_oblique_transient_failure_is_not_cached(tmp_path, failure):
+    calls = []
+    def handler(request):
+        calls.append(request.url.path)
+        if len(calls) == 1 and failure != 'missing-key':
+            error = httpx.ReadTimeout if failure == 'timeout' else httpx.ConnectError
+            raise error('offline', request=request)
+        if request.url.path.endswith('oriented/collections'):
+            return httpx.Response(200, json={'features': [{'properties': {
+                'product-type': 'oblique-north', 'last-capture-date': '2023-08-02'}}]})
+        return httpx.Response(200, content=b'north-image')
+    http = httpx.Client(transport=httpx.MockTransport(handler), base_url='https://test.invalid/v2/')
+    client = VexcelClient(api_key='test', cache_dir=tmp_path, http_client=http)
+    if failure == 'missing-key': client.api_key = None
+    geometry = square_around(29.7588018, -95.3650891)
+    assert client.obliques(geometry, property_id='233953') == {}
+    client.api_key = 'test'
+    assert client.obliques(geometry, property_id='233953') == {'oblique-north': b'north-image'}
+    assert calls[-2:] == ['/v2/oriented/collections', '/v2/oriented/extract']
+
+
+def test_partial_oblique_cache_retries_only_missing_directions(tmp_path):
+    calls = []
+    fail_south = True
+    def handler(request):
+        calls.append(request)
+        if request.url.path.endswith('oriented/collections'):
+            assert request.url.params['srid'] == '4326'
+            return httpx.Response(200, json={'features': [{'properties': {
+                'product-type': direction, 'last-capture-date': '2023-08-02'}}
+                for direction in ['oblique-north', 'oblique-south']]})
+        body = json.loads(request.content)
+        assert body['srid'] == 4326
+        assert body['rotation'] == 'natural'
+        assert body['drawing'][0]['outline-color'] == '255,204,0'
+        if fail_south and body['product-type'] == 'oblique-south':
+            return httpx.Response(503)
+        return httpx.Response(200, content=body['product-type'].encode())
+    http = httpx.Client(transport=httpx.MockTransport(handler), base_url='https://test.invalid/v2/')
+    client = VexcelClient(api_key='test', cache_dir=tmp_path, http_client=http)
+    geometry = square_around(29.7588018, -95.3650891)
+    assert set(client.obliques(geometry, property_id='233953')) == {'oblique-north'}
+    assert [r.url.path for r in calls] == ['/v2/oriented/collections', '/v2/oriented/extract', '/v2/oriented/extract']
+    fail_south = False
+    assert set(client.obliques(geometry, property_id='233953')) == {'oblique-north', 'oblique-south'}
+    assert len(calls) == 4
+    assert json.loads(calls[-1].content)['product-type'] == 'oblique-south'
+    assert len(client.obliques(geometry, property_id='233953')) == 2
+    assert len(calls) == 4
+
+
+@pytest.mark.parametrize('method', ['property', 'ortho', 'obliques', 'detect'])
+def test_cache_unavailable_preserves_usable_response(tmp_path, method, caplog):
+    cache = tmp_path / 'file-instead-of-directory'
+    cache.write_text('unavailable')
+    def handler(request):
+        if request.url.path.endswith('oriented/collections'):
+            return httpx.Response(200, json={'features': [{'properties': {
+                'product-type': 'oblique-north', 'last-capture-date': '2023-08-02'}}]})
+        if method in ('ortho', 'obliques'):
+            return httpx.Response(200, content=b'image')
+        return httpx.Response(200, json={'features': [], 'usable': True})
+    http = httpx.Client(transport=httpx.MockTransport(handler), base_url='https://test.invalid/v2/')
+    client = VexcelClient(api_key='test-secret', cache_dir=cache, http_client=http)
+    args = (29.7588018, -95.3650891) if method == 'property' else (square_around(29.7588018, -95.3650891),)
+    result = getattr(client, method)(*args, property_id='233953')
+    expected = b'image' if method == 'ortho' else {'oblique-north': b'image'} if method == 'obliques' else {'features': [], 'usable': True}
+    assert result == expected
+    assert 'NotADirectoryError' in caplog.text
+    assert 'test-secret' not in caplog.text
+
+
+@pytest.mark.parametrize('payload', [[], {'features': None}, {'features': [{}]}, {'features': [{'properties': None}]}])
+def test_oblique_malformed_response_is_typed_and_retryable(tmp_path, payload):
+    calls = []
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(200, json=payload if len(calls) == 1 else {'features': []})
+    http = httpx.Client(transport=httpx.MockTransport(handler), base_url='https://test.invalid/v2/')
+    client = VexcelClient(api_key='test', cache_dir=tmp_path, http_client=http)
+    geometry = square_around(29.7588018, -95.3650891)
+    assert client.obliques(geometry, property_id='233953') == {}
+    assert client.obliques(geometry, property_id='233953') == {}
+    assert len(calls) == 2
+
+
+@pytest.mark.parametrize('method', ['property', 'detect'])
+def test_malformed_json_shapes_are_not_returned_or_cached(tmp_path, method):
+    calls = []
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(200, json=['invalid'] if len(calls) == 1 else {'features': []})
+    http = httpx.Client(transport=httpx.MockTransport(handler), base_url='https://test.invalid/v2/')
+    client = VexcelClient(api_key='test', cache_dir=tmp_path, http_client=http)
+    args = (29.7588018, -95.3650891) if method == 'property' else (square_around(29.7588018, -95.3650891),)
+    assert getattr(client, method)(*args, property_id='233953') == {'type': 'FeatureCollection', 'features': []}
+    assert getattr(client, method)(*args, property_id='233953') == {'features': []}
+    assert len(calls) == 2
+
+
+@pytest.mark.parametrize('method', ['property', 'ortho', 'obliques', 'detect'])
+@pytest.mark.parametrize('invalid', ['../escaped', 'absolute', '', '233953/../../escaped'])
+def test_property_ids_cannot_escape_cache(tmp_path, method, invalid):
+    pid = str(tmp_path / 'outside') if invalid == 'absolute' else invalid
+    requests = []
+    def handler(request):
+        requests.append(request)
+        return httpx.Response(200, json={'features': []})
+    http = httpx.Client(transport=httpx.MockTransport(handler), base_url='https://test.invalid/v2/')
+    client = VexcelClient(api_key='test', cache_dir=tmp_path / 'cache', http_client=http)
+    args = (29.7588018, -95.3650891) if method == 'property' else (square_around(29.7588018, -95.3650891),)
+    fallback = None if method == 'ortho' else {} if method == 'obliques' else {'type': 'FeatureCollection', 'features': []}
+    assert getattr(client, method)(*args, property_id=pid) == fallback
+    assert not requests
+    assert not list(tmp_path.rglob('*.json'))
+
+
+@pytest.mark.parametrize('method', ['property', 'ortho', 'obliques', 'detect'])
+def test_cache_namespace_symlink_cannot_escape_root(tmp_path, method):
+    cache, outside = tmp_path / 'cache', tmp_path / 'outside'
+    cache.mkdir()
+    outside.mkdir()
+    (cache / '233953').symlink_to(outside, target_is_directory=True)
+    requests = []
+    def handler(request):
+        requests.append(request)
+        return httpx.Response(200, json={'features': []})
+    http = httpx.Client(transport=httpx.MockTransport(handler), base_url='https://test.invalid/v2/')
+    client = VexcelClient(api_key='test', cache_dir=cache, http_client=http)
+    args = (29.7588018, -95.3650891) if method == 'property' else (square_around(29.7588018, -95.3650891),)
+    getattr(client, method)(*args, property_id='233953')
+    assert not requests
+    assert not list(outside.iterdir())
+
+
+@pytest.mark.parametrize('method', ['ortho', 'obliques', 'detect'])
+@pytest.mark.parametrize('geometry', ['not WKT', {}])
+def test_invalid_geometry_returns_typed_fallback(tmp_path, method, geometry):
+    calls = []
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(200, json={'features': []})
+    http = httpx.Client(transport=httpx.MockTransport(handler), base_url='https://test.invalid/v2/')
+    client = VexcelClient(api_key='test', cache_dir=tmp_path, http_client=http)
+    fallback = None if method == 'ortho' else {} if method == 'obliques' else {'type': 'FeatureCollection', 'features': []}
+    assert getattr(client, method)(geometry, property_id='233953') == fallback
+    assert not calls

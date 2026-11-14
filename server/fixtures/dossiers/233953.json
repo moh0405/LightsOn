@@ -2201,16 +2201,6 @@
       "say_as": "808 Travis St"
     },
     {
-      "id": "F_233953_vexcel_detection_parking_lot",
-      "key": "vexcel_detection_parking_lot",
-      "value": 0,
-      "unit": "count",
-      "source": "vexcel+vision",
-      "source_field": "vexcel.elements/detect",
-      "kind": "estimate",
-      "say_as": "on the 2023 flyover, no parking lot detected"
-    },
-    {
       "id": "F_233953_vexcel_detection_car",
       "key": "vexcel_detection_car",
       "value": 31,
@@ -2218,37 +2208,7 @@
       "source": "vexcel+vision",
       "source_field": "vexcel.elements/detect",
       "kind": "estimate",
-      "say_as": "on the 2023 flyover, 31 car detected"
-    },
-    {
-      "id": "F_233953_vexcel_detection_rooftop_terrace",
-      "key": "vexcel_detection_rooftop_terrace",
-      "value": 0,
-      "unit": "count",
-      "source": "vexcel+vision",
-      "source_field": "vexcel.elements/detect",
-      "kind": "estimate",
-      "say_as": "on the 2023 flyover, no rooftop terrace detected"
-    },
-    {
-      "id": "F_233953_vexcel_detection_solar_panel",
-      "key": "vexcel_detection_solar_panel",
-      "value": 0,
-      "unit": "count",
-      "source": "vexcel+vision",
-      "source_field": "vexcel.elements/detect",
-      "kind": "estimate",
-      "say_as": "on the 2023 flyover, no solar panel detected"
-    },
-    {
-      "id": "F_233953_vexcel_detection_tree",
-      "key": "vexcel_detection_tree",
-      "value": 0,
-      "unit": "count",
-      "source": "vexcel+vision",
-      "source_field": "vexcel.elements/detect",
-      "kind": "estimate",
-      "say_as": "on the 2023 flyover, no tree detected"
+      "say_as": "on the 2023 flyover, 31 cars detected within about 30 m of the parcel"
     }
   ],
   "tenant_history": {

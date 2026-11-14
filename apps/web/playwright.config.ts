@@ -7,6 +7,11 @@ import { join } from "node:path";
 const stateDir = process.env.LO_E2E_STATE_DIR ?? mkdtempSync(join(tmpdir(), "lights-on-e2e-"));
 process.env.LO_E2E_STATE_DIR = stateDir;
 
+const apiPort = process.env.LO_E2E_API_PORT ?? "18001";
+const webPort = process.env.LO_E2E_WEB_PORT ?? "15174";
+const apiURL = `http://127.0.0.1:${apiPort}`;
+const webURL = `http://127.0.0.1:${webPort}`;
+
 export default defineConfig({
   testDir: "./e2e",
   // Keep traces outside the checkout and preserve them after snapshot cleanup.
@@ -16,21 +21,21 @@ export default defineConfig({
   fullyParallel: false,
   reporter: "list",
   globalTeardown: "./e2e/teardown.ts",
-  use: { baseURL: "http://127.0.0.1:15174", trace: "retain-on-failure", launchOptions: { args: ["--use-gl=swiftshader", "--enable-unsafe-swiftshader"] } },
+  use: { baseURL: webURL, trace: "retain-on-failure", launchOptions: { args: ["--use-gl=swiftshader", "--enable-unsafe-swiftshader"] } },
   projects: [{ name: "chromium", use: { browserName: "chromium" } }],
   webServer: [
     {
-      command: "uv run uvicorn app.main:app --host 127.0.0.1 --port 18001",
+      command: `uv run uvicorn app.main:app --host 127.0.0.1 --port ${apiPort}`,
       cwd: "../../server",
-      url: "http://127.0.0.1:18001/api/health",
+      url: `${apiURL}/api/health`,
       reuseExistingServer: false,
       env: { STATE_DIR: stateDir, HOST_PIN: "1234", PHASE_DURATIONS_SCALE: "0.1", PUBLIC_BASE_URL: "", DATA_MODE: "kit" },
     },
     {
-      command: "pnpm dev --host 127.0.0.1 --port 15174 --strictPort",
-      url: "http://127.0.0.1:15174",
+      command: `pnpm dev --host 127.0.0.1 --port ${webPort} --strictPort`,
+      url: webURL,
       reuseExistingServer: false,
-      env: { API_PROXY_TARGET: "http://127.0.0.1:18001" },
+      env: { API_PROXY_TARGET: apiURL },
     },
   ],
 });
