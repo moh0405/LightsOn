@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 
 from .commands import CommandService
 from .data.provider import DataProvider, get_provider
-from .rooms import DEFAULT_DURATIONS, Conn, RoomError, RoomManager
+from .rooms import Conn, RoomError, RoomManager, demo_mode, phase_durations
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(REPO_ROOT / ".env")
@@ -29,8 +29,7 @@ async def lifespan(app: FastAPI):
     state_dir = Path(os.getenv("STATE_DIR") or REPO_ROOT / "server" / "state")
     heroes = [h.strip() for h in (os.getenv("HERO_PROPERTY_IDS") or "233953,233899").split(",") if h.strip()]
     scale = float(os.getenv("PHASE_DURATIONS_SCALE", "1.0"))
-    durations = {phase: seconds * scale if seconds is not None else None
-                 for phase, seconds in DEFAULT_DURATIONS.items()}
+    durations = phase_durations(scale)
     app.state.manager = RoomManager(heroes, state_dir, durations=durations)
     app.state.commands = CommandService(app.state.manager)
     yield
@@ -52,6 +51,7 @@ def build_health() -> dict:
     return {
         "ok": True,
         "data_mode": os.getenv("DATA_MODE") or "kit",
+        "demo_mode": demo_mode(),
         # presence only (true/false), never the value
         "keys": {k: bool(os.getenv(k)) for k in env_example_keys()},
         "costar_property_file": (data_dir / "data" / "commercial-property.jsonl").is_file(),

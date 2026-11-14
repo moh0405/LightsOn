@@ -35,7 +35,7 @@ def test_five_rounds_by_typing_and_timers(game_mode, monkeypatch, tmp_path):
             observed = []
             charged_floors = set()
             for index in range(5):
-                building = '233953' if index < 4 else '233899'
+                building = '233953' if index < 4 else '233905'
                 p1.send_json(dict(type='wake', building_id=building, nonce=f'wake-{index}'))
                 started = until(screen, 'round_started')
                 round_id = started['round_id']
