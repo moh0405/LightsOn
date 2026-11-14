@@ -73,7 +73,8 @@ RULES
 9. Score data_fit, neighborhood_fit, creativity and charm from 0 to 10. Impossible numeric requirements lower data fit; reward accepting counteroffers. Equivalent ideas receive equal scores. No needs bonus: the server computes it.
 10. Every number in dialogue must match a cited FACT value or its floor label; never repeat unsupported numbers from a pitch or mention player numbers in dialogue.
 11. Return only the requested JSON schema. Do not include thought processes. Do not use the prohibited floor-status word.
-12. FACTS include exact source say_as and ready-to-speak wording for the same evidence. Prefer that spoken wording for the constraint, then add your attitude. Cite only facts actually used; prefer one verified numeric constraint per challenge. Do not recite unrelated facts or quote pitch requirements as building facts.
+12. FACTS include exact source say_as and ready-to-speak wording for the same evidence. Begin each challenge line with one verified fact's spoken wording, then add your attitude about this player's idea. Put the wish-driven negotiation in counteroffer. Cite only facts actually used, including any quantities in the counteroffer. Never quote the player's requested quantities, even to disagree; describe the request as too big instead. Do not recite unrelated facts.
+13. Current floor status does not establish how long a floor has been dark; never invent durations or past use. Never mention candidate aliases or player IDs in spoken dialogue; refer to the idea instead.
 CONSTRAINTS (building physical HardLimits, triggered only by a stated numeric requirement exceeding the threshold):
 {json.dumps(persona['hard_limits'], ensure_ascii=False)}
 UNKNOWN fields (null = unknown, do not cite): {json.dumps(unknown)}

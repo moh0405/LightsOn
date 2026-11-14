@@ -365,6 +365,8 @@ class Room:
                 await trace(dict(step='fallback', tool='room', summary='Unexpected live failure; offline judge', duration_ms=0))
                 try:
                     if phase == 'CHALLENGE':
+                        # Recovery output must also be excluded from model-latency evals.
+                        agent.fallback_player_ids.update(p.player_id for p in originals)
                         self.challenges = [fake_agent.challenge(p, self.dossier, variant=i)
                                            for i, p in enumerate(originals)]
                         for c in self.challenges:

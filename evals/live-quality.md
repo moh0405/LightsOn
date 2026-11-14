@@ -45,3 +45,43 @@ step and building ID to `server/state/live_agent.jsonl` (or `STATE_DIR`). They a
 record fallback causes, schema failures, and retain timeout versus budget causes
 through spend accounting. Pitches, SDK error bodies, unvalidated schema payloads,
 and screened generated dialogue are not retained.
+
+## Fixes and remaining limits
+
+The source checks now parse punctuation and compact quantities, constrain floor
+labels to floor context, preserve exact years and explicitly sourced percentages,
+and leave ordinary number words as dialogue. Claim checks distinguish persona
+fiction and hypothetical plans from physical assertions. Live prompts retain
+persona/desire/limit references, an example dark floor, requested floors and
+spatial evidence, with exact `say_as` and deterministic spoken clauses. Context
+fell from roughly 21/39 KB to 7/6 KB for Esperson/Wells before the small check.
+Missing source fields remain null and are listed as unknown, without citable IDs.
+
+Challenges are generated as one round batch, then validated per player; a failed
+player gets at most one grounding regeneration without replacing already validated
+players. The deadline remains 8 seconds for the whole challenge step and 12 for a
+verdict, including schema retries, regeneration and claim checks. Streamed tool
+JSON is validated after usage reconciliation, so malformed JSON and `max_tokens`
+are schema failures with a retry rather than disguised spend failures. Unexpected
+room exceptions recover through the offline judge and arm a timer, or return to
+EXPLORE with a toast if even the fallback verdict cannot validate. Mood retains
+all seven PRD values with a typed protocol/store union.
+
+Fallbacks use triggered physical limits first, then pitch-relevant evidence
+(including an explicitly requested floor), a category-specific question, the
+persona's voice and catchphrase, and a desire-based counteroffer. Round positions
+vary source facts and voice deterministically. No unsupported number from a pitch
+is accepted as a property fact.
+
+The one small paid check is in `evals/live-quality-check.md`: **4/8 challenge
+fallbacks (1 number-match, 3 timeout), 0/2 verdict fallbacks, $0.116304 spent,
+ledger $2.556235**. This misses the ≤1/8 target. Six retained number rejections and
+two missing-constraint-ID rejections forced regeneration; one regeneration ran
+out of the shared deadline. Prompt instructions alone did not stop the model from
+repeating unsupported pitch numbers. One accepted model challenge also invented
+a floor-status duration that the cheap claim checker missed; its exact line is
+now a failing-first offline regression and a deterministic rejection. A further
+offline regression distinguishes a hypothetical one-floor pilot from an existing
+floor count. The final constraint-first prompt and these post-check fixes have
+**not** been paid-revalidated. No paid evidence supports calling the remaining
+model reliability or latency gates passed.

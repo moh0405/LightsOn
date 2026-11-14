@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict
 from .prompts import safe_facts
 from .persona import fact_line
 
-NUMBER = re.compile(r'(?<![\w])[-+]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:\s*[kKmM]\b)?')
+NUMBER = re.compile(r'(?<![\w])[-+]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:\s*[kK]\b)?')
 NUMBER_WORDS = dict(zero=0, one=1, two=2, three=3, four=4, five=5, six=6, seven=7,
                     eight=8, nine=9, ten=10, eleven=11, twelve=12, twenty=20, hundred=100, thousand=1000, million=1000000)
 UNITS = {'sqft': r'(?:sq\.?\s*ft\.?|square\s+feet|square\s+foot)', 'ft': r'(?:ft\.?|feet|foot)',
@@ -30,7 +30,7 @@ class ClaimChecks(BaseModel):
 
 def number_value(text: str) -> float:
     text = text.replace(',', '').strip().lower()
-    multiplier = {'k': 1000, 'm': 1000000}.get(text[-1], 1)
+    multiplier = 1000 if text.endswith('k') else 1
     return float(text[:-1] if multiplier != 1 else text) * multiplier
 
 
@@ -47,6 +47,9 @@ def check_line(line: str, fact_ids: list[str], dossier: dict, impact: dict | Non
     if re.search(r'\bvacant\b', line, re.I):
         return 'Prohibited floor-status word'
     cited = [facts[fid] for fid in fact_ids]
+    duration = re.search(r'\b(?:been|stayed|sat|stood|remained)\s+(?:dark|empty|unlit)\s+(?:for|since)\b', line, re.I)
+    if duration and not any(duration[0].casefold() in (f.get('say_as') or '').casefold() for f in cited):
+        return 'Historical floor-status duration is not supported by current-status facts'
     if any(f['kind'] == 'estimate' for f in cited) and 'looks like' not in line.casefold():
         return 'Estimate must say looks like'
     # Quantified physical claims use number words; conversational "one idea" or
@@ -54,6 +57,12 @@ def check_line(line: str, fact_ids: list[str], dossier: dict, impact: dict | Non
     def spoken_number(match):
         after = line[match.end():]
         before = line[:match.start()]
+        clause = re.split(r'[.!?;:]', before)[-1]
+        hypothetical = re.search(r'\b(?:start|propose|imagine|try|could|would|should|pitch)\b', clause, re.I)
+        asserted = re.search(r'\b(?:i|we)\s+(?:have|had|own|contain|offer|rise|stand)\b', clause, re.I)
+        if (match[0].casefold() == 'one' and re.match(r'\s+floor\b', after, re.I)
+                and hypothetical and not asserted):
+            return match[0]  # "start on one floor" proposes a plan, not an existing floor count
         physical = (number_unit(after) is not None
                     or re.match(r'\s+(?:dark\s+)?(?:floors?|trees?|cars?|entries|spaces?|thousand|million)\b', after, re.I)
                     or re.search(r'\bfloor\s*$', before, re.I))

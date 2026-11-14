@@ -314,12 +314,13 @@ async def test_timeout_is_reported_as_timeout(dossier, tmp_path, monkeypatch):
 
 
 def test_number_parser_handles_percent_and_compact_units():
-    from app.agent.grounding import number_unit, number_value
+    from app.agent.grounding import NUMBER, number_unit, number_value
     # Parser syntax examples, not attributed building facts.
     assert number_unit('% of the total') == 'percent'
     assert number_unit(' percent of the total') == 'percent'
     assert number_unit(' sq ft') == 'sqft'
     assert number_value('31.5k') == 31500
+    assert NUMBER.findall('30 m') == ['30']  # metres in source aerial clauses, never millions
 
 
 async def test_budget_and_socket_failures_remain_distinguishable(dossier, tmp_path, monkeypatch):
@@ -509,12 +510,15 @@ def test_small_paid_check_plan_and_budget_ceiling(monkeypatch):
     assert all(not safety_reason(row['text']) for rows in plan.values() for row in rows)
 
 
-async def test_eval_latency_excludes_fallback_only_batches(dossier, monkeypatch):
+@pytest.mark.parametrize('unexpected', [False, True])
+async def test_eval_latency_excludes_fallback_only_batches(dossier, monkeypatch, unexpected):
     from pathlib import Path
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2]))
     from evals.run import measured_challenge
     monkeypatch.setenv('AGENT_MODE', 'live')
     async def offline(self, pitches, dossier, *args):
+        if unexpected:
+            raise KeyError('unexpected live failure')
         self.fallback_player_ids = {p.player_id for p in pitches}
         return [fake_agent.challenge(p, dossier) for p in pitches]
     monkeypatch.setattr(LiveAgent, 'challenge', offline)
@@ -578,3 +582,20 @@ def test_fallback_uses_the_floor_the_pitch_actually_requests(dossier):
         c = fake_agent.challenge(pitch('A community studio on floor 6'), dossier, variant=variant)
         assert c.fact_ids == ['F_233953_floor_6_available_sqft']
         assert check_line(c.line + ' ' + c.counteroffer, c.fact_ids, dossier) is None
+
+
+def test_paid_history_claim_is_rejected_even_when_cheap_checker_would_accept(dossier):
+    # Verbatim model line from the small paid check; current status proves no duration.
+    line = "Cats interviewing humans—charming, but I've been dark for years; will your café actually draw the neighbors in after sunset?"
+    assert check_line(line, ['F_233953_dark_floor_count'], dossier)
+
+
+def test_hypothetical_one_floor_plan_is_not_an_existing_floor_count(dossier):
+    line = 'Give me a pilot: start on one floor and prove your studio works.'
+    assert check_line(line, ['F_233953_dark_sqft'], dossier) is None
+    assert check_line('I have one floor.', ['F_233953_dark_sqft'], dossier)
+
+
+def test_paid_unsupported_pitch_quantity_still_fails(dossier):
+    line = "Nine million square feet on one floor? My typical floor gives you 22,189 square feet—let's talk real numbers, kid."
+    assert '9000000' in check_line(line, ['F_233953_grossTypicalFloorSquareFeet'], dossier)
