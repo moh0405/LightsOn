@@ -13,8 +13,10 @@ export const categoryLayers = {
 const categories = Object.keys(categoryLayers) as Category[];
 export type MusicState = Record<Category, number | null>;
 export const emptyMusic = (): MusicState => Object.fromEntries(categories.map((c) => [c, null])) as MusicState;
+/** A repeat category lifts its layer 3 dB instead of duplicating it, up to +6 dB. */
+export const MAX_LIFT_DB = 6;
 export function reviveLayer(state: MusicState, category: Category): MusicState {
-  return { ...state, [category]: state[category] === null ? 0 : state[category]! + 3 };
+  return { ...state, [category]: state[category] === null ? 0 : Math.min(MAX_LIFT_DB, state[category]! + 3) };
 }
 export function layerDb(state: MusicState, category: Category, speaking: boolean): number {
   return state[category] === null ? -Infinity : -24 + state[category]! - (speaking ? 8 : 0);
