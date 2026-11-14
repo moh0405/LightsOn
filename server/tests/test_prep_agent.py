@@ -616,3 +616,66 @@ def test_meta_and_floor_status_words_are_denied_in_fact_remainders():
         bad = {**persona, 'backstory': [dict(text=f"Completed in {year['value']}. {remainder}", fact_ref=year['id'], fiction=False)]}
         with pytest.raises(ValueError):
             validate_persona(bad, dossier)
+
+
+def pitch(text):
+    from app.models import Pitch
+    from datetime import datetime, timezone
+    return Pitch(player_id='p', text=text, origin='web', at=datetime.now(timezone.utc))
+
+
+@pytest.mark.parametrize('text,key', [
+    ('A 400-foot observation deck on top', 'buildingHeightInFeet'),
+    ('A vertical farm reaching 350 ft', 'buildingHeightInFeet'),
+    ('A sky bar on floor 30 with a view', 'numStoriesAboveGrade'),
+    ('A 35-story vertical farm', 'numStoriesAboveGrade'),
+    ('A food hall with 3 parking spaces per 1,000 sq ft', 'parkingRatio'),
+    ('An arena of 20,000 sq ft with 500 parking spaces', 'parkingRatio'),
+    ('A 200,000 sq ft indoor mall', 'dark_sqft'),
+    ('A single floor arena needing 25,000 sq ft', 'grossTypicalFloorSquareFeet'),
+])
+def test_each_hard_limit_triggers_numerically_and_challenge_cites_it(text, key):
+    from app.agent.fake_agent import challenge
+    from app.agent.persona import fake_persona, physical_limits
+    dossier = source_dossier()
+    dossier['persona'] = fake_persona(dossier).model_dump()
+    fact = next(f for f in dossier['facts'] if f['key'] == key)
+    limit = next(l for l in physical_limits(dossier) if l['fact_ref'] == fact['id'])
+    assert limit['threshold'] == fact['value'] and limit['applies_to'] == []
+    reply = challenge(pitch(text), dossier)
+    assert reply.fact_ids == [fact['id']]
+    assert reply.line == limit['text']
+
+
+@pytest.mark.parametrize('text', ['A cozy cafe for the block', 'A 20-story vertical farm',
+                                  'A 250-foot light show', 'A food hall with 0.5 parking spaces per 1,000 sq ft',
+                                  'A 100,000 sq ft market across my dark floors'])
+def test_hard_limits_do_not_trigger_within_the_facts(text):
+    from app.agent.fake_agent import challenge
+    from app.agent.persona import fake_persona, physical_limits
+    dossier = source_dossier()
+    dossier['persona'] = fake_persona(dossier).model_dump()
+    reply = challenge(pitch(text), dossier)
+    assert reply.line not in {l['text'] for l in physical_limits(dossier)}
+
+
+def test_parking_limit_may_target_only_justified_categories():
+    from app.agent.fake_agent import challenge
+    from app.agent.persona import fake_persona, physical_limits, validate_persona
+    dossier = source_dossier()
+    persona = fake_persona(dossier).model_dump()
+    parking = next(l for l in physical_limits(dossier) if l['constraint'] == 'parking')
+    persona['hard_limits'] = persona['hard_limits'][:1] + [{**parking, 'applies_to': ['entertainment']}]
+    validate_persona(persona, dossier)
+    for bad in (['housing'], ['entertainment', 'work']):
+        with pytest.raises(ValueError):
+            validate_persona({**persona, 'hard_limits': persona['hard_limits'][:1] + [{**parking, 'applies_to': bad}]}, dossier)
+    height = next(l for l in physical_limits(dossier) if l['constraint'] == 'height')
+    with pytest.raises(ValueError):
+        validate_persona({**persona, 'hard_limits': persona['hard_limits'][:1] + [{**height, 'applies_to': ['housing']}]}, dossier)
+    from app.agent.persona import limit_applies
+    narrowed = persona['hard_limits'][1]
+    assert limit_applies(narrowed, 'A concert hall with 3 parking spaces per 1,000 sq ft', 'entertainment')
+    assert not limit_applies(narrowed, 'Apartments with 3 parking spaces per 1,000 sq ft', 'housing')
+    with pytest.raises(ValueError):
+        validate_persona({**persona, 'hard_limits': persona['hard_limits'][:1] + [{**parking, 'threshold': 5.0}]}, dossier)

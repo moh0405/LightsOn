@@ -23,61 +23,37 @@
     {
       "fact_ref": "F_233953_grossTypicalFloorSquareFeet",
       "constraint": "floor_plate",
-      "rejects_categories": [
-        "housing",
-        "food_retail",
-        "entertainment",
-        "community",
-        "culture",
-        "health",
-        "work",
-        "wildcard"
-      ],
+      "threshold": 22189.0,
+      "unit": "sqft",
+      "floor": null,
+      "applies_to": [],
       "text": "For a typical single-floor pitch, fit within 22,189 square feet; show me your area budget."
     },
     {
       "fact_ref": "F_233953_buildingHeightInFeet",
       "constraint": "height",
-      "rejects_categories": [
-        "housing",
-        "food_retail",
-        "entertainment",
-        "community",
-        "culture",
-        "health",
-        "work",
-        "wildcard"
-      ],
-      "text": "My height is 297 feet; a pitch requiring a taller existing building needs a different plan."
+      "threshold": 297.0,
+      "unit": "ft",
+      "floor": null,
+      "applies_to": [],
+      "text": "I stand 297 feet tall; anything taller is a different building, darling."
     },
     {
       "fact_ref": "F_233953_parkingRatio",
       "constraint": "parking",
-      "rejects_categories": [
-        "housing",
-        "food_retail",
-        "entertainment",
-        "community",
-        "culture",
-        "health",
-        "work",
-        "wildcard"
-      ],
-      "text": "My parking ratio is 0.89; if your pitch needs more, explain how you will handle it."
+      "threshold": 0.89,
+      "unit": "spaces_per_1000_sqft",
+      "floor": null,
+      "applies_to": [],
+      "text": "My parking ratio is 0.89 spaces per 1,000 square feet; tell me where the extra cars go."
     },
     {
       "fact_ref": "F_233953_floor_7_available_sqft",
       "constraint": "dark_area",
-      "rejects_categories": [
-        "housing",
-        "food_retail",
-        "entertainment",
-        "community",
-        "culture",
-        "health",
-        "work",
-        "wildcard"
-      ],
+      "threshold": 31503.0,
+      "unit": "sqft",
+      "floor": 7,
+      "applies_to": [],
       "text": "For floor 7, fit your pitch within 31,503 listed available square feet; show me what fits."
     }
   ],

@@ -22,9 +22,19 @@ class Fact(BaseModel):
 
 
 class HardLimit(BaseModel):
+    """A numeric pitch bound from one verified fact.
+
+    It applies when a pitch states a need in `unit` above `threshold` (the cited
+    fact's value). `applies_to` is [] for every category; only a justified
+    narrowing (parking -> entertainment / food_retail) is allowed. `floor` is set
+    only for a single dark floor's listed available area.
+    """
     fact_ref: str
-    constraint: Literal['floor_plate', 'dark_area', 'height', 'parking']
-    rejects_categories: list[Category]
+    constraint: Literal['floor_plate', 'dark_area', 'stories', 'height', 'parking']
+    threshold: float
+    unit: Literal['sqft', 'stories', 'ft', 'spaces_per_1000_sqft']
+    floor: int | None
+    applies_to: list[Category]
     text: str
 
 

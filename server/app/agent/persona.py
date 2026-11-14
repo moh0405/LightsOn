@@ -274,29 +274,92 @@ def validate_beat(beat: dict, facts: dict, names: tuple[str, ...] = ()) -> None:
 EMPTY_LIMITS = 'Fewer than two verified physical quantities are available; ask for details instead.'
 
 
+CONSTRAINTS = ['floor_plate', 'dark_area', 'stories', 'height', 'parking']
+# Only parking may be narrowed: crowd-drawing uses are where extra cars are a real question.
+JUSTIFIED_TARGETS = {'parking': {'entertainment', 'food_retail'}}
+
+
 def physical_limits(dossier: dict) -> list[dict]:
-    """Game pitch bounds only: no inferred engineering, zoning or legal limits."""
+    """Game pitch bounds only: no inferred engineering, zoning or legal limits.
+
+    Every limit is a numeric trigger: it fires only when a pitch states a need above
+    the cited fact's value (see `pitch_needs`). `applies_to=[]` means any category.
+    """
     result = []
     dark = {f['number'] for f in dossier.get('floors', []) if f['source_status'] == 'dark'}
     for fact in dossier['facts']:
         value, key = fact.get('value'), fact['key']
         if fact.get('kind') != 'verified' or type(value) not in (int, float) or value <= 0:
             continue
-        n = f'{value:,.0f}'
+        n, floor_number = f'{value:,.0f}', None
         floor = re.fullmatch(r'floor_(-?\d+)_available_sqft', key)
         if key == 'grossTypicalFloorSquareFeet':
-            constraint, text = 'floor_plate', f'For a typical single-floor pitch, fit within {n} square feet; show me your area budget.'
+            constraint, unit, text = 'floor_plate', 'sqft', f'For a typical single-floor pitch, fit within {n} square feet; show me your area budget.'
         elif floor and int(floor[1]) in dark:
-            constraint, text = 'dark_area', f'For floor {floor[1]}, fit your pitch within {n} listed available square feet; show me what fits.'
+            floor_number = int(floor[1])
+            constraint, unit, text = 'dark_area', 'sqft', f'For floor {floor[1]}, fit your pitch within {n} listed available square feet; show me what fits.'
+        elif key == 'dark_sqft':
+            constraint, unit, text = 'dark_area', 'sqft', f'My dark floors list {n} available square feet in total; fit your plan inside that, darling.'
+        elif key == 'numStoriesAboveGrade':
+            constraint, unit, text = 'stories', 'stories', f'I rise {n} stories; a pitch above that needs a different building, darling.'
         elif key == 'buildingHeightInFeet':
-            constraint, text = 'height', f'My height is {n} feet; a pitch requiring a taller existing building needs a different plan.'
+            constraint, unit, text = 'height', 'ft', f'I stand {n} feet tall; anything taller is a different building, darling.'
         elif key == 'parkingRatio':
-            constraint, text = 'parking', f'My parking ratio is {value}; if your pitch needs more, explain how you will handle it.'
+            constraint, unit, text = 'parking', 'spaces_per_1000_sqft', f'My parking ratio is {value} spaces per 1,000 square feet; tell me where the extra cars go.'
         else:
             continue
-        result.append(dict(fact_ref=fact['id'], constraint=constraint,
-                           rejects_categories=['housing', 'food_retail', 'entertainment', 'community', 'culture', 'health', 'work', 'wildcard'], text=text))
-    return sorted(result, key=lambda limit: ['floor_plate', 'dark_area', 'height', 'parking'].index(limit['constraint']))
+        result.append(dict(fact_ref=fact['id'], constraint=constraint, threshold=float(value), unit=unit,
+                           floor=floor_number, applies_to=[], text=text))
+    return sorted(result, key=lambda limit: CONSTRAINTS.index(limit['constraint']))
+
+
+_NUM = r'(\d[\d,]*(?:\.\d+)?)'
+_SQFT = r'\s*(?:sq\.?\s*ft|square[ -]f(?:ee|oo)t|sqft|sf)\b'
+
+
+def _num(text: str) -> float:
+    return float(text.replace(',', ''))
+
+
+def pitch_needs(text: str) -> dict:
+    """Quantities a pitch explicitly states; nothing is inferred from category or tone."""
+    rest = text
+    ratios = [_num(m[1]) for m in re.finditer(_NUM + r'\s*(?:parking\s+)?(?:spaces?|spots?|stalls?)\s*(?:per|/|for every|every)\s*(?:1,?000|thousand)' + _SQFT, rest, re.I)]
+    rest = re.sub(_NUM + r'\s*(?:parking\s+)?(?:spaces?|spots?|stalls?)\s*(?:per|/|for every|every)\s*(?:1,?000|thousand)' + _SQFT, ' ', rest, flags=re.I)
+    areas = [_num(m[1]) * (1000 if m[2] else 1) for m in re.finditer(_NUM + r'\s*(k)?' + _SQFT, rest, re.I)]
+    rest = re.sub(_NUM + r'\s*k?' + _SQFT, ' ', rest, flags=re.I)
+    spaces = [_num(m[1]) for m in re.finditer(_NUM + r'\s*(?:parking\s+)?(?:spaces|spots|stalls)\b', rest, re.I)]
+    if spaces and areas:
+        ratios += [max(spaces) / (max(areas) / 1000)]
+    named = [int(m[1] or m[2]) for m in re.finditer(r'\bfloor\s+(-?\d+)\b|\b(\d+)(?:st|nd|rd|th)\s+floor\b', rest, re.I)]
+    stories = [int(m[1]) for m in re.finditer(r'\b(\d+)[ -](?:stor(?:y|ey|ies|eys)|floors?)\b', rest, re.I)] + named
+    feet = [_num(m[1]) for m in re.finditer(_NUM + r'[ -]?(?:ft|feet|foot)\b', rest, re.I)]
+    single = bool(re.search(r'\b(?:single[ -]floor|one floor|a floor)\b', text, re.I)) or bool(named)
+    return dict(areas=areas, floors=named, stories=stories, feet=feet, parking=ratios, single_floor=single)
+
+
+def limit_applies(limit: dict, text: str, category: str) -> bool:
+    """True when the pitch states a need beyond this limit's cited value."""
+    if limit.get('applies_to') and category not in limit['applies_to']:
+        return False
+    needs, cap = pitch_needs(text), limit['threshold']
+    constraint = limit['constraint']
+    if constraint == 'floor_plate':
+        return needs['single_floor'] and not needs['floors'] and any(a > cap for a in needs['areas'])
+    if constraint == 'dark_area' and limit.get('floor') is not None:
+        return limit['floor'] in needs['floors'] and any(a > cap for a in needs['areas'])
+    if constraint == 'dark_area':
+        return not needs['single_floor'] and any(a > cap for a in needs['areas'])
+    key = {'stories': 'stories', 'height': 'feet', 'parking': 'parking'}[constraint]
+    return any(value > cap for value in needs[key])
+
+
+def same_limit(limit: dict, candidate: dict) -> bool:
+    """Exact candidate, or a justified category narrowing of it."""
+    targets = limit.get('applies_to') or []
+    return ({**limit, 'applies_to': []} == candidate
+            and (not targets or (len(set(targets)) == len(targets)
+                                 and set(targets) <= JUSTIFIED_TARGETS.get(limit['constraint'], set()))))
 
 
 def validate_persona(value: dict, dossier: dict) -> Persona:
@@ -329,7 +392,7 @@ def validate_persona(value: dict, dossier: dict) -> Persona:
     limits = [limit.model_dump() for limit in persona.hard_limits]
     if len({limit['fact_ref'] for limit in limits}) != len(limits):
         raise ValueError('Physical limits must cite distinct facts')
-    if any(limit not in candidates for limit in limits):
+    if any(not any(same_limit(limit, c) for c in candidates) for limit in limits):
         raise ValueError('Hard limits must be validated physical pitch constraints')
     if not persona.backstory:
         raise ValueError('Backstory is required')
