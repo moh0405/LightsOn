@@ -6,6 +6,7 @@ import json
 import logging
 import math
 import os
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Callable, TypeVar
 
@@ -63,60 +64,72 @@ class SpendLedger:
             os.fsync(stream.fileno())
         temp.replace(self.path)
 
-    def call(self, model: str, input_bound: int, max_output: int,
-             invoke: Callable[[], T], usage: Callable[[T], dict], *, input_multiplier: float = 1) -> T:
+    @contextmanager
+    def _locked(self):
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        # Lock spans request + accounting: threads, processes and both heroes share the cap.
         with self.path.with_suffix('.lock').open('a') as lock:
             fcntl.flock(lock, fcntl.LOCK_EX)
-            if model not in PRICES or min(input_bound, max_output) < 0:
-                raise SpendUnavailable('Unpriced Bedrock request')
-            rates = PRICES[model]
-            reservation = (input_bound * rates[0] * input_multiplier + max_output * rates[1]) / 1e6
+            yield
+
+    def call(self, model: str, input_bound: int, max_output: int,
+             invoke: Callable[[], T], usage: Callable[[T], dict], *, input_multiplier: float = 1) -> T:
+        if model not in PRICES or min(input_bound, max_output) < 0:
+            raise SpendUnavailable('Unpriced Bedrock request')
+        rates = PRICES[model]
+        reservation = (input_bound * rates[0] * input_multiplier + max_output * rates[1]) / 1e6
+        with self._locked():
             state = self.snapshot()
             if state['total_usd'] >= self.cap or state['total_usd'] + reservation > self.cap:
                 log.error('Bedrock spend cap reached; using offline fallback')
                 raise SpendUnavailable('Bedrock spend cap reached', cause='budget')
-            row = dict(model=model, reserved_usd=reservation, status='unconfirmed')
-            state['calls'].append(row)
+            row_index = len(state['calls'])
+            state['calls'].append(dict(model=model, reserved_usd=reservation, status='unconfirmed'))
             state['total_usd'] += reservation
             self._save(state)  # A crash or timeout retains the reservation across restarts.
-            try:
-                response = invoke()
-                tokens = usage(response)
-                incoming, outgoing = tokens['input_tokens'], tokens['output_tokens']
-                if not isinstance(incoming, int) or not isinstance(outgoing, int) or min(incoming, outgoing) < 0:
-                    raise ValueError('Missing token usage')
-                details = tokens.get('input_token_details') or {}
-                read = details.get('cache_read', 0)
-                five = details.get('ephemeral_5m_input_tokens', 0)
-                hour = details.get('ephemeral_1h_input_tokens', 0)
-                writes = details.get('cache_creation', 0)
-                if five or hour:
-                    if writes not in (0, five + hour):
-                        raise ValueError('Inconsistent cache usage')
-                    writes = five + hour
-                else:
-                    five = writes
-                if any(type(n) is not int or n < 0 for n in (read, writes, five, hour)) or read + writes > incoming:
-                    raise ValueError('Invalid cache usage')
-                uncached = incoming - read - writes
-                cost = (rates[0] * (uncached + .1 * read + 1.25 * five + 2 * hour)
-                        + outgoing * rates[1]) / 1e6
+        try:
+            response = invoke()
+            tokens = usage(response)
+            incoming, outgoing = tokens['input_tokens'], tokens['output_tokens']
+            if not isinstance(incoming, int) or not isinstance(outgoing, int) or min(incoming, outgoing) < 0:
+                raise ValueError('Missing token usage')
+            if incoming > input_bound or outgoing > max_output:
+                raise ValueError('Usage exceeded reserved token bounds')
+            details = tokens.get('input_token_details') or {}
+            read = details.get('cache_read', 0)
+            five = details.get('ephemeral_5m_input_tokens', 0)
+            hour = details.get('ephemeral_1h_input_tokens', 0)
+            writes = details.get('cache_creation', 0)
+            if five or hour:
+                if writes not in (0, five + hour):
+                    raise ValueError('Inconsistent cache usage')
+                writes = five + hour
+            else:
+                five = writes
+            if any(type(n) is not int or n < 0 for n in (read, writes, five, hour)) or read + writes > incoming:
+                raise ValueError('Invalid cache usage')
+            uncached = incoming - read - writes
+            cost = (rates[0] * (uncached + .1 * read + 1.25 * five + 2 * hour)
+                    + outgoing * rates[1]) / 1e6
+            with self._locked():
+                # Reload: other requests may have reserved or reconciled during I/O.
+                state = self.snapshot()
+                row = state['calls'][row_index]
+                if row['status'] != 'unconfirmed' or row['reserved_usd'] != reservation:
+                    raise ValueError('Reservation no longer matches')
                 state['total_usd'] += cost - reservation
                 state['input_tokens'] += incoming
                 state['output_tokens'] += outgoing
                 row.update(status='complete', input_tokens=incoming, output_tokens=outgoing,
                            cache_read_tokens=read, cache_write_5m_tokens=five, cache_write_1h_tokens=hour, cost_usd=cost)
                 self._save(state)
-                return response
-            except Exception as exc:
-                # Never log exception bodies: SDK errors can contain request content.
-                log.error('Bedrock call unavailable (%s); reservation retained', type(exc).__name__)
-                from botocore.exceptions import ConnectTimeoutError, ReadTimeoutError
-                cause = ('timeout' if isinstance(exc, (TimeoutError, ConnectTimeoutError, ReadTimeoutError))
-                         else exc.cause if isinstance(exc, SpendUnavailable) else 'unavailable')
-                raise SpendUnavailable('Bedrock unavailable; using offline fallback', cause=cause) from None
+            return response
+        except Exception as exc:
+            # Never log exception bodies: SDK errors can contain request content.
+            log.error('Bedrock call unavailable (%s); reservation retained', type(exc).__name__)
+            from botocore.exceptions import ConnectTimeoutError, ReadTimeoutError
+            cause = ('timeout' if isinstance(exc, (TimeoutError, ConnectTimeoutError, ReadTimeoutError))
+                     else exc.cause if isinstance(exc, SpendUnavailable) else 'unavailable')
+            raise SpendUnavailable('Bedrock unavailable; using offline fallback', cause=cause) from None
 
 
 class CappedBedrockConverse(ChatBedrockConverse):
@@ -144,6 +157,29 @@ class CappedBedrockConverse(ChatBedrockConverse):
 
     def _stream(self, *args, **kwargs):
         raise SpendUnavailable('Use non-streaming metered Bedrock calls')
+
+
+def optional_cache_request(invoke, request):
+    """A cache capability rejection is unbilled; retry once without checkpoints.
+
+    Never retry transport errors or other validation failures. All actual model
+    usage still reconciles against the original, conservatively priced reservation.
+    """
+    from botocore.exceptions import ClientError
+    def strip(value):
+        if isinstance(value, list):
+            return [strip(v) for v in value if not isinstance(v, dict) or 'cachePoint' not in v]
+        if isinstance(value, dict):
+            return {k: strip(v) for k, v in value.items()}
+        return value
+    try:
+        return invoke(**request)
+    except ClientError as exc:
+        error = exc.response.get('Error', {})
+        if (error.get('Code') != 'ValidationException' or 'cache' not in error.get('Message', '').casefold()
+                or strip(request) == request):
+            raise
+        return invoke(**strip(request))
 
 
 class MeteredClient:
@@ -194,7 +230,7 @@ class MeteredClient:
         ledger = SpendLedger(self.path)
         if self.cap is not None:
             ledger.cap = min(ledger.cap, self.cap)
-        return ledger.call(model, bound, output, lambda: self.client.converse(**request),
+        return ledger.call(model, bound, output, lambda: optional_cache_request(self.client.converse, request),
                            usage, input_multiplier=cache_rate)
 
     def converse_stream(self, *, timeout: float, on_delta=None, **request):
@@ -211,7 +247,7 @@ class MeteredClient:
             def converse(self, **payload):
                 if time.monotonic() >= deadline:
                     raise TimeoutError('Bedrock stream expired before request')
-                result = client.converse_stream(**payload)
+                result = optional_cache_request(client.converse_stream, payload)
                 stream = result['stream']
                 blocks = {}
                 usage = None
