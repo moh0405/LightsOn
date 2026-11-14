@@ -160,3 +160,10 @@ async def test_snapshot_restores_after_restart(tmp_path):
     assert all(not p.connected for p in back.players.values())
     assert mgr2.get("../x") is None  # room codes never reach the filesystem unchecked
     mgr2.close()
+
+
+@pytest.mark.parametrize('mode', ['kit', 'fixtures'])
+def test_new_room_defaults_to_process_data_mode(tmp_path, monkeypatch, mode):
+    monkeypatch.setenv('DATA_MODE', mode)
+    mgr, _ = make(tmp_path)
+    assert mgr.create().snapshot()['data_mode'] == mode

@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import re
 import secrets
 from dataclasses import dataclass, field
@@ -65,7 +66,7 @@ class Conn:
 class Room:
     code: str
     hero_ids: list[str]
-    data_mode: str = "kit"
+    data_mode: str = field(default_factory=lambda: os.getenv("DATA_MODE") or "kit")
     state_dir: Path | None = None
     durations: dict[Phase, float | None] = field(default_factory=lambda: dict(DEFAULT_DURATIONS))
     players: dict[str, Player] = field(default_factory=dict)
@@ -209,7 +210,7 @@ class Room:
     @classmethod
     def restore(cls, path: Path, hero_ids: list[str], state_dir: Path, **kw) -> "Room":
         data = json.loads(path.read_text())
-        room = cls(code=data["room"], hero_ids=hero_ids, data_mode=data.get("data_mode", "kit"),
+        room = cls(code=data["room"], hero_ids=hero_ids, data_mode=data.get("data_mode") or os.getenv("DATA_MODE") or "kit",
                    state_dir=state_dir, **kw)
         room.phase = data["phase"]
         room.round_id = data.get("round_id")
