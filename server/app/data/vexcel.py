@@ -14,18 +14,21 @@ Meets all non-negotiable rules:
 """
 from __future__ import annotations
 
+from functools import wraps
 import hashlib
 import json
 import logging
 import math
 import os
 import random
+import re
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from dotenv import load_dotenv
 import httpx
+from shapely.errors import ShapelyError
 
 logger = logging.getLogger(__name__)
 
@@ -43,10 +46,26 @@ DEFAULT_LABELS = ["parking lot", "car", "rooftop terrace", "solar panel", "tree"
 
 def to_wkt(geometry: str | dict[str, Any]) -> str:
     """Normalize GeoJSON dict or WKT string to WKT string."""
-    if isinstance(geometry, str):
-        return geometry
+    from shapely import wkt
     from shapely.geometry import shape
-    return shape(geometry).wkt
+    parsed = wkt.loads(geometry) if isinstance(geometry, str) else shape(geometry)
+    if parsed.is_empty or not parsed.is_valid:
+        raise ValueError("Invalid geometry")
+    return parsed.wkt
+
+
+def _fallback(factory: Callable[[], Any]) -> Callable:
+    """Keep invalid tool inputs and operational errors inside the adapter boundary."""
+    def decorate(method: Callable) -> Callable:
+        @wraps(method)
+        def call(*args: Any, **kwargs: Any) -> Any:
+            try:
+                return method(*args, **kwargs)
+            except (OSError, ValueError, TypeError, KeyError, AttributeError, ShapelyError) as exc:
+                logger.error("Vexcel %s failed: %s", method.__name__, exc.__class__.__name__)
+                return factory()
+        return call
+    return decorate
 
 
 def square_around(lat: float, lon: float, half_size_m: float = 40.0) -> str:
@@ -73,12 +92,21 @@ class VexcelClient:
         self._custom_client = http_client
 
     def _get_cache_dir(self, property_id: str | None, key_hint: str | None = None) -> Path:
-        if property_id:
-            dir_path = self.cache_dir / str(property_id)
+        if property_id is not None:
+            if not isinstance(property_id, str) or re.fullmatch(r"[0-9]+", property_id) is None:
+                raise ValueError("Property ID must be decimal")
+            dir_path = self.cache_dir / property_id
         else:
             hashed = hashlib.sha256((key_hint or "generic").encode()).hexdigest()[:16]
             dir_path = self.cache_dir / f"_key_{hashed}"
-        return dir_path
+        return self._contained(dir_path)
+
+    def _contained(self, path: Path) -> Path:
+        root = self.cache_dir.resolve()
+        resolved = path.resolve()
+        if not resolved.is_relative_to(root):
+            raise ValueError("Cache path is outside the cache root")
+        return resolved
 
     @staticmethod
     def _collection(data: Any) -> dict[str, Any]:
@@ -94,10 +122,10 @@ class VexcelClient:
 
     def _read_bytes(self, path: Path) -> bytes | None:
         try:
-            return path.read_bytes()
+            return self._contained(path).read_bytes()
         except FileNotFoundError:
             return None
-        except OSError as exc:
+        except (OSError, ValueError) as exc:
             logger.warning("Vexcel cache read failed: %s", exc.__class__.__name__)
             return None
 
@@ -113,9 +141,10 @@ class VexcelClient:
 
     def _write(self, path: Path, data: bytes | dict[str, Any]) -> None:
         try:
+            path = self._contained(path)
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(data if isinstance(data, bytes) else json.dumps(data, indent=2).encode())
-        except OSError as exc:
+        except (OSError, ValueError) as exc:
             logger.warning("Vexcel cache write failed: %s", exc.__class__.__name__)
 
     @staticmethod
@@ -188,6 +217,7 @@ class VexcelClient:
         with httpx.Client(base_url=self.base_url, timeout=self.timeout) as client:
             return execute_request(client)
 
+    @_fallback(lambda: {"type": "FeatureCollection", "features": []})
     def property(
         self,
         lat: float,
@@ -231,6 +261,7 @@ class VexcelClient:
             logger.error("Failed to parse Vexcel property response: %s", exc.__class__.__name__)
             return {"type": "FeatureCollection", "features": []}
 
+    @_fallback(lambda: None)
     def ortho(
         self,
         parcel_wkt: str | dict[str, Any],
@@ -266,6 +297,7 @@ class VexcelClient:
             self._write(cache_path, content)
         return content
 
+    @_fallback(dict)
     def obliques(
         self,
         parcel_wkt: str | dict[str, Any],
@@ -345,6 +377,7 @@ class VexcelClient:
 
         return results
 
+    @_fallback(lambda: {"type": "FeatureCollection", "features": []})
     def detect(
         self,
         parcel_wkt: str | dict[str, Any],
