@@ -45,7 +45,9 @@ class CommandService:
             raise RoomError("unknown_command", f"Unknown command: {name!r}.")
         return await handler(room, cmd, origin, conn)
 
-    def _player(self, room: Room, cmd: dict):
+    def _player(self, room: Room, cmd: dict, conn: Conn | None = None):
+        if conn is not None and (conn.role != 'play' or conn.player_id != cmd.get('player_id')):
+            raise RoomError('not_joined', 'Join from your player connection first.')
         player = room.players.get(str(cmd.get("player_id", "")))
         if player is None:
             raise RoomError("not_joined", "Join the room first.")
@@ -69,7 +71,7 @@ class CommandService:
         return {"player_id": player.id, "color": player.color}
 
     async def _cmd_pointer(self, room: Room, cmd: dict, origin: str, conn: Conn | None) -> dict:
-        player = self._player(room, cmd)
+        player = self._player(room, cmd, conn)
         if room.phase != "EXPLORE":
             raise RoomError("wrong_phase", "Pointer is only used while exploring.")
         x, y = _clamp01(cmd.get("x")), _clamp01(cmd.get("y"))
@@ -78,10 +80,34 @@ class CommandService:
         return {}
 
     async def _cmd_wake(self, room: Room, cmd: dict, origin: str, conn: Conn | None) -> dict:
-        self._player(room, cmd)
+        self._player(room, cmd, conn)
         building_id = str(cmd.get("building_id", ""))
         await room.start_round(building_id)
         return {"round_id": room.round_id}
+
+    async def _pitch(self, room: Room, cmd: dict, origin: str, conn: Conn | None, revision: bool) -> dict:
+        player = self._player(room, cmd, conn)
+        text = cmd.get('text')
+        if not isinstance(text, str) or not 1 <= len(text.strip()) <= 280:
+            raise RoomError('bad_payload', 'Pitch text must be between 1 and 280 characters.')
+        if origin == 'host':
+            raise RoomError('bad_origin', 'Pitches must come from a player.')
+        await room.submit_pitch(player.id, text.strip(), origin, cmd.get('round_id'), revision)
+        return {}
+
+    async def _cmd_submit_pitch(self, room: Room, cmd: dict, origin: str, conn: Conn | None) -> dict:
+        return await self._pitch(room, cmd, origin, conn, False)
+
+    async def _cmd_revise_pitch(self, room: Room, cmd: dict, origin: str, conn: Conn | None) -> dict:
+        return await self._pitch(room, cmd, origin, conn, True)
+
+    async def _cmd_contribute_energy(self, room: Room, cmd: dict, origin: str, conn: Conn | None) -> dict:
+        player = self._player(room, cmd, conn)
+        nonce = cmd.get('nonce')
+        if not isinstance(nonce, str) or not 1 <= len(nonce) <= 128:
+            raise RoomError('bad_payload', 'A charge needs a nonce of 1 to 128 characters.')
+        await room.contribute_energy(player.id, nonce, cmd.get('round_id'))
+        return {}
 
     async def _cmd_host_action(self, room: Room, cmd: dict, origin: str, conn: Conn | None) -> dict:
         if not self._pin_ok(cmd.get("pin")):

@@ -1,7 +1,7 @@
 """Validate agent proposals; only the server computes scores and physical impact."""
 from __future__ import annotations
 
-from .agent.fake_agent import classify_use
+from .agent.fake_agent import classify_use, desire, desire_met
 from .city import City, housing_impact, needs_bonus
 from .models import Pitch, Score, Verdict, VerdictProposal
 
@@ -76,5 +76,5 @@ def validate_verdict(batches: list[tuple[VerdictProposal, list[Pitch]]], *, doss
     category = classify_use(pitch.text)
     return Verdict(round_id=round_id, winner_player_id=winner, scores=[item[0] for item in best.values()],
         reason_line=proposal.reason_line, fact_ids=cited, category=category,
-        desire_met=proposal.desire_met, desire_reveal=proposal.desire_reveal,
+        desire_met=desire_met(pitch.text, dossier), desire_reveal=desire(dossier),
         impact=housing_impact(sqft) if category == 'housing' else None)
