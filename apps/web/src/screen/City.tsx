@@ -17,10 +17,11 @@ interface Hover { player: string; building: string; color: string }
 export function City() {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<CityMap | null>(null);
-  const { pointers, players, phase, buildingId, revivedColors, dataMode, hasState } = useGame();
+  const { pointers, players, phase, buildingId, revivedColors, revival, dataMode, hasState } = useGame();
   const current = useRef({ pointers, phase });
   current.current = { pointers, phase };
   const [ready, setReady] = useState(false);
+  const [flashPoint, setFlashPoint] = useState<{ x: number; y: number } | null>(null);
   const [factsReady, setFactsReady] = useState(false);
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [hovers, setHovers] = useState<Hover[]>([]);
@@ -124,12 +125,24 @@ export function City() {
 
   useEffect(() => {
     const map = mapRef.current;
-    if (ready && map?.getLayer("floors")) map.setPaintProperty("floors", "fill-extrusion-color", floorColorExpression(revivedColors));
-  }, [revivedColors, ready]);
+    if (!ready || !map?.getLayer("floors")) return;
+    const target = buildings.find((b) => String(b.id) === revival?.building_id);
+    setFlashPoint(target?.lng != null && target.lat != null ? map.project([target.lng, target.lat]) : null);
+    map.setPaintProperty("floors", "fill-extrusion-color-transition", { duration: 0 });
+    let frame = 0;
+    const paint = () => {
+      map.setPaintProperty("floors", "fill-extrusion-color", floorColorExpression(revivedColors, revival ?? undefined));
+      if (revival && Date.now() - revival.at < 600 + Math.max(0, revival.floors.length - 1) * 60) frame = requestAnimationFrame(paint);
+    };
+    paint();
+    return () => cancelAnimationFrame(frame);
+  }, [revivedColors, revival, ready, buildings]);
 
   return <>
     {error && <div role="alert" style={{ padding: 10, background: "#5a3b00" }}>{error}</div>}
     <div data-testid="field" data-facts-ready={ready && factsReady} style={{ position: "relative", height: "65vh", minHeight: 360, borderRadius: 12, overflow: "hidden", background: "#10131c" }}>
+      {revival && flashPoint && <div key={revival.at} aria-hidden="true" style={{ position: "absolute", top: flashPoint.y, left: flashPoint.x - 32, width: 64, height: 24, zIndex: 1, background: "white", filter: "blur(18px)", animation: "city-flash 200ms forwards", pointerEvents: "none" }} />}
+      <style>{`@keyframes city-flash { from { opacity: 0.9 } to { opacity: 0 } }`}</style>
       <div ref={container} style={{ position: "absolute", inset: 0 }} />
       {Object.entries(pointers).map(([id, p]) => <div key={id} data-testid="dot" style={{ pointerEvents: "none", position: "absolute", left: `${p.x * 100}%`, top: `${p.y * 100}%`, width: 22, height: 22, marginLeft: -11, marginTop: -11, borderRadius: "50%", background: p.color, boxShadow: `0 0 16px 6px ${p.color}`, transition: "left 60ms linear, top 60ms linear" }}>
         <span style={{ position: "absolute", top: 26, fontSize: 12 }}>{players[id]?.nickname}</span>

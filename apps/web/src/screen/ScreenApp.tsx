@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
+import { CityMeter, RoundOverlays } from "./overlays/RoundOverlays";
 import { City } from "./City";
 import { createRoom } from "../lib/api";
 import { safeGet, safeSet, useGame, useRoomSocket } from "../lib/store";
-import { ConnBanner, PhaseBadge, page } from "../lib/ui";
+import { ConnBanner, ErrorToast, PhaseBadge, page } from "../lib/ui";
 
 export function ScreenApp() {
   const [room, setRoom] = useState<string | null>(null);
@@ -28,19 +29,19 @@ export function ScreenApp() {
   }, []);
 
   return (
-    <main style={{ ...page, display: "grid", gridTemplateColumns: "1fr 280px", gap: 16 }}>
+    <main style={{ ...page, display: "grid", gridTemplateColumns: "minmax(0, 1fr) 360px", gap: 16 }}>
       <section>
-        <ConnBanner />
+        <ConnBanner /><ErrorToast />
         {failed && <p role="alert">Could not reach the server.</p>}
         <h1>Lights On: screen</h1>
         <PhaseBadge />
         {buildingId && <p>Waking building {buildingId}</p>}
-        <City />
+        <div style={{ position: "relative" }}><City /><RoundOverlays /></div>
       </section>
       <aside>
         {qr && (
           <>
-            <div data-testid="qr" style={{ background: "#fff", padding: 8, borderRadius: 8 }} dangerouslySetInnerHTML={{ __html: qr.svg }} />
+            <div data-testid="qr" style={{ background: "#fff", padding: 8, borderRadius: 8, width: 140 }} dangerouslySetInnerHTML={{ __html: qr.svg }} />
             <p style={{ wordBreak: "break-all", fontSize: 12 }}>{qr.url}</p>
             <p>Room code: <strong>{room}</strong></p>
           </>
@@ -54,6 +55,7 @@ export function ScreenApp() {
             </li>
           ))}
         </ul>
+        <CityMeter />
       </aside>
     </main>
   );

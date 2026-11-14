@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { create } from "zustand";
-import type { RevivedColors } from "./floor-colors";
+import { restoreRevivedColors, withRevivedBuilding, type RevivedColors } from "./floor-colors";
 import { setBuildingDataMode } from "./buildings";
 import { fetchHealth } from "./api";
-import type { PlayerView, PointerView, ServerMessage } from "./protocol";
-import type { Phase } from "./types";
+import type { CityState, Counteroffer, Intro, PitchView, PlayerView, PointerView, Revival, ServerMessage } from "./protocol";
+import type { Phase, Verdict } from "./types";
 import { RoomSocket, type ConnStatus } from "./ws";
 
 // ---- health (Phase 0) ------------------------------------------------
@@ -50,6 +50,13 @@ export interface GameState {
   players: Record<string, PlayerView>;
   pointers: Record<string, PointerView>;
   revivedColors: RevivedColors;
+  intro: Intro | null;
+  pitches: Record<string, PitchView>;
+  counteroffers: Record<string, Counteroffer>;
+  verdict: Verdict | null;
+  charge: number;
+  revival: (Revival & { at: number }) | null;
+  city: CityState | null;
   hasState: boolean;
   lastError: { code: string; message: string } | null;
 }
@@ -67,6 +74,7 @@ export const initialGame: GameState = {
   players: {},
   pointers: {},
   revivedColors: {},
+  intro: null, pitches: {}, counteroffers: {}, verdict: null, charge: 0, revival: null, city: null,
   hasState: false,
   lastError: null,
 };
@@ -87,6 +95,11 @@ export function reduce(s: GameState, msg: ServerMessage, now = Date.now()): Part
         heroIds: msg.hero_building_ids,
         players: Object.fromEntries(msg.players.map((p) => [p.id, p])),
         pointers: {},
+        revivedColors: restoreRevivedColors(msg.revived ?? {}, msg.floor_states), city: msg.city ?? null,
+        intro: null,
+        pitches: Object.fromEntries([...(msg.pitches ?? []), ...(msg.revisions ?? [])].map((p) => [p.player_id, p])),
+        counteroffers: Object.fromEntries((msg.challenges ?? []).map((c) => [c.player_id, { ...c, audio_url: null }])),
+        verdict: msg.verdict ?? null, charge: msg.charge ?? 0, revival: null, lastError: null,
       };
     case "player_joined":
     case "player_left":
@@ -95,6 +108,7 @@ export function reduce(s: GameState, msg: ServerMessage, now = Date.now()): Part
       return { pointers: { ...s.pointers, [msg.player_id]: { x: msg.x, y: msg.y, color: msg.color, at: now } } };
     case "phase_changed":
       return {
+        ...(msg.round_id ? {} : { intro: null, pitches: {}, counteroffers: {}, verdict: null, charge: 0, revival: null }),
         phase: msg.phase,
         roundId: msg.round_id,
         endsAt: msg.ends_at,
@@ -102,7 +116,23 @@ export function reduce(s: GameState, msg: ServerMessage, now = Date.now()): Part
         pointers: msg.phase === "EXPLORE" ? s.pointers : {},
       };
     case "round_started":
-      return { roundId: msg.round_id, buildingId: msg.building_id };
+      return { roundId: msg.round_id, buildingId: msg.building_id, intro: null, pitches: {}, counteroffers: {}, verdict: null, charge: 0, revival: null, lastError: null };
+    case "building_intro": return { intro: msg };
+    case "pitch_received": return { pitches: { ...s.pitches, [msg.player_id]: msg } };
+    case "counteroffer": return { counteroffers: { ...s.counteroffers, [msg.player_id]: msg } };
+    case "verdict": return { verdict: msg };
+    case "energy_updated": return { charge: msg.charge };
+    case "building_revived": {
+      const previous = s.revivedColors[msg.building_id];
+      if (previous && msg.floors.every((floor) => previous.floors.includes(floor))) return {};
+      return {
+        charge: 100, revival: { ...msg, at: now },
+        revivedColors: withRevivedBuilding(s.revivedColors, msg.building_id, msg.floors, msg.color),
+        city: s.city ? { ...s.city, buildings_revived: s.city.buildings_revived + (previous ? 0 : 1),
+          sqft_reimagined: s.city.sqft_reimagined + msg.sqft, song_layers: s.city.song_layers + 1 } : null,
+      };
+    }
+    case "neighborhood_updated": return { city: s.city ? { ...s.city, needs: msg.needs, most_needed: msg.most_needed } : null };
     case "error":
       return msg.nonce ? {} : { lastError: { code: msg.code, message: msg.message } };
     default:
