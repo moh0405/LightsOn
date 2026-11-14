@@ -25,6 +25,8 @@ ROOT = Path(__file__).resolve().parents[3]
 CACHE = ROOT / 'server/cache/prep'
 PERSONAS = ROOT / 'server/fixtures/personas'
 HEROES = {'233953', '233899'}
+# Persona regeneration stays this far below the configured BEDROCK_SPEND_CAP_USD.
+PREP_RESERVE_USD = .30
 log = logging.getLogger(__name__)
 
 
@@ -327,11 +329,14 @@ def regenerate_persona(property_id: str, research: Path, *, provider=None, model
             derived.append(fact['id'])
     selections['facts_property.json'] = {'fact_ids': sorted(set(selections['facts_property.json']['fact_ids']) | set(derived))}
     dossier = {**tools.dossier, 'facts': [source[ref] for ref in source if ref in researched]}
+    # The writer's sub-cap keeps a reserve below the configured shared cap, like evals/live_quality.py.
+    ledger = ledger or SpendLedger()
+    sub_cap = ledger.cap - PREP_RESERVE_USD
     # Construction is local; all inference, including structured/tool-bound calls, is metered.
     model = model or CappedBedrockConverse(
         model_id=os.getenv('BEDROCK_SMART_MODEL_ID', 'us.anthropic.claude-sonnet-4-6'),
         region_name=os.getenv('AWS_REGION', 'us-east-1'), temperature=0, max_tokens=4096,
-        disable_streaming=True, spend_cap=2.90,
+        disable_streaming=True, spend_cap=sub_cap,
         config=Config(connect_timeout=10, read_timeout=60, retries={'total_max_attempts': 1}))
     messages = [SystemMessage(content=PERSONA_WRITER_PROMPT + writer_instructions(dossier)),
                 HumanMessage(content=json.dumps(dict(building_id=property_id, cached_research=selections)))]
@@ -345,12 +350,12 @@ def regenerate_persona(property_id: str, research: Path, *, provider=None, model
     if type(output) is not int or output <= 0:
         raise SpendUnavailable('Unbounded persona writer')
     estimate = (bound * rates[0] + output * rates[1]) / 1e6
-    ledger = ledger or SpendLedger()
     if isinstance(model, CappedBedrockConverse):
-        model = model.model_copy(update={'spend_path': ledger.path, 'spend_cap': min(ledger.cap, 2.90)})
+        model = model.model_copy(update={'spend_path': ledger.path, 'spend_cap': sub_cap})
     before = ledger.snapshot()['total_usd']
-    summary = dict(estimated_usd=estimate, ledger_before_usd=before, input_token_bound=bound, max_output_tokens=output)
-    if before + estimate >= 2.90:
+    summary = dict(estimated_usd=estimate, ledger_before_usd=before, input_token_bound=bound,
+                   max_output_tokens=output, spend_cap_usd=sub_cap)
+    if before + estimate >= sub_cap:
         return dict(prep_status='unaffordable', **summary)
     if estimate_only:
         return dict(prep_status='estimate', **summary)
