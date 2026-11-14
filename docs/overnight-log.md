@@ -105,3 +105,4 @@
 - 11:1x Antigravity Opus 4.6 and GPT-OSS quota exhausted (~7 days). PR #15 review moved to an independent Claude Opus 5.5 worker; Codex final review still at 13:57.
 - 11:5x Independent Claude Opus review of PR #15: FIX FIRST (sentence-initial proper nouns like "Exxon adored me" pass as fiction; fallback limits ignore applies_to narrowing in challenge; low: past-tense history claims). All revert tests verified. Claude Sonnet worker patching PR #15 plus: failed forced prep keeps old cache; "1,941 year" formatting.
 - 12:2x PR #15 + fixups merged as 515f29f (sentence-initial proper nouns, challenge respects applies_to, past-tense claims dropped, failed forced prep keeps old cache, year formatting). main: 251 pytest, 36 web; worker e2e 19/19, evals 58/58. Codex final Phase 4 review at ~13:57.
+- 14:0x Codex back. Phase 4 final review (Codex high) running since 13:57. Started Phase 5 live agent (Codex high) in parallel to save time; it rebases on any Phase 4 fixes.
