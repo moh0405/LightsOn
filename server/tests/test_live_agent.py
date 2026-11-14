@@ -264,3 +264,77 @@ async def test_each_scored_pitch_moves_mood_while_revision_keeps_better_score(do
     assert room.verdict.scores[0].data_fit == 7  # the weaker revision cannot hurt the round score
     assert room.mood == 'proud'  # original: proud -> hopeful; revision: hopeful -> proud
     room.close()
+
+
+@pytest.mark.parametrize('wording', [
+    'Floor 6, with 31,503 sq ft, wants your area budget.',
+    'Floor 6 has about 31,500 square feet for your pitch.',
+    'Floor 6 has 31.5k square feet for your pitch.',
+    'Floor 6 has 31.5k; show me what fits.',
+])
+def test_source_area_formats(dossier, wording):
+    fact = next(f for f in dossier['facts'] if f['key'] == 'floor_6_available_sqft')
+    assert fact['value'] == 31503  # retained eval's actual sourced quantity
+    assert check_line(wording, [fact['id']], dossier) is None
+
+
+def test_floor_labels_cannot_be_reused_as_unrelated_quantities(dossier):
+    fact = next(f for f in dossier['facts'] if f['key'] == 'floor_6_available_sqft')
+    assert check_line('I have 6 secret tunnels.', [fact['id']], dossier)
+
+
+def test_year_is_exact_without_separators(dossier):
+    fact = next(f for f in dossier['facts'] if f['key'] == 'construction_ConstructionComplete')
+    assert check_line(f"I arrived in {fact['value']}, darling.", [fact['id']], dossier) is None
+    assert check_line(f"I arrived in {fact['value'] + 1}, darling.", [fact['id']], dossier)
+
+
+async def test_rejections_keep_candidate_and_failure_cause(dossier, tmp_path, monkeypatch):
+    monkeypatch.setenv('STATE_DIR', str(tmp_path))
+    c = fake_agent.challenge(pitch(), dossier).model_dump()
+    c['line'] = 'I stand 987654 feet tall.'  # deliberately unsupported candidate, never a building fact
+    agent = LiveAgent(model=Model([{'challenges': [c]}, {'challenges': [c]}]))
+    await agent.challenge([pitch()], dossier)
+    records = [json.loads(line) for line in (tmp_path / 'live_agent.jsonl').read_text().splitlines()]
+    rejected = [r for r in records if r['event'] == 'rejected']
+    assert len(rejected) == 2
+    assert all(r['cause'] == 'number_match' and r['line'].startswith(c['line'])
+               and r['fact_ids'] == c['fact_ids'] for r in rejected)
+    assert agent.fallback_causes == {'number_match': 1}
+
+
+async def test_timeout_is_reported_as_timeout(dossier, tmp_path, monkeypatch):
+    monkeypatch.setenv('STATE_DIR', str(tmp_path))
+    async def slow(*args):
+        await asyncio.sleep(1)
+    agent = LiveAgent(model=slow, challenge_timeout=.01)
+    await agent.challenge([pitch()], dossier)
+    assert agent.fallback_causes == {'timeout': 1}
+
+
+def test_number_parser_handles_percent_and_compact_units():
+    from app.agent.grounding import number_unit, number_value
+    # Parser syntax examples, not attributed building facts.
+    assert number_unit('% of the total') == 'percent'
+    assert number_unit(' percent of the total') == 'percent'
+    assert number_unit(' sq ft') == 'sqft'
+    assert number_value('31.5k') == 31500
+
+
+async def test_budget_and_socket_failures_remain_distinguishable(dossier, tmp_path, monkeypatch):
+    from app.agent.spend import SpendLedger, SpendUnavailable
+    from app.agent.live_agent import FAST
+    monkeypatch.setenv('STATE_DIR', str(tmp_path))
+    ledger = SpendLedger(tmp_path / 'spend.json', cap=0)
+    with pytest.raises(SpendUnavailable) as budget:
+        ledger.call(FAST, 10, 10, lambda: None, lambda _: {})
+    agent = LiveAgent(model=Model([budget.value]))
+    await agent.challenge([pitch()], dossier)
+    assert agent.fallback_causes == {'budget': 1}
+    ledger.cap = 3
+    def timeout():
+        raise TimeoutError()
+    with pytest.raises(SpendUnavailable) as expired:
+        ledger.call(FAST, 10, 10, timeout, lambda _: {})
+    assert expired.value.cause == 'timeout'
+    assert ledger.snapshot()['calls'][-1]['status'] == 'unconfirmed'
