@@ -47,9 +47,14 @@ def check_line(line: str, fact_ids: list[str], dossier: dict, impact: dict | Non
     if re.search(r'\bvacant\b', line, re.I):
         return 'Prohibited floor-status word'
     cited = [facts[fid] for fid in fact_ids]
-    duration = re.search(r'\b(?:been|stayed|sat|stood|remained)\s+(?:dark|empty|unlit)\s+(?:for|since)\b', line, re.I)
-    if duration and not any(duration[0].casefold() in (f.get('say_as') or '').casefold() for f in cited):
-        return 'Historical floor-status duration is not supported by current-status facts'
+    # Current status and a construction date do not prove a duration. Require
+    # explicit matching duration wording in cited source evidence, in either order.
+    durations = list(re.finditer(r'\b(?:for\s+(?:(?:many|several)\s+)?(?:years|decades|centuries)|'
+                                r'(?:years|decades|centuries)\s+of|'
+                                r'(?:spent|waited|waiting)\s+(?:years|decades|centuries)|'
+                                r'(?:been|stayed|sat|stood|remained)\s+(?:dark|empty|unlit)\s+since\b)', line, re.I))
+    if any(not any(d[0].casefold() in (f.get('say_as') or '').casefold() for f in cited) for d in durations):
+        return 'Historical duration is not supported by cited facts'
     if any(f['kind'] == 'estimate' for f in cited) and 'looks like' not in line.casefold():
         return 'Estimate must say looks like'
     # Quantified physical claims use number words; conversational "one idea" or
@@ -58,7 +63,7 @@ def check_line(line: str, fact_ids: list[str], dossier: dict, impact: dict | Non
         after = line[match.end():]
         before = line[:match.start()]
         clause = re.split(r'[.!?;:]', before)[-1]
-        hypothetical = re.search(r'\b(?:start|propose|imagine|try|could|would|should|pitch)\b', clause, re.I)
+        hypothetical = re.search(r'\b(?:start|propose|imagine|try|could|would|should|pitch|give\s+me)\b', clause, re.I)
         asserted = re.search(r'\b(?:i|we)\s+(?:have|had|own|contain|offer|rise|stand)\b', clause, re.I)
         if (match[0].casefold() == 'one' and re.match(r'\s+floor\b', after, re.I)
                 and hypothetical and not asserted):

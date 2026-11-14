@@ -1,4 +1,4 @@
-"""One structured live request per step; no model result directly mutates a room."""
+"""Independent grounded player turns; only the server mutates room state."""
 from __future__ import annotations
 
 import asyncio
@@ -17,8 +17,8 @@ from pydantic import BaseModel, ConfigDict, TypeAdapter
 
 from ..models import Challenge, Pitch, VerdictProposal
 from . import fake_agent
-from .grounding import ClaimChecks, check_line, fallback_line
-from .prompts import build_prompt, persona_for, pitch_data, safe_facts
+from .grounding import ClaimChecks, NUMBER, check_line, fallback_line
+from .prompts import CachedPrompt, build_prompt, challenge_prompt, persona_for, pitch_data, safe_facts
 from .spend import MeteredClient, SpendUnavailable
 
 log = logging.getLogger(__name__)
@@ -87,9 +87,12 @@ class Bedrock:
                               config=Config(connect_timeout=1, read_timeout=max(1, timeout),
                                             retries={'total_max_attempts': 1}))
         model = os.getenv('BEDROCK_SMART_MODEL_ID' if step == 'verdict' else 'BEDROCK_FAST_MODEL_ID') or (SMART if step == 'verdict' else FAST)
-        request = dict(modelId=model, system=[{'text': system}],
+        system_blocks = ([{'text': system.shared}, {'cachePoint': {'type': 'default'}}]
+                         + ([{'text': system.specific}] if system.specific else [])
+                         if isinstance(system, CachedPrompt) else [{'text': system}])
+        request = dict(modelId=model, system=system_blocks,
                        messages=[{'role': 'user', 'content': [{'text': content}]}],
-                       inferenceConfig={'maxTokens': 900 if step == 'challenge' else 800 if step == 'verdict' else 300, 'temperature': 0},
+                       inferenceConfig={'maxTokens': 180 if step == 'challenge' else 800 if step == 'verdict' else 300, 'temperature': 0},
                        toolConfig={'tools': [{'toolSpec': {'name': 'answer', 'description': 'Return the structured game proposal.',
                                                           'inputSchema': {'json': schema.model_json_schema()}}}],
                                    'toolChoice': {'tool': {'name': 'answer'}}})
@@ -103,9 +106,11 @@ class Bedrock:
 
 
 class LiveAgent:
-    def __init__(self, model=None, emit=None, challenge_timeout=8, verdict_timeout=12):
+    def __init__(self, model=None, emit=None, challenge_timeout=8, verdict_timeout=12, on_challenge=None):
         self.model = model or Bedrock()
         self.emit = emit
+        self.on_challenge = on_challenge
+        self.challenge_latencies: dict[str, float] = {}
         self.challenge_timeout, self.verdict_timeout = challenge_timeout, verdict_timeout
         self.fallbacks = 0
         self.fallback_causes = Counter()
@@ -145,7 +150,7 @@ class LiveAgent:
                     raise
 
     async def grounded_each(self, lines, dossier, deadline, *, step, attempt):
-        # One batched fast-model check, with one explicit result per line.
+        # Local checks run first; unrelated player tasks keep publishing during the remote check.
         def reject(line, refs, reason, cause):
             diagnostic('rejected', cause, step=step, attempt=attempt + 1,
                        building_id=dossier['id'], line=line, fact_ids=refs, reason=reason)
@@ -163,7 +168,16 @@ class LiveAgent:
                 issues[index] = reject(line, refs, reason, cause)
             elif BLOCK.search(line) or INJECT.search(line):
                 issues[index] = reject(line, refs, 'Unsafe generated dialogue', 'safety')
-        pending = [i for i, issue in enumerate(issues) if issue is None]
+        def needs_check(line, refs):
+            if refs or NUMBER.search(line):
+                return True
+            # Only skip recognizable voice or hypothetical plans. Uncited factual
+            # assertions still need semantic validation, even without quantities.
+            assertion = re.search(r"\b(?:i|we|it|this building|my [a-z ]+)\s+(?:have|has|had|was|were|is|are|contain|offer|stand|rise|built)|"
+                                  r"\b(?:tunnels?|windows?|ceilings?|daylight|capacity|history|years|decades|legal)\b", line, re.I)
+            pure = re.match(r"(?:darling, you have my attention[.!]?|could your |would your |can your |let['’]s |give me |start |offer )", line, re.I)
+            return bool(assertion) or not pure
+        pending = [i for i, issue in enumerate(issues) if issue is None and needs_check(*lines[i])]
         if not pending:
             return issues
         facts = {f['id']: f for f in safe_facts(dossier)}
@@ -205,61 +219,68 @@ class LiveAgent:
         await self.event('fallback', step, started, cause=cause)
 
     async def challenge(self, pitches: list[Pitch], dossier: dict, city=None, mood='hopeful', memory='') -> list[Challenge]:
-        from ..city import City
-        started = monotonic()
-        deadline = started + self.challenge_timeout
-        safe = [p for p in pitches if not safety_reason(p.text)]
-        output = {}
-        for p in pitches:
+        self.challenge_latencies = {}
+        self.fallback_player_ids.clear()
+        self.fallback_player_causes.clear()
+        self.last_grounded_at = None
+
+        async def player_turn(position, p):
+            started = monotonic()
+            deadline = started + self.challenge_timeout
             reason = safety_reason(p.text)
+            from_model = False
             if reason:
-                output[p.player_id] = Challenge(player_id=p.player_id, line=INJECTION if reason == 'injection' else REFUSAL,
-                                                fact_ids=[], counteroffer='Offer a kind, original idea for this space.', category_guess='wildcard')
-        if safe:
-            system = build_prompt(dossier, mood, city or City(), memory, pitches=safe)
-            content = pitch_data(safe)
-            pending = safe
-            positions = {p.player_id: i for i, p in enumerate(safe)}
-            async def use_fallback(causes):
-                for p in pending:
-                    output[p.player_id] = fake_agent.challenge(p, dossier,
-                        variant=positions[p.player_id] if len(safe) > 1 else None)
+                candidate = Challenge(player_id=p.player_id, line=INJECTION if reason == 'injection' else REFUSAL,
+                    fact_ids=[], counteroffer='Offer a kind, original idea for this space.', category_guess='wildcard')
+            else:
+                system = challenge_prompt(dossier, mood, pitches=[p])
+                content = pitch_data([p])
+                cause = 'unavailable'
+                try:
+                    for attempt in range(2):
+                        result = await self.call('challenge', system, content, Challenges, deadline)
+                        if len(result.challenges) != 1 or result.challenges[0].player_id != p.player_id:
+                            self.schema_failures += 1
+                            raise ValueError('Challenge player mismatch')
+                        candidate = result.challenges[0]
+                        issues = await self.grounded_each([(candidate.line + ' ' + candidate.counteroffer, candidate.fact_ids)],
+                            dossier, deadline, step='challenge', attempt=attempt)
+                        if issues[0] is None:
+                            from_model = True
+                            break
+                        reason, cause = issues[0]
+                        content = pitch_data([p]) + '\nRegenerate this player. Grounding failure: ' + reason[:240]
+                except Exception as exc:
+                    cause = failure_cause(exc)
+                if not from_model:
+                    candidate = fake_agent.challenge(p, dossier, variant=position if len(pitches) > 1 else None)
                     self.fallback_player_ids.add(p.player_id)
-                    self.fallback_player_causes[p.player_id] = causes[p.player_id]
-                    self.challenge_fallback_causes[causes[p.player_id]] += 1
-                    diagnostic('challenge_fallback', causes[p.player_id], building_id=dossier['id'], player_id=p.player_id)
-                await self.fallback('challenge', started, next(iter(causes.values())))
-            try:
-                for attempt in range(2):
-                    result = await self.call('challenge', system, content, Challenges, deadline)
-                    ids = [c.player_id for c in result.challenges]
-                    if len(ids) != len(set(ids)) or set(ids) != {p.player_id for p in pending}:
-                        self.schema_failures += 1
-                        for c in result.challenges:
-                            diagnostic('rejected', 'invalid_schema', step='challenge', attempt=attempt + 1,
-                                       building_id=dossier['id'], line=c.line + ' ' + c.counteroffer,
-                                       fact_ids=c.fact_ids, reason='Challenge players mismatch')
-                        raise ValueError('Challenge players mismatch')
-                    issues = await self.grounded_each([(c.line + ' ' + c.counteroffer, c.fact_ids) for c in result.challenges],
-                                                     dossier, deadline, step='challenge', attempt=attempt)
-                    failed = {}
-                    for c, issue in zip(result.challenges, issues):
-                        if issue is None:
-                            output[c.player_id] = c
-                        else:
-                            failed[c.player_id] = issue
-                    pending = [p for p in pending if p.player_id in failed]
-                    if not pending:
-                        break
-                    if attempt:
-                        await use_fallback({pid: issue[1] for pid, issue in failed.items()})
-                    else:
-                        content = pitch_data(pending) + '\nRegenerate only these players. Grounding failures: ' + json.dumps(
-                            {pid: issue[0][:240] for pid, issue in failed.items()})
-            except Exception as exc:
-                await use_fallback({p.player_id: failure_cause(exc) for p in pending})
-        self.last_grounded_at = monotonic()
-        return [output[p.player_id] for p in pitches]
+                    self.fallback_player_causes[p.player_id] = cause
+                    self.challenge_fallback_causes[cause] += 1
+                    diagnostic('challenge_fallback', cause, building_id=dossier['id'], player_id=p.player_id)
+                    await self.fallback('challenge', started, cause)
+            ready = monotonic()
+            if from_model:
+                self.challenge_latencies[p.player_id] = ready - started
+                self.last_grounded_at = ready
+            # The callback receives only the complete validated proposal (or a trusted
+            # template). It is private, guarded by the room's round token, and awaited.
+            if self.on_challenge:
+                published = self.on_challenge(candidate)
+                if inspect.isawaitable(published):
+                    await published
+            return candidate
+
+        # gather preserves pitch order in the return value, without delaying callbacks.
+        # Cancel children on reset or callback failure; no late publication survives.
+        tasks = [asyncio.create_task(player_turn(i, p)) for i, p in enumerate(pitches)]
+        try:
+            return await asyncio.gather(*tasks)
+        finally:
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
 
     async def verdict_batches(self, originals, revisions, dossier, city, challenges, mood='hopeful', memory=''):
         started = monotonic()
