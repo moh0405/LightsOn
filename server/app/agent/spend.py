@@ -153,6 +153,7 @@ class MeteredClient:
                 or request.get('additionalModelRequestFields') or tier != 'default' or latency != 'standard'):
             raise SpendUnavailable('Unpriced or unbounded Bedrock request')
         # Payloads are text/tools only. Encoded images/documents need a separate token bound.
+        cache_ttls = set()
         def multiplier(value):
             if isinstance(value, dict):
                 if any(k in value for k in ('image', 'video', 'document', 'bytes', 's3Location')):
@@ -161,6 +162,7 @@ class MeteredClient:
                     ttl = value['cachePoint'].get('ttl', '5m')
                     if ttl not in ('5m', '1h'):
                         raise SpendUnavailable('Unpriced cache TTL')
+                    cache_ttls.add(ttl)
                     return 2 if ttl == '1h' else 1.25
                 return max([1] + [multiplier(v) for v in value.values()])
             if isinstance(value, list):
@@ -172,6 +174,10 @@ class MeteredClient:
             raw = response['usage']
             read, write = raw.get('cacheReadInputTokens', 0), raw.get('cacheWriteInputTokens', 0)
             details = raw.get('cacheDetails', [])
+            if write and not details and cache_ttls == {'1h'}:
+                details = [{'ttl': '1h', 'inputTokens': write}]
+            elif write and not details and len(cache_ttls) > 1:
+                raise ValueError('Mixed cache TTLs require a usage breakdown')
             if any(d.get('ttl') not in ('5m', '1h') for d in details):
                 raise ValueError('Unknown cache TTL usage')
             return dict(input_tokens=raw['inputTokens'] + read + write, output_tokens=raw['outputTokens'],

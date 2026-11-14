@@ -545,3 +545,20 @@ def test_explicit_floor_pitch_uses_that_floor_area_not_typical_plate():
     assert reply.fact_ids == ['F_233953_floor_6_available_sqft']
     assert reply.line.startswith('For floor 6, fit')
 
+
+def test_hour_cache_override_without_optional_breakdown_prices_hour_writes(tmp_path):
+    from app.agent.spend import CappedBedrockConverse
+    class Client:
+        def converse(self, **request):
+            assert request['messages'][0]['content'][1]['cachePoint']['ttl'] == '1h'
+            return dict(output={'message': {'role': 'assistant', 'content': [{'text': 'Ready.'}]}},
+                stopReason='end_turn', usage={'inputTokens': 5, 'outputTokens': 2,
+                    'cacheReadInputTokens': 0, 'cacheWriteInputTokens': 10}, metrics={'latencyMs': 1})
+    path = tmp_path / 'spend.json'
+    model = CappedBedrockConverse(client=Client(), model_id=MODEL, region_name='us-east-1',
+        max_tokens=32, disable_streaming=True, spend_path=path,
+        raw_blocks=[{'role': 'user', 'content': [{'text': 'Research'}, {'cachePoint': {'type': 'default', 'ttl': '1h'}}]}])
+    model.invoke('Ignored by raw_blocks')
+    row = SpendLedger(path).snapshot()['calls'][0]
+    assert row['cache_write_1h_tokens'] == 10
+    assert row['cost_usd'] == pytest.approx((3.3 * (5 + 20) + 16.5 * 2) / 1e6)
