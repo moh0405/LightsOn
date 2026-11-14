@@ -205,3 +205,55 @@ def test_ortho_cache_changes_with_geometry(tmp_path):
     assert client.ortho(geometry, property_id='233953') == b'image-1'
     assert client.ortho(geometry, property_id='233953') == b'image-1'
     assert client.ortho(square_around(29.7588018, -95.3650891, 50), property_id='233953') == b'image-2'
+
+
+@pytest.mark.parametrize('failure', ['timeout', 'transport', 'missing-key'])
+def test_oblique_transient_failure_is_not_cached(tmp_path, failure):
+    calls = []
+    def handler(request):
+        calls.append(request.url.path)
+        if len(calls) == 1 and failure != 'missing-key':
+            error = httpx.ReadTimeout if failure == 'timeout' else httpx.ConnectError
+            raise error('offline', request=request)
+        if request.url.path.endswith('oriented/collections'):
+            return httpx.Response(200, json={'features': [{'properties': {
+                'product-type': 'oblique-north', 'last-capture-date': '2023-08-02'}}]})
+        return httpx.Response(200, content=b'north-image')
+    http = httpx.Client(transport=httpx.MockTransport(handler), base_url='https://test.invalid/v2/')
+    client = VexcelClient(api_key='test', cache_dir=tmp_path, http_client=http)
+    if failure == 'missing-key': client.api_key = None
+    geometry = square_around(29.7588018, -95.3650891)
+    assert client.obliques(geometry, property_id='233953') == {}
+    client.api_key = 'test'
+    assert client.obliques(geometry, property_id='233953') == {'oblique-north': b'north-image'}
+    assert calls[-2:] == ['/v2/oriented/collections', '/v2/oriented/extract']
+
+
+def test_partial_oblique_cache_retries_only_missing_directions(tmp_path):
+    calls = []
+    fail_south = True
+    def handler(request):
+        calls.append(request)
+        if request.url.path.endswith('oriented/collections'):
+            assert request.url.params['srid'] == '4326'
+            return httpx.Response(200, json={'features': [{'properties': {
+                'product-type': direction, 'last-capture-date': '2023-08-02'}}
+                for direction in ['oblique-north', 'oblique-south']]})
+        body = json.loads(request.content)
+        assert body['srid'] == 4326
+        assert body['rotation'] == 'natural'
+        assert body['drawing'][0]['outline-color'] == '255,204,0'
+        if fail_south and body['product-type'] == 'oblique-south':
+            return httpx.Response(503)
+        return httpx.Response(200, content=body['product-type'].encode())
+    http = httpx.Client(transport=httpx.MockTransport(handler), base_url='https://test.invalid/v2/')
+    client = VexcelClient(api_key='test', cache_dir=tmp_path, http_client=http)
+    geometry = square_around(29.7588018, -95.3650891)
+    assert set(client.obliques(geometry, property_id='233953')) == {'oblique-north'}
+    assert [r.url.path for r in calls] == ['/v2/oriented/collections', '/v2/oriented/extract', '/v2/oriented/extract']
+    fail_south = False
+    assert set(client.obliques(geometry, property_id='233953')) == {'oblique-north', 'oblique-south'}
+    assert len(calls) == 4
+    assert json.loads(calls[-1].content)['product-type'] == 'oblique-south'
+    assert len(client.obliques(geometry, property_id='233953')) == 2
+    assert len(calls) == 4

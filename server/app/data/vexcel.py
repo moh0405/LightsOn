@@ -232,54 +232,46 @@ class VexcelClient:
     ) -> dict[str, bytes]:
         """Check /oriented/collections first, then fetch available obliques."""
         wkt_str = to_wkt(parcel_wkt)
-        target_dir = self._get_cache_dir(property_id, f"obliques_{wkt_str}")
-        obliques_dir = target_dir / "obliques"
+        # Geometry namespaces also prevent coverage and images from a previous parcel
+        # being reused after the parcel changes. Ignore legacy incomplete caches.
+        target_dir = self._get_cache_dir(property_id, f"obliques_{wkt_str}") / f"obliques_{self._request_key({'wkt': wkt_str})}"
+        target_dir.mkdir(parents=True, exist_ok=True)
+        obliques_dir = target_dir / "images"
         obliques_dir.mkdir(parents=True, exist_ok=True)
         collections_cache = target_dir / "oriented_collections.json"
-
-        # Check disk cache first
+        collections_data = None
         if collections_cache.is_file():
             try:
                 collections_data = json.loads(collections_cache.read_text())
-                features = collections_data.get("features", [])
-                if not features:
-                    return {}
-                cached_images: dict[str, bytes] = {}
-                for img_file in obliques_dir.glob("*.jpg"):
-                    direction = img_file.stem
-                    cached_images[direction] = img_file.read_bytes()
-                if cached_images:
-                    return cached_images
             except Exception as exc:
-                logger.warning("Failed reading cached oblique metadata: %s", exc)
+                logger.warning("Failed reading cached oblique metadata: %s", exc.__class__.__name__)
 
-        # 1. Check collections
-        params = {
-            "wkt": wkt_str,
-            "srid": 4326,
-            "layer": "urban",
-            "product-type": "oblique",
-            "include": "product-type,collection,last-capture-date",
-        }
-        coll_resp = self._send("GET", "oriented/collections", params=params)
-        if coll_resp is None or coll_resp.status_code == 404:
-            logger.info("No Vexcel oblique coverage at given geometry")
+        if collections_data is None:
+            params = {
+                "wkt": wkt_str,
+                "srid": 4326,
+                "layer": "urban",
+                "product-type": "oblique",
+                "include": "product-type,collection,last-capture-date",
+            }
+            coll_resp = self._send("GET", "oriented/collections", params=params)
+            if coll_resp is None:
+                return {}
+            if coll_resp.status_code == 404:
+                collections_data = {"type": "FeatureCollection", "features": []}
+            elif not coll_resp.is_success:
+                logger.error("Vexcel oriented/collections returned status %d", coll_resp.status_code)
+                return {}
+            else:
+                try:
+                    collections_data = coll_resp.json()
+                except Exception as exc:
+                    logger.error("Failed to parse oriented/collections response: %s", exc.__class__.__name__)
+                    return {}
             try:
-                collections_cache.write_text(json.dumps({"type": "FeatureCollection", "features": []}))
-            except Exception:
-                pass
-            return {}
-
-        if not coll_resp.is_success:
-            logger.error("Vexcel oriented/collections returned status %d", coll_resp.status_code)
-            return {}
-
-        try:
-            collections_data = coll_resp.json()
-            collections_cache.write_text(json.dumps(collections_data, indent=2))
-        except Exception as exc:
-            logger.error("Failed to parse oriented/collections response: %s", exc)
-            return {}
+                collections_cache.write_text(json.dumps(collections_data, indent=2))
+            except OSError as exc:
+                logger.warning("Failed writing oblique metadata: %s", exc.__class__.__name__)
 
         features = collections_data.get("features", [])
         if not features:
@@ -298,6 +290,14 @@ class VexcelClient:
 
         results: dict[str, bytes] = {}
         for direction in directions:
+            image_path = obliques_dir / f"{direction}.jpg"
+            try:
+                cached = image_path.read_bytes() if image_path.is_file() else None
+                if cached:
+                    results[direction] = cached
+                    continue
+            except OSError as exc:
+                logger.warning("Failed reading cached oblique image: %s", exc.__class__.__name__)
             body = {
                 "wkt": wkt_str,
                 "srid": 4326,
