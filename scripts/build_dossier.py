@@ -4,6 +4,7 @@ import argparse
 from datetime import datetime
 import json
 import os
+import re
 from pathlib import Path
 import sqlite3
 import sys
@@ -69,6 +70,34 @@ def build_dossier(db: sqlite3.Connection, pid: str, enums: dict) -> dict | None:
     fact('current_tenants', current, 'location-occupancy.toDate', 'records')
     fact('tenant_industries', industries, 'company-detail.profile.industryType')
     fact('tenant_exit_reasons', reasons, 'location-occupancy.expirationReason')
+    # Derived, contact-free facts; existing CoStar facts remain byte-for-byte equivalent.
+    def derived(key, value, field, unit=None):
+        ref = fact(key, value, field, unit)
+        facts[-1]['source'] = 'derived'
+        return ref
+    dark = [floor for floor in floors if floor['source_status'] == 'dark']
+    derived('dark_floor_count', len(dark), 'floors.source_status', 'floors')
+    derived('dark_sqft', None if any(f['available_sqft'] is None for f in dark)
+            else sum(f['available_sqft'] for f in dark), 'floors.dark.available_sqft', 'sqft')
+    derived('former_tenancy_records', None if records is None or current is None else records - current,
+            'tenant_history.records-current', 'records')
+    # The previous top_industries spans all tenancies, so it cannot describe former tenants.
+    tables = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    former = None
+    if {'tenancies', 'companies'} <= tables:
+        former = [dict(industry=r[0], records=r[1],
+                       label=re.sub(r'(?<=[a-z])(?=[A-Z])', ' ', r[0]).lower())
+                  for r in db.execute("""SELECT c.industry,count(*) FROM tenancies t
+                    JOIN companies c ON c.id=t.tenant_id
+                    WHERE t.property_id=? AND t.current=0 AND c.industry != 'Unknown'
+                    GROUP BY c.industry ORDER BY count(*) DESC,c.industry LIMIT 3""", (pid,))]
+    history['top_former_industries'] = former
+    for rank in range(3):
+        entry = former[rank] if former and len(former) > rank else None
+        derived(f'top_former_industry_{rank + 1}', entry['label'] if entry else None,
+                'tenant_history.top_former_industries')
+        derived(f'top_former_industry_{rank + 1}_records', entry['records'] if entry else None,
+                'tenant_history.top_former_industries.records', 'records')
     # Include unmatched-floor space in building totals, never in an arbitrary floor.
     for table, key, field in [('available', 'available_sqft', 'commercial-listing-summary.forLeaseSummary.spaces.squareFeetMax|squareFeetMin'),
                               ('occupied', 'occupied_sqft', 'location-occupancy.spaces.squareFeetOccupied')]:
@@ -92,19 +121,19 @@ def build_dossier(db: sqlite3.Connection, pid: str, enums: dict) -> dict | None:
         ortho_path = f"/media/{pid}/{images['ortho']}" if images.get('ortho') else None
         oblique_paths = [f"/media/{pid}/{img}" for img in images.get('obliques', [])]
         aerial = dict(ortho=ortho_path, obliques=oblique_paths)
-        ortho_date = vdata.get('capture_dates', {}).get('ortho') or ''
-        try:
-            year = datetime.fromisoformat(ortho_date).year
-        except (ValueError, TypeError):
-            year = None
         for det in vdata.get('detections', []):
-            label = det['label']
-            count = det['count']
-            if type(count) is not int or count <= 0 or year is None:
+            label, count = det['label'], det['count']
+            if type(count) is not int or count <= 0:
                 continue
+            # Dates belong to the detection's own capture, never property/extract's ortho.
+            try:
+                detected_on = datetime.fromisoformat(det.get('capture_date') or '').date().isoformat()
+            except (TypeError, ValueError):
+                detected_on = None
+            when = f'on the {detected_on} flyover' if detected_on else 'in imagery with an unknown capture date'
             slug = label.replace(' ', '_')
             noun = label if count == 1 else label + ('es' if label.endswith(('s', 'x', 'ch', 'sh')) else 's')
-            say_as = f"on the {year} flyover, {count} {noun} detected within about 30 m of the parcel"
+            say_as = f"{when}, {count} {noun} detected within about 30 m of the parcel"
             facts.append(dict(
                 id=f'F_{pid}_vexcel_detection_{slug}',
                 key=f'vexcel_detection_{slug}',

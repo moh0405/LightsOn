@@ -112,7 +112,7 @@ def test_fact_building_estimate_kind_and_capture_date():
     assert car_fact["kind"] == "estimate"
     assert car_fact["source"] == "vexcel+vision"
     assert car_fact["source_field"] == "vexcel.elements/detect"
-    assert "on the 2023 flyover" in car_fact["say_as"]
+    assert "unknown capture date" in car_fact["say_as"]
     assert car_fact["value"] == 31
 
 

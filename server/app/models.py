@@ -21,6 +21,13 @@ class Fact(BaseModel):
     say_as: str
 
 
+class HardLimit(BaseModel):
+    fact_ref: str
+    constraint: Literal['floor_plate', 'dark_area', 'height', 'parking']
+    rejects_categories: list[Category]
+    text: str
+
+
 class Persona(BaseModel):
     building_id: str
     name: str
@@ -29,7 +36,10 @@ class Persona(BaseModel):
     mood_baseline: Literal["lonely", "proud", "bitter", "anxious", "hopeful"]
     desire_key: str
     desire_text: str
-    hard_limits: list[str]
+    desire_reason_fact_ids: list[str]
+    desire_reason: str
+    hard_limits: list[HardLimit]
+    hard_limits_empty_reason: str | None
     backstory: list[dict]  # {text, fact_ref | None, fiction: bool}
     catchphrase: str
     intro_line: str

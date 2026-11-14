@@ -6,6 +6,7 @@ Saves:
 - Fixture metadata to server/fixtures/vexcel/<id>.json (committed, small, no API keys or raw bytes)
 """
 import argparse
+from datetime import datetime
 import json
 import logging
 import os
@@ -41,6 +42,27 @@ def get_coordinates(pid: str) -> tuple[float, float]:
     if pid == "233899":
         return 29.7584604, -95.3682126
     raise ValueError(f"Unknown property ID {pid} and no dossier found at {dossier_path}")
+
+
+def capture_date(value) -> str | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        return datetime.fromisoformat(value.replace('Z', '+00:00')).date().isoformat()
+    except ValueError:
+        return None
+
+
+def detection_capture(detection: dict, images: list[dict]) -> str | None:
+    """Only this detection's metadata or an identically keyed response image is evidence."""
+    own = capture_date(detection.get('capture-date') or detection.get('captureDate') or detection.get('capture_date'))
+    image_id = detection.get('imageId')
+    matching = [image for image in images if image_id is not None and image.get('image-id') == image_id]
+    dates = {capture_date(image.get('capture-date') or image.get('captureDate') or image.get('capture_date'))
+             for image in matching}
+    if own is not None:
+        return own if not dates or dates == {own} else None
+    return next(iter(dates)) if len(dates) == 1 and None not in dates else None
 
 
 def fetch_building(pid: str, labels: list[str], client: VexcelClient, media_root: Path, fixtures_root: Path) -> dict:
@@ -106,13 +128,18 @@ def fetch_building(pid: str, labels: list[str], client: VexcelClient, media_root
 
     # 4. Elements detect
     detect_resp = client.detect(parcel_wkt, labels=labels, property_id=pid)
-    detections_summary: dict[str, dict] = {label: {"count": None, "confidences": []} for label in labels}
+    detections_summary: dict[str, dict] = {label: {"count": None, "confidences": [], "capture_dates": [], "image_ids": []} for label in labels}
+    response_images = detect_resp.get("images", [])
     for feat in detect_resp.get("features", []):
         lbl = feat.get("properties", {}).get("label")
         dets = feat.get("properties", {}).get("detections")
         if lbl in detections_summary and isinstance(dets, list):
             detections_summary[lbl]["count"] = (detections_summary[lbl]["count"] or 0) + len(dets)
             detections_summary[lbl]["confidences"].extend([round(d["confidence"], 3) for d in dets if "confidence" in d])
+            for detection in dets:
+                detections_summary[lbl]['capture_dates'].append(detection_capture(detection, response_images))
+                if detection.get('imageId'):
+                    detections_summary[lbl]['image_ids'].append(detection['imageId'])
 
     # 5. Build compact fixture dictionary
     fixture = {
@@ -129,6 +156,9 @@ def fetch_building(pid: str, labels: list[str], client: VexcelClient, media_root
         "detections": [
             {
                 "label": label,
+                "capture_date": next(iter(set(detections_summary[label]['capture_dates'])))
+                    if len(set(detections_summary[label]['capture_dates'])) == 1 else None,
+                "image_ids": sorted(set(detections_summary[label]['image_ids'])),
                 "count": detections_summary[label]["count"],
                 "confidences": sorted(detections_summary[label]["confidences"], reverse=True),
             }

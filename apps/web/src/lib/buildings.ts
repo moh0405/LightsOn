@@ -3,10 +3,17 @@ export interface Building {
   id: string; name: string | null; lat: number | null; lng: number | null;
   stories: number | null; is_hero: boolean; dark_floors: number | null; dark_sqft: number | null;
 }
+export interface DossierFact {
+  id?: string; key: string; value: unknown; say_as: string | null;
+  source?: string; kind?: "verified" | "estimate";
+}
+export function factDescription(fact: DossierFact): string {
+  return `${fact.kind === "estimate" ? "Estimate · " : ""}${fact.say_as ?? "Source text unavailable"}`;
+}
 export interface Dossier {
   id: string; name: string | null; stories: number | null;
   floors: { number: number; available_sqft: number | null; source_status: Status }[] | null;
-  facts: { id?: string; key: string; value: unknown; say_as: string | null }[] | null;
+  facts: DossierFact[] | null;
 }
 /** Local data requests time out; callers own their visible fallback. */
 export async function getData<T>(url: string): Promise<T> {

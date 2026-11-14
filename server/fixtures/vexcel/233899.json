@@ -156,7 +156,9 @@
     {
       "label": "parking lot",
       "count": null,
-      "confidences": []
+      "confidences": [],
+      "capture_date": null,
+      "image_ids": []
     },
     {
       "label": "car",
@@ -170,17 +172,23 @@
         0.809,
         0.758,
         0.72
-      ]
+      ],
+      "capture_date": null,
+      "image_ids": []
     },
     {
       "label": "rooftop terrace",
       "count": null,
-      "confidences": []
+      "confidences": [],
+      "capture_date": null,
+      "image_ids": []
     },
     {
       "label": "solar panel",
       "count": null,
-      "confidences": []
+      "confidences": [],
+      "capture_date": null,
+      "image_ids": []
     },
     {
       "label": "tree",
@@ -188,7 +196,9 @@
       "confidences": [
         0.547,
         0.512
-      ]
+      ],
+      "capture_date": null,
+      "image_ids": []
     }
   ]
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { cachedDossier, getDossier, type Dossier } from "../../lib/buildings";
+import { factDescription, cachedDossier, getDossier, type Dossier } from "../../lib/buildings";
 
 export function HoverCard({ id, color, onError }: { id: string; color: string; onError: () => void }) {
   const [data, setData] = useState<Dossier | null>(() => cachedDossier(id));
@@ -18,6 +18,7 @@ export function HoverCard({ id, color, onError }: { id: string; color: string; o
     {data?.stories != null && <div>{data.stories} stories</div>}
     {floors && <div>{floors.filter((f) => f.source_status === "dark").length} dark floors</div>}
     {(spoken || available !== null) && <div>{spoken ?? `${available?.toLocaleString()} sq ft available`}</div>}
+    {data?.facts?.filter((fact) => fact.source === "vexcel+vision").map((fact) => <div key={fact.id}>{factDescription(fact)}</div>)}
     {!data && <div>Loading facts…</div>}
   </article>;
 }

@@ -14,6 +14,13 @@ export interface Fact {
   say_as: string;
 }
 
+export interface HardLimit {
+  fact_ref: string;
+  constraint: "floor_plate" | "dark_area" | "height" | "parking";
+  rejects_categories: ("housing" | "food_retail" | "entertainment" | "community" | "culture" | "health" | "work" | "wildcard")[];
+  text: string;
+}
+
 export interface Persona {
   building_id: string;
   name: string;
@@ -22,7 +29,10 @@ export interface Persona {
   mood_baseline: "lonely" | "proud" | "bitter" | "anxious" | "hopeful";
   desire_key: string;
   desire_text: string;
-  hard_limits: string[];
+  desire_reason_fact_ids: string[];
+  desire_reason: string;
+  hard_limits: HardLimit[];
+  hard_limits_empty_reason: string | null;
   backstory: Record<string, unknown>[];
   catchphrase: string;
   intro_line: string;

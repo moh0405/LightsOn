@@ -2631,6 +2631,96 @@
       "say_as": "[{'reason': 'MovingOutNewAddressUnknown', 'records': 173}, {'reason': 'ClosedLocationOrBankrupt', 'records': 34}, {'reason': 'Renewal', 'records': 28}, {'reason': 'MoveIntoAnotherProperty', 'records': 23}, {'reason': 'OccupancySplit', 'records': 17}, {'reason': 'Unknown', 'records': 16}, {'reason': 'MovingIntoSameBuilding', 'records': 8}, {'reason': 'NoLongerInCustomerMarket', 'records': 3}, {'reason': 'MovingIntoHomeOffice', 'records': 1}, {'reason': 'ShedSpace', 'records': 1}]"
     },
     {
+      "id": "F_233918_dark_floor_count",
+      "key": "dark_floor_count",
+      "value": 17,
+      "unit": "floors",
+      "source": "derived",
+      "source_field": "floors.source_status",
+      "kind": "verified",
+      "say_as": "17 floors"
+    },
+    {
+      "id": "F_233918_dark_sqft",
+      "key": "dark_sqft",
+      "value": 423761.0,
+      "unit": "sqft",
+      "source": "derived",
+      "source_field": "floors.dark.available_sqft",
+      "kind": "verified",
+      "say_as": "423,761.0 sqft"
+    },
+    {
+      "id": "F_233918_former_tenancy_records",
+      "key": "former_tenancy_records",
+      "value": 304,
+      "unit": "records",
+      "source": "derived",
+      "source_field": "tenant_history.records-current",
+      "kind": "verified",
+      "say_as": "304 records"
+    },
+    {
+      "id": "F_233918_top_former_industry_1",
+      "key": "top_former_industry_1",
+      "value": "professional scientific and technical services",
+      "unit": null,
+      "source": "derived",
+      "source_field": "tenant_history.top_former_industries",
+      "kind": "verified",
+      "say_as": "professional scientific and technical services"
+    },
+    {
+      "id": "F_233918_top_former_industry_1_records",
+      "key": "top_former_industry_1_records",
+      "value": 70,
+      "unit": "records",
+      "source": "derived",
+      "source_field": "tenant_history.top_former_industries.records",
+      "kind": "verified",
+      "say_as": "70 records"
+    },
+    {
+      "id": "F_233918_top_former_industry_2",
+      "key": "top_former_industry_2",
+      "value": "agricultural or mining or utilities",
+      "unit": null,
+      "source": "derived",
+      "source_field": "tenant_history.top_former_industries",
+      "kind": "verified",
+      "say_as": "agricultural or mining or utilities"
+    },
+    {
+      "id": "F_233918_top_former_industry_2_records",
+      "key": "top_former_industry_2_records",
+      "value": 35,
+      "unit": "records",
+      "source": "derived",
+      "source_field": "tenant_history.top_former_industries.records",
+      "kind": "verified",
+      "say_as": "35 records"
+    },
+    {
+      "id": "F_233918_top_former_industry_3",
+      "key": "top_former_industry_3",
+      "value": "financial institutions",
+      "unit": null,
+      "source": "derived",
+      "source_field": "tenant_history.top_former_industries",
+      "kind": "verified",
+      "say_as": "financial institutions"
+    },
+    {
+      "id": "F_233918_top_former_industry_3_records",
+      "key": "top_former_industry_3_records",
+      "value": 25,
+      "unit": "records",
+      "source": "derived",
+      "source_field": "tenant_history.top_former_industries.records",
+      "kind": "verified",
+      "say_as": "25 records"
+    },
+    {
       "id": "F_233918_available_sqft",
       "key": "available_sqft",
       "value": 559729.0,
@@ -2782,6 +2872,23 @@
       {
         "reason": "ShedSpace",
         "records": 1
+      }
+    ],
+    "top_former_industries": [
+      {
+        "industry": "ProfessionalScientificAndTechnicalServices",
+        "records": 70,
+        "label": "professional scientific and technical services"
+      },
+      {
+        "industry": "AgriculturalOrMiningOrUtilities",
+        "records": 35,
+        "label": "agricultural or mining or utilities"
+      },
+      {
+        "industry": "FinancialInstitutions",
+        "records": 25,
+        "label": "financial institutions"
       }
     ]
   },

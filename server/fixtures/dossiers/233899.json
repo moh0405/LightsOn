@@ -3650,6 +3650,96 @@
       "say_as": "[{'reason': 'MovingOutNewAddressUnknown', 'records': 157}, {'reason': 'ClosedLocationOrBankrupt', 'records': 30}, {'reason': 'MoveIntoAnotherProperty', 'records': 24}, {'reason': 'MovingIntoSameBuilding', 'records': 20}, {'reason': 'OccupancySplit', 'records': 20}, {'reason': 'Unknown', 'records': 20}, {'reason': 'Renewal', 'records': 15}, {'reason': 'NoLongerInCustomerMarket', 'records': 6}, {'reason': 'UnableToConfirm', 'records': 4}, {'reason': 'MovingIntoExecutiveSuite', 'records': 1}]"
     },
     {
+      "id": "F_233899_dark_floor_count",
+      "key": "dark_floor_count",
+      "value": 17,
+      "unit": "floors",
+      "source": "derived",
+      "source_field": "floors.source_status",
+      "kind": "verified",
+      "say_as": "17 floors"
+    },
+    {
+      "id": "F_233899_dark_sqft",
+      "key": "dark_sqft",
+      "value": 415496.0,
+      "unit": "sqft",
+      "source": "derived",
+      "source_field": "floors.dark.available_sqft",
+      "kind": "verified",
+      "say_as": "415,496.0 sqft"
+    },
+    {
+      "id": "F_233899_former_tenancy_records",
+      "key": "former_tenancy_records",
+      "value": 297,
+      "unit": "records",
+      "source": "derived",
+      "source_field": "tenant_history.records-current",
+      "kind": "verified",
+      "say_as": "297 records"
+    },
+    {
+      "id": "F_233899_top_former_industry_1",
+      "key": "top_former_industry_1",
+      "value": "professional scientific and technical services",
+      "unit": null,
+      "source": "derived",
+      "source_field": "tenant_history.top_former_industries",
+      "kind": "verified",
+      "say_as": "professional scientific and technical services"
+    },
+    {
+      "id": "F_233899_top_former_industry_1_records",
+      "key": "top_former_industry_1_records",
+      "value": 45,
+      "unit": "records",
+      "source": "derived",
+      "source_field": "tenant_history.top_former_industries.records",
+      "kind": "verified",
+      "say_as": "45 records"
+    },
+    {
+      "id": "F_233899_top_former_industry_2",
+      "key": "top_former_industry_2",
+      "value": "financial institutions",
+      "unit": null,
+      "source": "derived",
+      "source_field": "tenant_history.top_former_industries",
+      "kind": "verified",
+      "say_as": "financial institutions"
+    },
+    {
+      "id": "F_233899_top_former_industry_2_records",
+      "key": "top_former_industry_2_records",
+      "value": 33,
+      "unit": "records",
+      "source": "derived",
+      "source_field": "tenant_history.top_former_industries.records",
+      "kind": "verified",
+      "say_as": "33 records"
+    },
+    {
+      "id": "F_233899_top_former_industry_3",
+      "key": "top_former_industry_3",
+      "value": "mining quarrying and oil and gas extraction",
+      "unit": null,
+      "source": "derived",
+      "source_field": "tenant_history.top_former_industries",
+      "kind": "verified",
+      "say_as": "mining quarrying and oil and gas extraction"
+    },
+    {
+      "id": "F_233899_top_former_industry_3_records",
+      "key": "top_former_industry_3_records",
+      "value": 30,
+      "unit": "records",
+      "source": "derived",
+      "source_field": "tenant_history.top_former_industries.records",
+      "kind": "verified",
+      "say_as": "30 records"
+    },
+    {
       "id": "F_233899_available_sqft",
       "key": "available_sqft",
       "value": 591419.0,
@@ -3705,7 +3795,7 @@
       "source": "vexcel+vision",
       "source_field": "vexcel.elements/detect",
       "kind": "estimate",
-      "say_as": "on the 2022 flyover, 8 cars detected within about 30 m of the parcel"
+      "say_as": "in imagery with an unknown capture date, 8 cars detected within about 30 m of the parcel"
     },
     {
       "id": "F_233899_vexcel_detection_tree",
@@ -3715,7 +3805,7 @@
       "source": "vexcel+vision",
       "source_field": "vexcel.elements/detect",
       "kind": "estimate",
-      "say_as": "on the 2022 flyover, 2 trees detected within about 30 m of the parcel"
+      "say_as": "in imagery with an unknown capture date, 2 trees detected within about 30 m of the parcel"
     }
   ],
   "tenant_history": {
@@ -3827,6 +3917,23 @@
       {
         "reason": "MovingIntoExecutiveSuite",
         "records": 1
+      }
+    ],
+    "top_former_industries": [
+      {
+        "industry": "ProfessionalScientificAndTechnicalServices",
+        "records": 45,
+        "label": "professional scientific and technical services"
+      },
+      {
+        "industry": "FinancialInstitutions",
+        "records": 33,
+        "label": "financial institutions"
+      },
+      {
+        "industry": "MiningQuarryingAndOilAndGasExtraction",
+        "records": 30,
+        "label": "mining quarrying and oil and gas extraction"
       }
     ]
   },
