@@ -1,4 +1,4 @@
-import type { Phase } from "./types";
+import type { Category, Phase, Verdict } from "./types";
 
 export interface PlayerView {
   id: string;
@@ -6,6 +6,17 @@ export interface PlayerView {
   color: string;
   connected: boolean;
 }
+
+export type Need = "housing" | "food_retail" | "entertainment" | "community";
+export type Needs = Record<Need, number>;
+export interface CityState {
+  buildings_revived: number; sqft_reimagined: number; needs: Needs;
+  most_needed: Need; song_layers: number;
+}
+export interface Intro { text: string; audio_url: string | null; mood: string; analyst_line: string | null }
+export interface PitchView { player_id: string; text: string; origin: "web" | "voice" | "imessage" }
+export interface Counteroffer { player_id: string; line: string; fact_ids: string[]; counteroffer: string; audio_url: string | null }
+export interface Revival { building_id: string; floors: number[]; color: string; category: Category; sqft: number; auto_completed: boolean }
 
 export interface RoomStateMsg {
   type: "room_state";
@@ -19,10 +30,19 @@ export interface RoomStateMsg {
   data_mode_scope: "process";
   hero_building_ids: string[];
   players: PlayerView[];
+  city?: CityState;
+  revived?: Record<string, { floors: number[]; color: string }>;
 }
 
 export type ServerMessage =
   | RoomStateMsg
+  | ({ type: "building_intro" } & Intro)
+  | ({ type: "pitch_received" } & PitchView)
+  | ({ type: "counteroffer" } & Counteroffer)
+  | ({ type: "verdict" } & Verdict)
+  | { type: "energy_updated"; charge: number; by_player_id: string | null }
+  | ({ type: "building_revived" } & Revival)
+  | { type: "neighborhood_updated"; needs: Needs; most_needed: Need }
   | { type: "player_joined"; player: PlayerView }
   | { type: "player_left"; player: PlayerView }
   | { type: "pointer"; player_id: string; color: string; x: number; y: number }
