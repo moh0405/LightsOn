@@ -16,6 +16,11 @@ Coding goes to cheaper agents through Orca workers or PRs. Every agent follows A
 CLIs on this machine (checked 2026-11-13): `codex`, `agy` (Antigravity 1.5.8, logged in), `grok` 1.0.77
 (logged in), `gemini` 0.68.0 (installed, needs Gemini auth before use).
 
+Antigravity models (checked 2026-11-14, all answer): `claude-opus-4-6-thinking`, `claude-sonnet-4-6`,
+`gpt-oss-120b-medium`, `gemini-3.8-flash-{high,medium,low}`. Antigravity with `claude-opus-4-6-thinking` is the strong
+reviewer when Codex is rate-limited (`--agent antigravity --model claude-opus-4-6-thinking`). GPT-OSS 120B and Gemini Flash
+are not used for final reviews.
+
 Headless one-shots: `grok -p "<prompt>"`, `gemini -p "<prompt>"`, `agy --print "<prompt>"`.
 
 ## Branches and PRs
