@@ -17,10 +17,23 @@ export async function getData<T>(url: string): Promise<T> {
   return data as T;
 }
 const dossiers = new Map<string, Promise<Dossier>>();
+const cachedDossiers = new Map<string, Dossier>();
+export function cachedDossier(id: string): Dossier | null {
+  return cachedDossiers.get(id) ?? null;
+}
+export async function prefetchDossiers(buildings: Building[]): Promise<void> {
+  await Promise.all(buildings.map((b) => getDossier(b.id)));
+}
 export function getDossier(id: string): Promise<Dossier> {
   let pending = dossiers.get(id);
   if (!pending) {
-    pending = getData<Dossier>(`/api/buildings/${encodeURIComponent(id)}`);
+    pending = getData<Dossier>(`/api/buildings/${encodeURIComponent(id)}`).then((dossier) => {
+      cachedDossiers.set(id, dossier);
+      return dossier;
+    }).catch((error: unknown) => {
+      dossiers.delete(id); // A failed prefetch can be retried on hover.
+      throw error;
+    });
     dossiers.set(id, pending);
   }
   return pending;

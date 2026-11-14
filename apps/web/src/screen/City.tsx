@@ -5,7 +5,7 @@ import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
 setWorkerUrl(workerUrl);
 import type { FeatureCollection } from "geojson";
 import { floorColorExpression } from "../lib/floor-colors";
-import { getData, type Building } from "../lib/buildings";
+import { getData, prefetchDossiers, type Building } from "../lib/buildings";
 import { useGame } from "../lib/store";
 import { HoverCard } from "./overlays/HoverCard";
 
@@ -21,6 +21,7 @@ export function City() {
   const current = useRef({ pointers, phase });
   current.current = { pointers, phase };
   const [ready, setReady] = useState(false);
+  const [factsReady, setFactsReady] = useState(false);
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [hovers, setHovers] = useState<Hover[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +29,12 @@ export function City() {
 
   useEffect(() => {
     let active = true;
-    void getData<Building[]>("/api/buildings").then((b) => { if (active) setBuildings(b); }).catch(() => { if (active) factError(); });
+    void getData<Building[]>("/api/buildings").then(async (b) => {
+      if (!active) return;
+      setBuildings(b);
+      await prefetchDossiers(b);
+      if (active) setFactsReady(true);
+    }).catch(() => { if (active) factError(); });
     let map: CityMap;
     try {
       map = new CityMap({ container: container.current!, center: CENTER, zoom: 15.5, pitch: 60,
@@ -115,7 +121,7 @@ export function City() {
 
   return <>
     {error && <div role="alert" style={{ padding: 10, background: "#5a3b00" }}>{error}</div>}
-    <div data-testid="field" style={{ position: "relative", height: "65vh", minHeight: 360, borderRadius: 12, overflow: "hidden", background: "#10131c" }}>
+    <div data-testid="field" data-facts-ready={ready && factsReady} style={{ position: "relative", height: "65vh", minHeight: 360, borderRadius: 12, overflow: "hidden", background: "#10131c" }}>
       <div ref={container} style={{ position: "absolute", inset: 0 }} />
       {Object.entries(pointers).map(([id, p]) => <div key={id} data-testid="dot" style={{ pointerEvents: "none", position: "absolute", left: `${p.x * 100}%`, top: `${p.y * 100}%`, width: 22, height: 22, marginLeft: -11, marginTop: -11, borderRadius: "50%", background: p.color, boxShadow: `0 0 16px 6px ${p.color}`, transition: "left 60ms linear, top 60ms linear" }}>
         <span style={{ position: "absolute", top: 26, fontSize: 12 }}>{players[id]?.nickname}</span>
