@@ -16,9 +16,9 @@ export function Bubbles() {
   return <section aria-label="Player pitches" style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>{Object.values(pitches).map((p) => <blockquote style={{ ...card, borderColor: players[p.player_id]?.color, margin: 0, flex: "1 1 280px" }} key={p.player_id}><strong>{players[p.player_id]?.nickname ?? "Player"}</strong><p>{p.text}</p></blockquote>)}</section>;
 }
 export function ChallengeCards() {
-  const { counteroffers, players, phase } = useGame();
+  const { counteroffers, players, phase, mood } = useGame();
   if (!["CHALLENGE", "NEGOTIATE"].includes(phase)) return null;
-  return <section aria-label="Building counteroffers" style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>{Object.values(counteroffers).map((c) => <article style={{ ...card, flex: "1 1 280px" }} key={c.player_id}><h3>To {players[c.player_id]?.nickname ?? "Player"}</h3><p>{c.line}</p><strong>{c.counteroffer}</strong><Evidence ids={c.fact_ids} /></article>)}</section>;
+  return <section aria-label="Building counteroffers" style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>{Object.values(counteroffers).map((c) => <article style={{ ...card, flex: "1 1 280px" }} key={c.player_id}><h3>To {players[c.player_id]?.nickname ?? "Player"}</h3><p aria-live="polite">{c.line}</p><small>Mood: {mood}</small><strong>{c.counteroffer}</strong><Evidence ids={c.fact_ids} /></article>)}</section>;
 }
 export function Evidence({ ids }: { ids: string[] }) {
   const { buildingId, dataMode } = useGame();
@@ -41,6 +41,7 @@ export function ScoreCard() {
     <div style={{ overflowX: "auto" }}><table style={{ width: "100%", textAlign: "left", borderSpacing: "12px" }}><thead><tr>{["Player", "Data fit", "Neighborhood fit", "Creativity", "Charm", "Needs bonus", "Total"].map((label) => <th key={label}>{label}</th>)}</tr></thead>
       <tbody>{verdict.scores.map((s) => <tr key={s.player_id}><th>{players[s.player_id]?.nickname ?? "Player"}</th><td>{s.data_fit}/10</td><td>{s.neighborhood_fit}/10</td><td>{s.creativity}/10</td><td>{s.charm}/10</td><td>+{s.needs_bonus ?? 0} (included)</td><td>{s.total ?? "—"}/40</td></tr>)}</tbody></table></div>
     <Evidence ids={verdict.fact_ids} />
+    <footer>Game character. Not a feasibility assessment.</footer>
     {verdict.category === "housing" && impact?.kind === "housing_estimate" && <p>{typeof impact.units === "number" ? impact.units : "—"} homes · {typeof impact.residents === "number" ? impact.residents : "—"} residents — rough game estimate, not a feasibility claim</p>}
   </section>;
 }

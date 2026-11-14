@@ -16,7 +16,7 @@ from typing import Awaitable, Callable
 
 from .models import Phase, Pitch, Challenge, Verdict
 from .actions import ActionError, select_target_floors, target_sqft, validate_verdict, validate_revival
-from .agent import fake_agent
+from .agent import fake_agent, live_agent
 from .city import City, analyst_line, most_needed
 from .data.provider import provider_for_mode
 
@@ -91,6 +91,8 @@ class Room:
     verdict: Verdict | None = None
     dossier: dict | None = None
     intro: dict | None = None
+    mood: str = "hopeful"
+    _agent_task: asyncio.Task | None = field(default=None, repr=False)
     charge: int = 0
     auto_completed: bool = False
     city: City = field(default_factory=City)
@@ -121,6 +123,7 @@ class Room:
             "target_floors": self.target_floors,
             "ends_at": self.ends_at.isoformat() if self.ends_at else None,
             "data_mode": self.data_mode,
+            "mood": self.mood,
             "data_mode_scope": "process",
             "hero_building_ids": self.wakeable_ids(),
             "pitches": [p.model_dump(mode='json') for p in self.pitches.values()],
@@ -186,6 +189,7 @@ class Room:
             self.round_id = f'{self.code}-{self._round_seq}'
             self.building_id = building_id
             self.dossier = dossier
+            self.mood = live_agent.persona_for(dossier)['mood_baseline']
             self.target_floors = targets
             self._clear_round_inputs()
             await self._set_phase('INTRO', announce_round=True)
@@ -208,6 +212,8 @@ class Room:
 
     async def _set_phase(self, phase: Phase, announce_round: bool = False) -> None:
         self._cancel_timer()
+        self._cancel_agent()
+        pending_live = live_agent.enabled() and phase in ('CHALLENGE', 'VERDICT')
         if phase in ('CHALLENGE', 'VERDICT') and not self.pitches:
             await self.broadcast('error', {'code': 'no_pitches', 'message': 'No pitches this round. Choose a building to try again.'})
             phase = 'EXPLORE'
@@ -218,9 +224,9 @@ class Room:
             self.target_floors = []
             self.dossier = None
             self._clear_round_inputs()
-        if phase == 'CHALLENGE':
+        if phase == 'CHALLENGE' and not pending_live:
             self.challenges = [fake_agent.challenge(p, self.dossier) for p in self.pitches.values()]
-        if phase == 'VERDICT':
+        if phase == 'VERDICT' and not pending_live:
             original = list(self.pitches.values())
             batches = [(fake_agent.verdict(original, self.dossier, self.city), original)]
             if self.revisions:
@@ -234,10 +240,12 @@ class Room:
                 await self.broadcast('error', {'code': 'invalid_verdict', 'message': 'The judge could not validate a verdict. Try another round.'})
                 await self._set_phase('EXPLORE')
                 return
+        if phase == 'VERDICT' and self.verdict and not pending_live:
+            self._score_mood()
         if phase == "INTRO" and self.dossier:
             self.intro = {**fake_agent.intro(self.dossier), "analyst_line": analyst_line(self.city.needs)}
         seconds = self.durations.get(phase)
-        self.ends_at = utcnow() + timedelta(seconds=seconds) if seconds is not None else None
+        self.ends_at = utcnow() + timedelta(seconds=seconds) if seconds is not None and not pending_live else None
         self._save()
         if announce_round:
             await self.broadcast('round_started', {
@@ -249,13 +257,95 @@ class Room:
         })
         if phase == 'INTRO' and self.dossier:
             await self.broadcast('building_intro', self.intro, to='screen')
-        elif phase == 'CHALLENGE':
+        elif phase == 'CHALLENGE' and not pending_live:
             for challenge in self.challenges:
                 payload = challenge.model_dump(exclude={'category_guess'})
-                await self.broadcast('counteroffer', {**payload, 'audio_url': None})
-        elif phase == 'VERDICT':
+                await self.broadcast('counteroffer', {**payload, 'audio_url': None, 'mood': self.mood})
+        elif phase == 'VERDICT' and not pending_live:
             await self.broadcast('verdict', self.verdict.model_dump())
-        self._arm_timer(seconds)
+        if pending_live and phase in ('CHALLENGE', 'VERDICT'):
+            if phase == 'CHALLENGE':
+                for p in self.pitches.values():
+                    if live_agent.safety_reason(p.text) == 'injection':
+                        self.mood = 'offended'
+                    await self.broadcast('counteroffer', dict(player_id=p.player_id,
+                        line=live_agent.persona_for(self.dossier)['catchphrase'] or live_agent.THINKING,
+                        fact_ids=[], counteroffer='', audio_url=None, mood=self.mood), to='screen')
+            token = (self.round_id, self._round_seq, phase)
+            self._agent_task = asyncio.create_task(self._finish_live(token))
+        else:
+            self._arm_timer(seconds)
+
+    def _score_mood(self) -> None:
+        if not self.verdict:
+            return
+        scores = {s.player_id: s for s in self.verdict.scores}
+        for p in self.pitches.values():
+            injection = any(live_agent.safety_reason(candidate.text) == 'injection'
+                            for candidate in (p, self.revisions.get(p.player_id)) if candidate)
+            self.mood = live_agent.mood_after(self.mood, scores[p.player_id].data_fit, injection=injection)
+        if self.intro:
+            self.intro['mood'] = self.mood
+
+    def _cancel_agent(self) -> None:
+        if self._agent_task and not self._agent_task.done() and self._agent_task is not asyncio.current_task():
+            self._agent_task.cancel()
+        self._agent_task = None
+
+    async def _finish_live(self, token: tuple) -> None:
+        round_id, sequence, phase = token
+        async def trace(event):
+            if (self.round_id, self._round_seq, self.phase) == token:
+                await self.broadcast('agent_step', event, to='screen')
+                if event['step'] == 'fallback':
+                    await self.broadcast('error', {'code': 'agent_fallback',
+                        'message': 'The building is using its offline judge for this step.'})
+        agent = live_agent.LiveAgent(emit=trace)
+        originals, revised = list(self.pitches.values()), list(self.revisions.values())
+        memory = f'{self.city.buildings_revived} buildings revived in this game; {self.city.sqft_reimagined} square feet reimagined.'
+        try:
+            if phase == 'CHALLENGE':
+                result = await agent.challenge(originals, self.dossier, self.city, self.mood, memory)
+            else:
+                result = await agent.verdict_batches(originals, revised, self.dossier, self.city,
+                                                      self.challenges, self.mood, memory)
+            async with self._lock:
+                if (self.round_id, self._round_seq, self.phase) != token:
+                    return
+                if phase == 'CHALLENGE':
+                    self.challenges = result
+                    # Only grounded complete lines reach clients. Existing counteroffer messages
+                    # replace cumulative prefixes, with no new event or untrusted token exposure.
+                    for c in self.challenges:
+                        payload = c.model_dump(exclude={'category_guess'})
+                        words = c.line.split()
+                        for end in range(4, len(words), 4):
+                            await self.broadcast('counteroffer', {**payload, 'line': ' '.join(words[:end]),
+                                'counteroffer': '', 'audio_url': None, 'mood': self.mood}, to='screen')
+                            await asyncio.sleep(.015)
+                        await self.broadcast('counteroffer', {**payload, 'audio_url': None, 'mood': self.mood})
+                else:
+                    try:
+                        self.verdict = validate_verdict(result, dossier=self.dossier, player_ids=set(self.players),
+                            round_id=round_id, city=self.city, sqft=target_sqft(self.dossier, self.target_floors))
+                    except ActionError:
+                        # The usual server validator is still the final authority.
+                        await trace(dict(step='fallback', tool='actions', summary='Invalid proposal; offline judge', duration_ms=0))
+                        batches = [(fake_agent.verdict(batch, self.dossier, self.city), batch)
+                                   for batch in (originals, revised) if batch]
+                        self.verdict = validate_verdict(batches, dossier=self.dossier, player_ids=set(self.players),
+                            round_id=round_id, city=self.city, sqft=target_sqft(self.dossier, self.target_floors))
+                    self._score_mood()
+                    await self.broadcast('room_state', self.snapshot())
+                    await self.broadcast('verdict', self.verdict.model_dump())
+                seconds = self.durations.get(phase)
+                self.ends_at = utcnow() + timedelta(seconds=seconds) if seconds is not None else None
+                self._save()
+                await self.broadcast('phase_changed', {'round_id': round_id, 'phase': phase,
+                    'ends_at': self.ends_at.isoformat() if self.ends_at else None})
+                self._arm_timer(seconds)
+        except asyncio.CancelledError:
+            return
 
     async def advance(self, expected: tuple | None = None) -> None:
         async with self._lock:
@@ -376,6 +466,7 @@ class Room:
 
     def close(self) -> None:
         self._cancel_timer()
+        self._cancel_agent()
 
     # ---- persistence (phase changes only, never pointer events) -------
     def _path(self) -> Path | None:
@@ -415,6 +506,7 @@ class Room:
         room.ends_at = datetime.fromisoformat(ends) if ends else None
         room.dossier = data.get('dossier')
         room.intro = data.get('intro')
+        room.mood = data.get('mood', (room.intro or {}).get('mood', 'hopeful'))
         room.pitches = {p['player_id']: Pitch.model_validate(p) for p in data.get('pitches', [])}
         room.revisions = {p['player_id']: Pitch.model_validate(p) for p in data.get('revisions', [])}
         room.challenges = [Challenge.model_validate(c) for c in data.get('challenges', [])]
@@ -437,7 +529,9 @@ class Room:
 
     def resume_timer(self) -> None:
         """After a restart, continue the interrupted phase timer (fires immediately if overdue)."""
-        if self.ends_at is not None:
+        if self.phase in ('CHALLENGE', 'VERDICT') and self.ends_at is None and live_agent.enabled():
+            self._agent_task = asyncio.create_task(self._finish_live((self.round_id, self._round_seq, self.phase)))
+        elif self.ends_at is not None:
             self._arm_timer((self.ends_at - utcnow()).total_seconds())
 
 
