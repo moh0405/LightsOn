@@ -36,7 +36,7 @@ def test_floor_artifact_contract(tmp_path):
         assert isinstance(p['building_id'], str)
         assert isinstance(p['floor_number'], int) and p['floor_number'] > 0
         assert p['source_status'] in {'dark', 'partial', 'occupied', 'unknown'}
-        assert p['game_status'] == ('dark' if p['source_status'] == 'dark' else 'lit')
+        assert p['game_status'] == ('dark' if p['source_status'] == 'dark' else None)
         assert p['height_m'] > p['base_m'] >= 0
         assert feature['geometry']['type'] == 'Polygon'
         assert shape(feature['geometry']).is_valid

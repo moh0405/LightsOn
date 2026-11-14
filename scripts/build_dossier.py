@@ -53,7 +53,7 @@ def build_dossier(db: sqlite3.Connection, pid: str, enums: dict) -> dict | None:
                     fact(prefix + '_occupied_sqft', o, 'location-occupancy.spaces.squareFeetOccupied', 'sqft')]
         floors.append(dict(floor_id=floor_id, number=number, name=name, size_sqft=size,
                            available_sqft=a, occupied_sqft=o, source_status=status,
-                           game_status='dark' if status == 'dark' else 'lit', fact_ids=fact_ids))
+                           game_status='dark' if status == 'dark' else None, fact_ids=fact_ids))
     floors.sort(key=lambda f: (f['number'] is None, f['number'] or 0, f['floor_id']))
     history = json.loads(db.execute('SELECT data FROM tenant_history WHERE property_id=?', (pid,)).fetchone()[0])
     records, current = history['records'], history['current']

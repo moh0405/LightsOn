@@ -37,7 +37,7 @@ def build_floors(dossiers, city_path, output, heroes):
             properties = dict(building_id=dossier['id'], building_name=dossier['name'],
                               floor_number=number, floor_id=floor.get('floor_id'),
                               base_m=(number-1)*height, height_m=number*height,
-                              source_status=status, game_status='dark' if status == 'dark' else 'lit',
+                              source_status=status, game_status='dark' if status == 'dark' else None,
                               is_hero=dossier['id'] in heroes)
             # Foreign member keeps the UI's exact property contract intact.
             features.append(dict(type='Feature', properties=properties, geometry=geometry,
