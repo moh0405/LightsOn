@@ -43,6 +43,9 @@ for (const mode of ["kit", "fixtures"]) test(`media approach, instant light-up, 
     server.phase("INTRO");
     server.emit({ type: "building_intro", text: persona.intro_line, audio_url: null, mood: "hopeful", analyst_line: null });
     await expect(page.getByTestId("intro-approach")).toBeVisible();
+    // The tour starts loading (hidden) at the start of INTRO, during the dive.
+    await expect(page.locator('iframe[title="Matterport interior tour"]')).toHaveCount(1);
+    await expect(page.getByTestId("intro-approach")).toBeVisible();
     await expect(page.getByTestId("subtitles")).toContainText(persona.intro_line);
     await page.screenshot({ animations: "disabled", path: info.outputPath(`INTRO-${mode}.png`) });
     await expect(page.getByTitle("Matterport interior tour")).toBeVisible({ timeout: 6000 });
@@ -98,8 +101,11 @@ test("Matterport timeout falls back to a caption and never holds the phase; auto
     // Observe the source caption during its beat, before waiting for the
     // timeout toast. The visual beat may end while a later assertion polls.
     await expect(page.getByTestId("matterport-still")).toContainText("Interior tour caption unavailable", { timeout: 7000 });
-    await expect(page.getByRole("alert")).toContainText("Interior tour unavailable", { timeout: 7000 });
-    await expect(page.getByTitle("Matterport interior tour")).toHaveCount(0);
+    // A slow tour gets a realistic load window, then falls back silently: a log, no toast.
+    const loadStarted = Date.now();
+    await expect(page.locator('iframe[title="Matterport interior tour"]')).toHaveCount(0, { timeout: 7000 });
+    expect(Date.now() - loadStarted).toBeGreaterThan(1500);
+    await expect(page.getByRole("alert")).toHaveCount(0);
     server.phase("POWER_UP");
     server.emit({ type: "building_revived", building_id: "233953", floors: [6, 7, 8], color: "#00ccff", category: "community", sqft: 94509, auto_completed: true });
     server.phase("REVIVED");

@@ -9,7 +9,13 @@ test("Phase 6 optional persona fallback keeps the screen console clean", async (
   try {
     const screen = await desktop.newPage();
     const errors: string[] = [];
-    screen.on("console", message => { if (message.type() === "error") errors.push(message.text()); });
+    // App console errors only: the sandboxed third-party Matterport frame logs its own fetch failures.
+    screen.on("console", message => {
+      if (message.type() !== "error") return;
+      const where = message.location().url;
+      if (where && !where.startsWith(baseURL!)) return;
+      errors.push(message.text());
+    });
     screen.on("pageerror", error => errors.push(error.message));
     await screen.goto(`${baseURL}/screen`);
     await expect(screen.getByTestId("qr")).toBeVisible();
