@@ -1047,7 +1047,7 @@
       "source": "costar",
       "source_field": "commercial-property.constructionEvents.year",
       "kind": "verified",
-      "say_as": "1,983 year"
+      "say_as": "1983"
     },
     {
       "id": "F_233905_construction_RenovationFinished",
@@ -1057,7 +1057,7 @@
       "source": "costar",
       "source_field": "commercial-property.constructionEvents.year",
       "kind": "verified",
-      "say_as": "2,021 year"
+      "say_as": "2021"
     },
     {
       "id": "F_233905_latitude",

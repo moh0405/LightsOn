@@ -882,7 +882,7 @@
       "source": "costar",
       "source_field": "commercial-property.constructionEvents.year",
       "kind": "verified",
-      "say_as": "1,982 year"
+      "say_as": "1982"
     },
     {
       "id": "F_233918_construction_RenovationFinished",
@@ -892,7 +892,7 @@
       "source": "costar",
       "source_field": "commercial-property.constructionEvents.year",
       "kind": "verified",
-      "say_as": "2,023 year"
+      "say_as": "2023"
     },
     {
       "id": "F_233918_construction_CommonAreaRenovated",
@@ -902,7 +902,7 @@
       "source": "costar",
       "source_field": "commercial-property.constructionEvents.year",
       "kind": "verified",
-      "say_as": "1,998 year"
+      "say_as": "1998"
     },
     {
       "id": "F_233918_latitude",
