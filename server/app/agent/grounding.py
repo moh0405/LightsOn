@@ -40,6 +40,29 @@ def number_unit(text: str) -> str | None:
                  if re.match(pattern + r'(?!\w)', tail)), None)
 
 
+SCORE_MAX = 40  # four 0-10 scores; the server clamps and totals them
+
+
+def game_number(text: str, start: int, end: int, value: float, unit: str | None) -> bool:
+    """Scores and player/pitch counts or labels are game dialogue, never building facts."""
+    if unit is not None or value != int(value) or not 0 <= value <= SCORE_MAX:
+        return False
+    before, after = text[:start], text[end:]
+    if re.match(r'\s*(?:/|out\s+of\b)\s*(?:10|40)\b', after, re.I):
+        return True  # "9/10", "34 out of 40"
+    if value in (10, SCORE_MAX) and re.search(r'(?:/|\bout\s+of)\s*$', before, re.I):
+        return True  # the denominator
+    if re.match(r'(?:st|nd|rd|th)?\s+(?:players?|pitch(?:es)?|candidates?|revisions?)\b', after, re.I):
+        return True  # "2 pitches", "3 players", "your 2nd pitch"
+    if re.search(r'\b(?:players?|pitch|candidate|revision)\s*#?\s*$', before, re.I):
+        return True  # "player 2", "candidate 1"
+    # A score word directly before the number, and nothing countable after it:
+    # "scored 31 points", "a total of 33.", but never "a total of 30 elevators".
+    return bool(re.search(r'\b(?:scor(?:e|es|ed|ing)|total(?:s|led)?|data\s+fit|neighborhood\s+fit|'
+                          r'creativity|charm)\s+(?:of\s+|a\s+|an\s+|at\s+)?$', before, re.I)
+                and re.match(r'(?:\s*$|\s*[,.;:!?)\u2014\u2013]|\s+points?\b|\s+(?:and|for|in|from|to|with)\b)', after, re.I))
+
+
 def check_line(line: str, fact_ids: list[str], dossier: dict, impact: dict | None = None) -> str | None:
     facts = {f['id']: f for f in safe_facts(dossier)}
     if any(fid not in facts or facts[fid]['value'] is None for fid in fact_ids):
@@ -65,8 +88,10 @@ def check_line(line: str, fact_ids: list[str], dossier: dict, impact: dict | Non
         clause = re.split(r'[.!?;:]', before)[-1]
         hypothetical = re.search(r'\b(?:start|propose|imagine|try|could|would|should|pitch|give\s+me|show\s+me|bring\s+me|fits?)\b', clause, re.I)
         asserted = re.search(r'\b(?:i|we|this building)\s+(?:have|has|had|own|contain|offer|rise|stand)\b', clause, re.I)
+        # "a restaurant on one floor" restates a pitch's plan, like "fits one floor".
+        placed = re.search(r'\b(?:on|onto|into)\s+$', before, re.I)
         if (match[0].casefold() == 'one' and re.match(r'\s+floor\b', after, re.I)
-                and hypothetical and not asserted):
+                and (hypothetical or placed) and not asserted):
             return match[0]  # "start on one floor" proposes a plan, not an existing floor count
         physical = (number_unit(after) is not None
                     or re.match(r'\s+(?:dark\s+)?(?:floors?|trees?|cars?|entries|spaces?|thousand|million)\b', after, re.I)
@@ -103,6 +128,8 @@ def check_line(line: str, fact_ids: list[str], dossier: dict, impact: dict | Non
                 supported = True
             if value == 1000 and fact['key'] == 'parkingRatio' and re.search(r'per\s*$', normalized[:match.start()], re.I):
                 supported = True
+        if game_number(normalized, match.start(), match.end(), value, unit):
+            supported = True
         if impact and 'looks like' in line.casefold() and value in [v for v in impact.values() if type(v) in (int, float)]:
             supported = True
         if not supported:

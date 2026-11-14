@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Explicit paid latency check: eight challenges, two verdicts, <= $0.12, ledger < configured cap minus $0.30."""
+"""Explicit paid latency check: eight challenges, two verdicts, <= $0.12 spent, ledger < configured cap minus $0.30."""
 from __future__ import annotations
 
 import argparse
@@ -27,11 +27,18 @@ from app.models import Pitch
 
 
 RUN_MARGIN_USD = .30  # the eval's ledger ceiling stays this far below the configured cap
+RUN_SPEND_LIMIT_USD = .12  # pass criterion on reconciled spend
+# spend.py reserves worst-case input/output bounds before each request, ~6-7x the
+# reconciled cost, and parallel players hold several reservations at once. A run
+# sub-cap of total + $0.12 refused real calls ("budget" fallbacks) even though the
+# run spent $0.074. Reservations reconcile down, so this headroom only admits
+# requests; the ceiling never exceeds the configured cap minus RUN_MARGIN_USD.
+RESERVATION_HEADROOM_USD = RUN_SPEND_LIMIT_USD * 8
 
 
 def budget_ceiling(total: float, cap: float | None = None) -> float:
     cap = SpendLedger().cap if cap is None else cap
-    return min(total + .12, cap - RUN_MARGIN_USD - .000001)
+    return min(total + RESERVATION_HEADROOM_USD, cap - RUN_MARGIN_USD - .000001)
 
 
 def percentile(samples, quantile):
@@ -83,9 +90,10 @@ async def evaluate(plan):
         # Two verdict cases total, each scores a fit against an impossible requirement.
         judge = LiveAgent(model=model)
         started = monotonic()
-        batches = await judge.verdict_batches(pitches[:2], [], dossier, city, challenges[:2])
+        sqft = target_sqft(dossier, select_target_floors(dossier))
+        batches = await judge.verdict_batches(pitches[:2], [], dossier, city, challenges[:2], impact_sqft=sqft)
         verdict = validate_verdict(batches, dossier=dossier, player_ids={p.player_id for p in pitches[:2]},
-            round_id=f'quality-{bid}', city=city, sqft=target_sqft(dossier, select_target_floors(dossier)))
+            round_id=f'quality-{bid}', city=city, sqft=sqft)
         output['verdicts'].append(dict(building=bid, line=verdict.reason_line, fact_ids=verdict.fact_ids,
             winner=verdict.winner_player_id, scores=[s.model_dump() for s in verdict.scores],
             fallback_cause=next(iter(judge.fallback_causes), None), seconds=monotonic() - started,
@@ -117,7 +125,7 @@ def report(result, before, after, ceiling):
         '| Cause | Challenge cases | Verdict cases |', '| --- | --- | --- |']
     for cause in ('timeout', 'invalid_schema', 'fact_id', 'number_match', 'claim_check', 'safety', 'budget', 'unavailable'):
         lines.append(f'| {cause} | {counts[cause]} | {verdict_counts[cause]} |')
-    lines += ['', f'Run spend including retained reservations: **${spend:.6f}** (limit $0.12).',
+    lines += ['', f'Run spend including retained reservations: **${spend:.6f}** (limit ${RUN_SPEND_LIMIT_USD:.2f}).',
         f"Shared ledger: **${before['total_usd']:.6f} → ${after['total_usd']:.6f}**; run cap ${ceiling:.6f}, ${RUN_MARGIN_USD:.2f} below the configured cap.",
         f"Paid requests: {len(calls)}, reconciled {sum(c['status'] == 'complete' for c in calls)}, "
         f"unconfirmed {sum(c['status'] != 'complete' for c in calls)}.", '',
@@ -160,7 +168,7 @@ def report(result, before, after, ceiling):
     (ROOT / 'evals/latency-check.md').write_text('\n'.join(lines) + '\n')
     return (sum(counts.values()) <= 1 and len(challenges) == 8 and len(verdicts) == 2
             and p90 is not None and p90 <= 6 and len(first) == 2 and max(first) <= 3
-            and spend <= .12 + 1e-9 and after['total_usd'] <= ceiling + 1e-9
+            and spend <= RUN_SPEND_LIMIT_USD + 1e-9 and after['total_usd'] <= ceiling + 1e-9
             and all(c['ground_error'] is None for c in challenges + verdicts))
 
 

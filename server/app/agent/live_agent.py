@@ -15,6 +15,7 @@ from time import monotonic
 from botocore.config import Config
 from pydantic import BaseModel, ConfigDict, TypeAdapter
 
+from ..city import housing_impact
 from ..models import Challenge, Pitch, VerdictProposal
 from . import fake_agent
 from .grounding import ClaimChecks, check_line, fallback_line
@@ -152,7 +153,7 @@ class LiveAgent:
                 if attempt:
                     raise
 
-    async def grounded_each(self, lines, dossier, deadline, *, step, attempt):
+    async def grounded_each(self, lines, dossier, deadline, *, step, attempt, impact=None):
         # Local checks run first; unrelated player tasks keep publishing during the remote check.
         def reject(line, refs, reason, cause):
             diagnostic('rejected', cause, step=step, attempt=attempt + 1,
@@ -164,7 +165,7 @@ class LiveAgent:
                 issues[index] = reject(line, refs, 'Challenge must cite a researched constraint', 'fact_id')
             elif len(line) > 480:
                 issues[index] = reject(line, refs, 'Dialogue must use short sentences', 'invalid_schema')
-            elif reason := check_line(line, refs, dossier):
+            elif reason := check_line(line, refs, dossier, impact):
                 cause = ('fact_id' if reason == 'Unknown or null fact ID' else
                          'safety' if reason == 'Prohibited floor-status word' else
                          'number_match' if reason.startswith('Number ') else 'claim_check')
@@ -202,8 +203,8 @@ class LiveAgent:
                 issues[index] = reject(*lines[index], 'Claim-check count mismatch', 'invalid_schema')
         return issues
 
-    async def grounded(self, lines, dossier, deadline, *, step, attempt):
-        issues = await self.grounded_each(lines, dossier, deadline, step=step, attempt=attempt)
+    async def grounded(self, lines, dossier, deadline, *, step, attempt, impact=None):
+        issues = await self.grounded_each(lines, dossier, deadline, step=step, attempt=attempt, impact=impact)
         first = next((issue for issue in issues if issue is not None), None)
         if first:
             self.last_failure = first[1]
@@ -281,7 +282,8 @@ class LiveAgent:
                     task.cancel()
             await asyncio.gather(*tasks, return_exceptions=True)
 
-    async def verdict_batches(self, originals, revisions, dossier, city, challenges, mood='hopeful', memory=''):
+    async def verdict_batches(self, originals, revisions, dossier, city, challenges, mood='hopeful', memory='',
+                              impact_sqft=None):
         started = monotonic()
         deadline = started + self.verdict_timeout
         pitches = originals + revisions
@@ -304,8 +306,14 @@ class LiveAgent:
                                building_id=dossier['id'], line=proposal.reason_line,
                                fact_ids=proposal.fact_ids, reason='Verdict candidates mismatch')
                     raise ValueError('Verdict candidates mismatch')
+                # This round's housing estimate (the same one actions.py attaches) may be
+                # quoted, as "looks like", only when the proposed winner pitched housing.
+                winner = next(source for c, source in zip(candidates, pitches)
+                              if c.player_id == proposal.winner_player_id)
+                impact = (housing_impact(impact_sqft) if impact_sqft and winner
+                          and fake_agent.classify_use(winner.text) == 'housing' else None)
                 reason = await self.grounded([(proposal.reason_line, proposal.fact_ids)], dossier, deadline,
-                                             step='verdict', attempt=attempt)
+                                             step='verdict', attempt=attempt, impact=impact)
                 if not reason:
                     break
                 if attempt:

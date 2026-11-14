@@ -514,10 +514,18 @@ def test_small_paid_check_plan_and_budget_ceiling(monkeypatch):
     import sys
     from pathlib import Path
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2]))
-    from evals.live_quality import budget_ceiling, challenge_plan
-    assert budget_ceiling(2.44, 3.0) == pytest.approx(2.56)
+    from evals.live_quality import RESERVATION_HEADROOM_USD, budget_ceiling, challenge_plan
+    # Reservations run ~6-7x the reconciled $0.074 of the last paid check; the
+    # run sub-cap must admit them, never above the configured cap minus $0.30.
+    assert RESERVATION_HEADROOM_USD >= .12 * 7
+    assert budget_ceiling(1.00, 3.0) == pytest.approx(1.00 + RESERVATION_HEADROOM_USD)
+    assert budget_ceiling(2.44, 3.0) == pytest.approx(2.70, abs=1e-5)
+    assert budget_ceiling(2.44, 3.0) < 2.70
     assert budget_ceiling(2.60, 3.0) < 2.70
     assert budget_ceiling(4.0, 4.5) < 4.20
+    for total in (0, 1.5, 2.0, 2.69, 3.5):
+        for cap in (3.0, 4.5):
+            assert budget_ceiling(total, cap) < cap - .30
     plan = challenge_plan()
     assert sum(len(rows) for rows in plan.values()) == 8
     assert len(plan) == 2
@@ -883,3 +891,74 @@ async def test_legitimate_counteroffers_pass_after_claim_check(dossier, line):
     agent = LiveAgent(model=model)
     assert await agent.grounded([(line, [])], dossier, monotonic() + 1, step='verdict', attempt=0) is None
     assert called == ['claim_check']
+
+
+# Verbatim verdict rejected (attempt 2, number_match) in the 2026-11-14 paid latency
+# check, building 233953: "one floor" restates the losing pitch's plan, not my floors.
+PAID_VERDICT = ('A night-lit community gaming studio fits my bones and my hopes; '
+                'a nine-million-square-foot restaurant on one floor defies every wall I own.')
+PAID_VERDICT_FACTS = ['F_233953_grossTypicalFloorSquareFeet', 'F_233953_dark_sqft']
+
+
+def test_paid_rejected_verdict_pitch_plan_is_not_a_floor_count(dossier):
+    assert check_line(PAID_VERDICT, PAID_VERDICT_FACTS, dossier) is None
+    # Building facts still must match: an asserted floor count stays rejected.
+    assert check_line('This building has one floor.', PAID_VERDICT_FACTS, dossier)
+    assert check_line('I have one floor for a restaurant.', PAID_VERDICT_FACTS, dossier)
+    assert check_line('I stand on 2 floors.', PAID_VERDICT_FACTS, dossier)
+
+
+async def test_paid_rejected_verdict_publishes_without_fallback(dossier):
+    p = pitch()
+    async def model(step, system, content, schema, timeout):
+        if step == 'claim_check':
+            return {'checks': [{'supported': True, 'reason': ''} for _ in json.loads(content)]}
+        proposal = fake_agent.verdict([p.model_copy(update={'player_id': 'candidate_0'})], dossier, City())
+        return proposal.model_copy(update={'reason_line': PAID_VERDICT, 'fact_ids': PAID_VERDICT_FACTS}).model_dump()
+    agent = LiveAgent(model=model)
+    batches = await agent.verdict_batches([p], [], dossier, City(), [])
+    assert batches[0][0].reason_line == PAID_VERDICT and agent.fallbacks == 0
+
+
+@pytest.mark.parametrize('line', [
+    'Player 1 wins with 34 out of 40; your charm earned a 9/10.',
+    'Of 3 players, p1 takes it with a total of 33.',
+    'Data fit 8, charm 7: the studio wins.',
+    'I heard 2 pitches; candidate 1 scored 31 points.',
+    'Your 2nd pitch beat your 1st pitch, player 2.',
+])
+def test_verdict_scores_and_player_pitch_counts_are_game_numbers(dossier, line):
+    assert check_line(line, ['F_233953_dark_sqft'], dossier) is None
+
+
+@pytest.mark.parametrize('line', [
+    'I have 2 lobbies for 3 players.',
+    'Score this: my typical floor is 99,999 square feet.',
+    'My charm is 9 floors tall.',
+    'Player 1 scored 99 out of 40.',
+    'I welcome 500 players nightly.',
+])
+def test_game_number_contexts_do_not_launder_building_numbers(dossier, line):
+    assert check_line(line, ['F_233953_dark_sqft'], dossier)
+
+
+async def test_live_verdict_may_cite_this_rounds_housing_estimate(dossier):
+    from app.city import housing_impact
+    p = pitch('Affordable apartments and homes for families')
+    impact = housing_impact(10000)
+    line = f"It looks like {impact['units']} homes for about {impact['residents']} neighbors."
+    def model_for():
+        async def model(step, system, content, schema, timeout):
+            if step == 'claim_check':
+                return {'checks': [{'supported': True, 'reason': ''} for _ in json.loads(content)]}
+            proposal = fake_agent.verdict([p.model_copy(update={'player_id': 'candidate_0'})], dossier, City())
+            return proposal.model_copy(update={'reason_line': line, 'fact_ids': ['F_233953_dark_sqft']}).model_dump()
+        return model
+    agent = LiveAgent(model=model_for())
+    batches = await agent.verdict_batches([p], [], dossier, City(), [], impact_sqft=10000)
+    assert batches[0][0].reason_line == line and agent.fallbacks == 0
+    # Without this round's estimate the same numbers are invented.
+    agent = LiveAgent(model=model_for())
+    batches = await agent.verdict_batches([p], [], dossier, City(), [])
+    assert batches[0][0].reason_line != line and agent.fallback_causes == {'number_match': 1}
+    assert check_line(f"{impact['units']} homes.", ['F_233953_dark_sqft'], dossier, impact)
