@@ -6,7 +6,11 @@
   "lng": -95.3650891,
   "footprint": null,
   "stories": 27,
-  "floor_height_m": 3.3528000000000002,
+  "building_height_ft": 297.0,
+  "render": {
+    "floor_height_m": 3.3528000000000002,
+    "floor_height_source": "costar"
+  },
   "floors": [
     {
       "floor_id": 606416,

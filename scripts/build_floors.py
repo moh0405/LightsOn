@@ -33,7 +33,7 @@ def build_floors(dossiers, city_path, output, heroes):
         for number in range(1, (dossier['stories'] or 0) + 1):
             floor = indexed.get(number, {})
             status = floor.get('source_status', 'unknown')
-            height = dossier['floor_height_m']
+            height = dossier['render']['floor_height_m']
             properties = dict(building_id=dossier['id'], building_name=dossier['name'],
                               floor_number=number, floor_id=floor.get('floor_id'),
                               base_m=(number-1)*height, height_m=number*height,

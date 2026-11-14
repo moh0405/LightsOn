@@ -131,3 +131,27 @@ def test_artifacts_contain_no_real_contact_names():
                for s in walk(json.loads(path.read_text()))]
     assert names
     assert not any(name in value for name in names for value in strings), 'A private contact name leaked into an artifact'
+
+
+@pytest.mark.parametrize('has_height', [False, True])
+def test_dossier_separates_height_fact_from_rendering(has_height):
+    import sqlite3
+    kit = ROOT / 'data/costar'
+    if not (kit / 'index.sqlite').is_file():
+        pytest.skip('Real CoStar index absent')
+    builder = load_script('build_dossier')
+    # Use a copy of the real kit index; vary only whether the height was provided.
+    with sqlite3.connect(kit / 'index.sqlite') as source, sqlite3.connect(':memory:') as db:
+        source.backup(db)
+        raw = json.loads(db.execute('SELECT data FROM properties WHERE id=233953').fetchone()[0])
+        height = raw['buildingHeightInFeet'] if has_height else None
+        raw['buildingHeightInFeet'] = height
+        db.execute('UPDATE properties SET data=? WHERE id=233953', (json.dumps(raw),))
+        dossier = builder.build_dossier(db, '233953', json.loads((kit / 'schemas/enums.json').read_text()))
+    assert dossier['building_height_ft'] == height
+    assert 'floor_height_m' not in dossier
+    assert dossier['render']['floor_height_source'] == ('assumption' if height is None else 'costar')
+    expected = 3.8 if height is None else height * .3048 / dossier['stories']
+    assert dossier['render']['floor_height_m'] == pytest.approx(expected)
+    height_fact = next(f for f in dossier['facts'] if f['key'] == 'buildingHeightInFeet')
+    assert height_fact['value'] == height

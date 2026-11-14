@@ -31,7 +31,9 @@ def build_dossier(db: sqlite3.Connection, pid: str, enums: dict) -> dict | None:
                           if isinstance(value, (int, float)) else str(value)))
         return fid
     stories = data.get('numStoriesAboveGrade'); height = data.get('buildingHeightInFeet')
-    floor_height = height * .3048 / stories if height is not None and stories else 3.8
+    render = dict(floor_height_m=3.8, floor_height_source='assumption')
+    if height is not None and stories:
+        render = dict(floor_height_m=height * .3048 / stories, floor_height_source='costar')
     for key, value in data.items():
         if key not in {'primaryAddress', 'constructionEvents'}:
             fact(key, value, f'commercial-property.{key}',
@@ -78,7 +80,7 @@ def build_dossier(db: sqlite3.Connection, pid: str, enums: dict) -> dict | None:
     fact('address', street, 'commercial-property.primaryAddress')
     return dict(id=str(pid), name=data['buildingName'], address=street,
                 lat=address['latitude'], lng=address['longitude'], footprint=None,
-                stories=stories, floor_height_m=floor_height, floors=floors, facts=facts,
+                stories=stories, building_height_ft=height, render=render, floors=floors, facts=facts,
                 tenant_history=history, media=dict(matterport=models, photos=[], aerial=dict(ortho=None, obliques=[])),
                 neighbors=[other for other in property_ids() if other != str(pid)], data_mode='kit')
 
