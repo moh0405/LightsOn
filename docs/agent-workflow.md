@@ -10,9 +10,13 @@ Coding goes to cheaper agents through Orca workers or PRs. Every agent follows A
 | Codex (main coder) | `agent:codex` | Feature code for each phase, refactors, every Playwright / headless browser test |
 | Grok | `agent:grok` | Second opinion reviews, prompt and persona writing, eval cases (`evals/pitches.yaml`) |
 | Gemini Pro | `agent:gemini` | Long-context work: reading the CoStar kit docs, PRD cross-checks, docs and README |
+| Antigravity (`agy`) | `agent:antigravity` | Backup coder when Codex is busy; UI/visual work (skyline, overlays) |
 | Claude Code | `agent:claude` | Coordination, contract changes (models.py, events, commands), merges, final review |
 
-Grok and Gemini Pro run only when the human is logged in. Until then their PRs wait with the label set.
+CLIs on this machine (checked 2026-11-13): `codex`, `agy` (Antigravity 1.5.8, logged in), `grok` 1.0.77 and
+`gemini` 0.68.0 (both installed, need `grok login` / Gemini auth before use).
+
+Headless one-shots: `grok -p "<prompt>"`, `gemini -p "<prompt>"`, `agy --print "<prompt>"`.
 
 ## Branches and PRs
 
@@ -46,3 +50,5 @@ Dispatch from Claude Code:
 ```text
 orca orchestration worker-start --agent codex --worktree new-child --name <short-name> --spec-file <spec.md>
 ```
+
+Swap `--agent codex` for `antigravity`, `grok` or `gemini` to route to another agent.
