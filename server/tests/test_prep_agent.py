@@ -902,3 +902,18 @@ def test_cache_capability_rejection_retries_unbilled_without_checkpoint(tmp_path
     assert len(requests) == 2
     state = SpendLedger(tmp_path / 'spend.json').snapshot()
     assert len(state['calls']) == 1 and state['calls'][0]['status'] == 'complete'
+
+
+def test_spend_cap_ceiling_is_4_50(tmp_path):
+    assert SpendLedger(tmp_path / 's.json', 4.50).cap == 4.50
+    for bad in (4.51, 0.0 - 1, float('nan'), float('inf')):
+        with pytest.raises(SpendUnavailable):
+            SpendLedger(tmp_path / 's.json', bad)
+
+
+def test_spend_cap_env_respects_ceiling(monkeypatch, tmp_path):
+    monkeypatch.setenv('BEDROCK_SPEND_CAP_USD', '4.50')
+    assert SpendLedger(tmp_path / 's.json').cap == 4.50
+    monkeypatch.setenv('BEDROCK_SPEND_CAP_USD', '4.51')
+    with pytest.raises(SpendUnavailable):
+        SpendLedger(tmp_path / 's.json')

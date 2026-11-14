@@ -515,8 +515,9 @@ def test_small_paid_check_plan_and_budget_ceiling(monkeypatch):
     from pathlib import Path
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2]))
     from evals.live_quality import budget_ceiling, challenge_plan
-    assert budget_ceiling(2.44) == pytest.approx(2.56)
-    assert budget_ceiling(2.60) < 2.70
+    assert budget_ceiling(2.44, 3.0) == pytest.approx(2.56)
+    assert budget_ceiling(2.60, 3.0) < 2.70
+    assert budget_ceiling(4.0, 4.5) < 4.20
     plan = challenge_plan()
     assert sum(len(rows) for rows in plan.values()) == 8
     assert len(plan) == 2
@@ -799,7 +800,7 @@ def test_game_bedrock_only_refuses_at_the_shared_cap(monkeypatch, tmp_path, doss
     from app.agent.spend import SpendLedger, SpendUnavailable
     ledger = tmp_path / 'spend.json'
     monkeypatch.setenv('BEDROCK_SPEND_LEDGER', str(ledger))
-    monkeypatch.delenv('BEDROCK_SPEND_CAP_USD', raising=False)
+    monkeypatch.setenv('BEDROCK_SPEND_CAP_USD', '3.00')
     class Stream:
         def __iter__(self):
             yield {'contentBlockStart': {'contentBlockIndex': 0, 'start': {'toolUse': {'name': 'answer'}}}}

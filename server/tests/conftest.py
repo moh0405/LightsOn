@@ -17,3 +17,9 @@ def game_mode(request, monkeypatch):
 def offline_agent_by_default(monkeypatch):
     """Unit tests never inherit a developer's live opt-in."""
     monkeypatch.setenv('AGENT_MODE', 'fake')
+
+
+@pytest.fixture(autouse=True)
+def default_spend_cap(monkeypatch):
+    """Cap-dependent tests never inherit the developer's .env cap; override per test."""
+    monkeypatch.setenv('BEDROCK_SPEND_CAP_USD', '3.00')
