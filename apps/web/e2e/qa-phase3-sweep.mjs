@@ -12,7 +12,9 @@ import { resolve, join } from 'node:path';
 const root = resolve(import.meta.dirname, '../../..');
 const artifacts = join(root, 'apps/web/e2e/artifacts/qa-phase3');
 await mkdir(artifacts, { recursive: true });
-const base = 'http://127.0.0.1:15176', api = 'http://127.0.0.1:18003';
+const webPort = process.env.LO_E2E_WEB_PORT ?? '15176';
+const apiPort = process.env.LO_E2E_API_PORT ?? '18003';
+const base = `http://127.0.0.1:${webPort}`, api = `http://127.0.0.1:${apiPort}`;
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 const require = createRequire(import.meta.url);
 const { createExpression } = createRequire(require.resolve('maplibre-gl/package.json'))('@maplibre/maplibre-gl-style-spec');
@@ -41,7 +43,7 @@ async function stop(child, signal = 'SIGTERM') {
   if (!child || child.exitCode !== null || child.signalCode !== null) return;
   const exit = once(child, 'exit'); child.kill(signal); await exit;
 }
-const web = spawn(process.execPath, [join(root, 'apps/web/node_modules/vite/bin/vite.js'), '--host', '127.0.0.1', '--port', '15176', '--strictPort'], { cwd: join(root, 'apps/web'), env: { ...process.env, API_PROXY_TARGET: api }, stdio: 'ignore' });
+const web = spawn(process.execPath, [join(root, 'apps/web/node_modules/vite/bin/vite.js'), '--host', '127.0.0.1', '--port', webPort, '--strictPort'], { cwd: join(root, 'apps/web'), env: { ...process.env, API_PROXY_TARGET: api }, stdio: 'ignore' });
 const browser = await chromium.launch({ headless: true, args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader'] });
 try {
   await ready(base);
@@ -51,7 +53,7 @@ try {
     const stateDir = await mkdtemp(join(tmpdir(), 'lo-phase3-'));
     let backend, restarting = false;
     const start = async () => {
-      backend = spawn(join(root, 'server/.venv/bin/python'), ['-m', 'uvicorn', 'app.main:app', '--host', '127.0.0.1', '--port', '18003'], { cwd: join(root, 'server'), env: { ...process.env, DATA_MODE: mode, STATE_DIR: stateDir, HOST_PIN: '1234', PUBLIC_BASE_URL: '', PHASE_DURATIONS_SCALE: '0.1' }, stdio: ['ignore', 'ignore', 'pipe'] });
+      backend = spawn(join(root, 'server/.venv/bin/python'), ['-m', 'uvicorn', 'app.main:app', '--host', '127.0.0.1', '--port', apiPort], { cwd: join(root, 'server'), env: { ...process.env, DATA_MODE: mode, STATE_DIR: stateDir, HOST_PIN: '1234', PUBLIC_BASE_URL: '', PHASE_DURATIONS_SCALE: '0.1' }, stdio: ['ignore', 'ignore', 'pipe'] });
       backend.stderr.on('data', (data) => { const text = String(data); if (/ERROR|Traceback/.test(text)) result.errors.push({ kind: 'server', text, restarting }); });
       await ready(`${api}/api/health`);
     };

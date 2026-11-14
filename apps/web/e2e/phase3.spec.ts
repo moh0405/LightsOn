@@ -28,7 +28,7 @@ class RoundServer {
   }
   async route(context: BrowserContext) {
     await mockSkyline(context);
-    await context.route("**/api/rooms", (r) => r.fulfill({ json: { room: "TEST", join_url: "http://127.0.0.1:15174/play?room=TEST", qr_svg: '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="40" height="40" fill="white"/></svg>' } }));
+    await context.route("**/api/rooms", (r) => r.fulfill({ json: { room: "TEST", join_url: new URL("/play?room=TEST", r.request().url()).href, qr_svg: '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="40" height="40" fill="white"/></svg>' } }));
     await context.route("**/api/buildings/233953", (r) => r.fulfill({ json: dossier }));
     await context.routeWebSocket("**/ws/TEST?*", (ws) => {
       this.sockets.add(ws);
