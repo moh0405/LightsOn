@@ -206,3 +206,42 @@ def test_shipped_hero_persona_fiction_still_validates():
     dossier = BuildingTools(PID, provider_for_mode('fixtures')).dossier
     shipped = json.loads(Path('fixtures/personas/233953.json').read_text())
     assert validate_persona(shipped, {**dossier, 'facts': BuildingTools(PID, provider_for_mode('fixtures')).facts})
+
+
+@pytest.mark.parametrize('cap, total, status', [
+    (3.00, 2.50, 'ready'), (3.00, 2.62, 'unaffordable'),
+    (4.50, 2.95, 'ready'), (4.50, 4.12, 'unaffordable'),
+])
+def test_persona_sub_cap_follows_configured_cap_minus_reserve(tmp_path, cap, total, status):
+    """Review P2: the writer's sub-cap is the configured cap minus $0.30, never a literal $2.90."""
+    from app.agent.prep_agent import PREP_RESERVE_USD, regenerate_persona
+    research = tmp_path / 'research'
+    writer = Writer(cached_research(research))
+    ledger = SpendLedger(tmp_path / 'spend.json', cap=cap)
+    ledger.path.write_text(json.dumps(dict(total_usd=total, input_tokens=0, output_tokens=0, calls=[])))
+    result = regenerate_persona(PID, research, model=writer, provider=provider_for_mode('fixtures'),
+        cache=tmp_path / 'cache', personas=tmp_path / 'personas', ledger=ledger)
+    assert PREP_RESERVE_USD == pytest.approx(.30)
+    assert result['prep_status'] == status
+    assert writer.calls == (status == 'ready')
+    estimate = regenerate_persona(PID, research, model=writer, provider=provider_for_mode('fixtures'),
+        cache=tmp_path / 'cache', personas=tmp_path / 'personas', ledger=ledger, estimate_only=True)
+    assert estimate['spend_cap_usd'] == pytest.approx(cap - .30)
+
+
+@pytest.mark.parametrize('cap', [3.00, 4.50])
+def test_metered_persona_writer_uses_derived_sub_cap(tmp_path, monkeypatch, cap):
+    from app.agent import prep_agent
+    research = tmp_path / 'research'
+    dossier = cached_research(research)
+    seen = []
+    def structured(self, schema):
+        seen.append((self.spend_cap, self.spend_path))
+        return Writer(dossier)
+    monkeypatch.setattr(prep_agent.CappedBedrockConverse, 'with_structured_output', structured)
+    monkeypatch.setattr(prep_agent.CappedBedrockConverse, 'get_num_tokens_from_messages', lambda self, m: 1000)
+    ledger = SpendLedger(tmp_path / 'spend.json', cap=cap)
+    result = prep_agent.regenerate_persona(PID, research, provider=provider_for_mode('fixtures'),
+        cache=tmp_path / 'cache', personas=tmp_path / 'personas', ledger=ledger)
+    assert result['prep_status'] == 'ready'
+    assert seen == [(pytest.approx(cap - .30), ledger.path)]
