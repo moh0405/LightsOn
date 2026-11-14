@@ -63,3 +63,14 @@ def test_trace_rejects_invalid_timing_and_non_object_records(trace_cache):
     ]}))
     with TestClient(app) as client:
         assert client.get('/api/buildings/233953/trace').json()['events'] == []
+
+
+def test_trace_never_exports_arbitrary_environment_values(trace_cache, monkeypatch):
+    monkeypatch.setenv('BEDROCK_SMART_MODEL_ID', 'PRIVATE_KEY_DO_NOT_EXPORT')
+    monkeypatch.setenv('BEDROCK_FAST_MODEL_ID', 'PRIVATE_OWNER_DO_NOT_EXPORT')
+    with TestClient(app) as client:
+        response = client.get('/api/buildings/233953/trace')
+        assert 'DO_NOT_EXPORT' not in response.text
+        assert response.json()['configured_model_ids'] == []
+        assert client.post('/api/buildings/233953/trace').status_code == 405
+        assert client.get('/api/buildings/..%2F..%2F.env/trace').status_code == 404

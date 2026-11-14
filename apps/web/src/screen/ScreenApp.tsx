@@ -5,6 +5,7 @@ import { createRoom } from "../lib/api";
 import { safeGet, safeSet, useGame, useRoomSocket } from "../lib/store";
 import { ConnBanner, ErrorToast, PhaseBadge, page } from "../lib/ui";
 import { useScreenAudio } from "./music";
+import { TracePanel } from "./overlays/TracePanel";
 
 export function ScreenApp() {
   const audio = useScreenAudio();
@@ -32,6 +33,7 @@ export function ScreenApp() {
 
   return (
     <main style={{ ...page, display: "grid", gridTemplateColumns: "minmax(0, 1fr) 360px", gap: 16, height: "100vh", boxSizing: "border-box", overflow: "hidden" }}>
+      <TracePanel />
       <section style={{ minHeight: 0, overflow: "hidden" }}>
         <ConnBanner /><ErrorToast />
         {failed && <p role="alert">Could not reach the server.</p>}
