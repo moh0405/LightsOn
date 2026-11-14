@@ -571,3 +571,48 @@ def test_voice_style_cannot_smuggle_physical_claims():
     for suffix in (' with 999 floors', ' with a rooftop pool'):
         with pytest.raises(ValueError):
             validate_persona({**persona, 'voice_style': 'old-Houston art-deco pride' + suffix}, dossier)
+
+
+def test_merge_research_rejects_desire_cited_from_unresearched_facts(tmp_path):
+    from app.agent.persona import fake_persona
+    from app.agent.prep_agent import merge_research
+    from app.data.provider import provider_for_mode
+    tools = BuildingTools(PID, provider_for_mode('fixtures'))
+    dossier = {**tools.dossier, 'facts': tools.facts}
+    persona = fake_persona(dossier).model_dump()
+    desire_refs = set(persona['desire_reason_fact_ids'])
+    other = {ref for beat in persona['backstory'] if (ref := beat.get('fact_ref'))} | {l['fact_ref'] for l in persona['hard_limits']}
+    assert desire_refs - other, 'desire must cite a fact the rest of the persona does not'
+    researched = [f['id'] for f in tools.facts if f['id'] not in desire_refs - other]
+    (tmp_path / 'facts_property.json').write_text(json.dumps({'fact_ids': researched}))
+    (tmp_path / 'facts_spatial.json').write_text(json.dumps({'fact_ids': []}))
+    (tmp_path / 'persona.json').write_text(json.dumps(persona))
+    with pytest.raises(ValueError, match='Desire'):
+        merge_research(tools, tmp_path)
+    (tmp_path / 'facts_property.json').write_text(json.dumps({'fact_ids': [f['id'] for f in tools.facts]}))
+    assert merge_research(tools, tmp_path)['persona']['desire_key'] == persona['desire_key']
+
+
+def test_cache_with_forged_fingerprint_is_not_trusted(tmp_path):
+    from app.agent.prep_agent import prep_building
+    from app.data.provider import provider_for_mode
+    kwargs = dict(provider=provider_for_mode('fixtures'), cache=tmp_path / 'cache', personas=tmp_path / 'personas')
+    first = prep_building(PID, model=scripted_model(source_dossier()), **kwargs)
+    path = tmp_path / 'cache' / PID / 'dossier.json'
+    # Source snapshot is intact; only the fingerprint is wrong, so only that check can reject it.
+    path.write_text(json.dumps({**first, 'source_fingerprint': 'forged'}))
+    model = scripted_model(source_dossier())
+    result = prep_building(PID, model=model, **kwargs)
+    assert model._calls > 0
+    assert result['source_fingerprint'] == first['source_fingerprint']
+
+
+def test_meta_and_floor_status_words_are_denied_in_fact_remainders():
+    from app.agent.persona import fake_persona, validate_persona
+    dossier = source_dossier()
+    persona = fake_persona(dossier).model_dump()
+    year = next(f for f in dossier['facts'] if f['key'] == 'construction_ConstructionComplete')
+    for remainder in ('The database agrees, darling.', 'Records show I am proud.', 'Never call me vacant, darling.'):
+        bad = {**persona, 'backstory': [dict(text=f"Completed in {year['value']}. {remainder}", fact_ref=year['id'], fiction=False)]}
+        with pytest.raises(ValueError):
+            validate_persona(bad, dossier)
