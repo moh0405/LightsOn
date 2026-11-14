@@ -11,6 +11,8 @@ dependencies = [
   "pillow",
   "python-dotenv",
   "segno",
+  "deepagents>=0.7.38",
+  "langchain-aws>=1.9.3",
 ]
 
 [dependency-groups]
