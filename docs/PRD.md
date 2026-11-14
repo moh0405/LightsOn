@@ -681,14 +681,37 @@ class Fact(BaseModel):
     unit: str | None; source: Literal["costar","matterport","vexcel+vision","osm","derived"]
     source_field: str; kind: Literal["verified","estimate"]; say_as: str
 
+class HardLimit(BaseModel):  # a numeric pitch bound from one verified fact
+    fact_ref: str
+    constraint: Literal["floor_plate","dark_area","stories","height","parking"]
+    threshold: float  # the cited fact's value
+    unit: Literal["sqft","stories","ft","spaces_per_1000_sqft"]
+    floor: int | None  # set only for one dark floor's listed available area
+    applies_to: list[Category]  # [] = every category; only parking may narrow to entertainment/food_retail
+    text: str  # the building's challenge line
+
 class Persona(BaseModel):
-    building_id: str; name: str; voice_style: str; voice_id: str
+    building_id: str; name: str; voice_style: str; voice_id: str  # voice_id "" until a voice is configured
     mood_baseline: Literal["lonely","proud","bitter","anxious","hopeful"]
-    desire_key: str; desire_text: str; hard_limits: list[str]
+    desire_key: str; desire_text: str  # fixed key and text from the Hidden desire table
+    desire_reason_fact_ids: list[str]; desire_reason: str  # supporting facts + fixed fictional rationale
+    hard_limits: list[HardLimit]  # at least 2, each citing a distinct researched fact
+    hard_limits_empty_reason: str | None  # set only when fewer than 2 limits can be derived
     backstory: list[dict]  # {text, fact_ref | None, fiction: bool}
     catchphrase: str; intro_line: str; signature_sound: str
-    neighbor_lines: dict[str, str]
+    neighbor_lines: dict[str, str]  # exactly 3 known neighbors
+```
 
+A hard limit fires only when a pitch states a number beyond its threshold (area for a single floor, a named dark
+floor or all dark floors; stories or a named floor number; height in feet; parking spaces per 1,000 sq ft, stated
+or computed from stated spaces and area). A category alone never triggers one.
+
+Fiction lines (fact_ref null, catchphrase, neighbor lines, and any remainder after a cited clause) may be any
+in-character prose that makes no factual claim. Prep drops and logs a line that contains numbers or number words,
+proper nouns other than the building's name, history ("was", "used to", "built", "opened"...), physical features,
+architecture styles, tenancy words, or meta words ("dossier", "database" and the banned floor-status word).
+
+```python
 class Pitch(BaseModel):
     player_id: str; text: str; origin: Literal["web","voice","imessage"]
     revision: bool = False; at: datetime
