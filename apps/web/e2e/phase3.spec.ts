@@ -209,3 +209,35 @@ test("different winners retain per-floor colors after screen reload", async ({ b
     }
   } finally { await context.close(); }
 });
+
+
+test("light-up paints the completed frame when the clock crosses the deadline during paint", async ({ browser, baseURL }) => {
+  const context = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
+  const server = new RoundServer("fixtures");
+  server.phase = "POWER_UP";
+  try {
+    await server.route(context);
+    const screen = await context.newPage();
+    await screen.goto(`${baseURL}/screen`);
+    await expect(screen.getByTestId("field")).toHaveAttribute("data-facts-ready", "true");
+    await screen.evaluate(() => {
+      const map = window.__lightsOnMap!;
+      const setPaint = map.setPaintProperty.bind(map);
+      const realNow = Date.now;
+      let crossed = false;
+      map.setPaintProperty = (...args: Parameters<typeof setPaint>) => {
+        const expression = JSON.stringify(args[2]);
+        if (!crossed && args[1] === "fill-extrusion-color" && expression.includes("#00ccff") && expression.includes("interpolate")) {
+          // Deterministically cross the end boundary between calculating a frame
+          // and deciding whether another frame is required.
+          crossed = true;
+          Date.now = () => realNow() + 1000;
+        }
+        return setPaint(...args);
+      };
+    });
+    server.emit({ type: "building_revived", building_id: "233953", floors: [6, 7, 8], color, category: "entertainment", sqft: 94509, auto_completed: false });
+    await expect.poll(() => screen.evaluate(() => JSON.stringify(window.__lightsOnMap!.getPaintProperty("floors", "fill-extrusion-color")))).toContain(color);
+    await expect.poll(() => screen.evaluate(() => JSON.stringify(window.__lightsOnMap!.getPaintProperty("floors", "fill-extrusion-color")))).not.toContain("interpolate");
+  } finally { await context.close(); }
+});
