@@ -122,3 +122,4 @@
 - 17:4x PR #22 (Phase 6A audio/voice) merged: 483 pytest, 42 web. Wrote docs/handoff.md (current state for a new session/account).
 - 17:5x PR #23 merged: verdicts may use scores, player/pitch counts and the housing estimate; the rejected line was the pitch's own "one floor". Eval sub-cap = min(ledger + 0.96, cap - 0.30). Open: hyphenated number words not parsed.
 - 17:5x User switched Orca Claude workers to the second account. Started LLM council (codex, claude-opus, grok; chairman claude-opus) on remaining scope.
+- 18:1x LLM council (Codex answer ranked first): finish Phase 6, build only the A3 trace panel, admin demo preset, verify A5/A6/A7, cut A1/A2/A8/P2, freeze at 00:00, keep >= $1.00 Bedrock for judging, humans playtest 21:00-22:30. Started 7A trace panel (Codex medium) and 7B demo readiness + README + hyphenated numbers (Claude Opus).
