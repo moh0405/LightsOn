@@ -6,6 +6,7 @@ import react from "@vitejs/plugin-react";
 const apiTarget = process.env.API_PROXY_TARGET ?? "http://localhost:8000";
 export default defineConfig({
   plugins: [react()],
+  optimizeDeps: { exclude: ["maplibre-gl"] },
   test: { exclude: [...configDefaults.exclude, "e2e/**"] },
   server: {
     host: true,

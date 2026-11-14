@@ -1,0 +1,27 @@
+export type Status = "dark" | "partial" | "occupied" | "unknown";
+export interface Building {
+  id: string; name: string | null; lat: number | null; lng: number | null;
+  stories: number | null; is_hero: boolean; dark_floors: number | null; dark_sqft: number | null;
+}
+export interface Dossier {
+  id: string; name: string | null; stories: number | null;
+  floors: { number: number; available_sqft: number | null; source_status: Status }[] | null;
+  facts: { key: string; value: unknown; say_as: string | null }[] | null;
+}
+/** Local data requests time out; callers own their visible fallback. */
+export async function getData<T>(url: string): Promise<T> {
+  const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
+  if (!response.ok) throw new Error(`Data unavailable: ${url} (${response.status})`);
+  const data: unknown = await response.json();
+  if (data === null || typeof data !== "object") throw new Error(`Invalid data: ${url}`);
+  return data as T;
+}
+const dossiers = new Map<string, Promise<Dossier>>();
+export function getDossier(id: string): Promise<Dossier> {
+  let pending = dossiers.get(id);
+  if (!pending) {
+    pending = getData<Dossier>(`/api/buildings/${encodeURIComponent(id)}`);
+    dossiers.set(id, pending);
+  }
+  return pending;
+}

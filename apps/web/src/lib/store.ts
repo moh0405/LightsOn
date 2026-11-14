@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { create } from "zustand";
+import type { RevivedColors } from "./floor-colors";
 import { fetchHealth } from "./api";
 import type { PlayerView, PointerView, ServerMessage } from "./protocol";
 import type { Phase } from "./types";
@@ -46,6 +47,7 @@ export interface GameState {
   heroIds: string[];
   players: Record<string, PlayerView>;
   pointers: Record<string, PointerView>;
+  revivedColors: RevivedColors;
   hasState: boolean;
   lastError: { code: string; message: string } | null;
 }
@@ -61,6 +63,7 @@ export const initialGame: GameState = {
   heroIds: [],
   players: {},
   pointers: {},
+  revivedColors: {},
   hasState: false,
   lastError: null,
 };

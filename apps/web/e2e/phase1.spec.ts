@@ -1,11 +1,14 @@
 import { devices, expect, test, type Page } from "@playwright/test";
 
+import { mockSkyline } from "./skyline-data";
+
 const phase = (page: Page) => page.getByTestId("phase").locator("strong");
 
 for (const mode of ["kit", "fixtures"] as const) {
   test(`Phase 1 exit gate (${mode})`, async ({ browser, baseURL }) => {
     const desktop = await browser.newContext();
     const mobiles = await Promise.all([0, 1, 2].map(() => browser.newContext({ ...devices["iPhone 13"] })));
+    await Promise.all([desktop, ...mobiles].map(mockSkyline));
     const errors: string[] = [];
     try {
       const screen = await desktop.newPage();

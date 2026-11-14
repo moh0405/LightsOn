@@ -16,7 +16,7 @@ export default defineConfig({
   fullyParallel: false,
   reporter: "list",
   globalTeardown: "./e2e/teardown.ts",
-  use: { baseURL: "http://127.0.0.1:15174", trace: "retain-on-failure" },
+  use: { baseURL: "http://127.0.0.1:15174", trace: "retain-on-failure", launchOptions: { args: ["--use-gl=swiftshader", "--enable-unsafe-swiftshader"] } },
   projects: [{ name: "chromium", use: { browserName: "chromium" } }],
   webServer: [
     {

@@ -3,12 +3,14 @@ import { useSearchParams } from "react-router-dom";
 import { CommandError } from "../lib/ws";
 import { safeGet, safeSet, useGame, useRoomSocket } from "../lib/store";
 import { ConnBanner, ErrorToast, PhaseBadge, button, input, page } from "../lib/ui";
+import { requestSensors } from "./pointer";
 import { Explore } from "./Explore";
 
 const playerKey = (room: string) => `lo.player.${room}`;
 
 export function PlayApp() {
   const [params] = useSearchParams();
+  const [sensors, setSensors] = useState(false);
   const room = (params.get("room") ?? safeGet("lo.room") ?? "").toUpperCase() || null;
   const [playerId, setPlayerId] = useState<string | null>(() => (room ? safeGet(playerKey(room)) : null));
   const idRef = useRef(playerId);
@@ -44,6 +46,8 @@ export function PlayApp() {
         <Join
           disabled={conn !== "open"}
           onJoin={async (nickname) => {
+            const permissions = requestSensors();
+            void permissions.then(setSensors);
             const r = await sock.current?.send({ type: "join", nickname });
             const id = String(r?.player_id ?? "");
             if (id) {
@@ -57,7 +61,7 @@ export function PlayApp() {
           <h2 style={{ color: me.color }}>{me.nickname}</h2>
           <PhaseBadge />
           {phase === "EXPLORE" ? (
-            <Explore sock={sock} color={me.color} />
+            <Explore sock={sock} color={me.color} sensors={sensors} />
           ) : (
             <p>{phase === "LOBBY" ? "Waiting for another player…" : "Round in progress. Watch the big screen."}</p>
           )}

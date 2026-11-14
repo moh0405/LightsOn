@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { City } from "./City";
 import { createRoom } from "../lib/api";
 import { safeGet, safeSet, useGame, useRoomSocket } from "../lib/store";
 import { ConnBanner, PhaseBadge, page } from "../lib/ui";
@@ -8,7 +9,7 @@ export function ScreenApp() {
   const [qr, setQr] = useState<{ svg: string; url: string } | null>(null);
   const [failed, setFailed] = useState(false);
   useRoomSocket(room, "screen");
-  const { players, pointers, buildingId, hasState } = useGame();
+  const { players, buildingId, hasState } = useGame();
 
   useEffect(() => {
     let cancelled = false;
@@ -34,18 +35,7 @@ export function ScreenApp() {
         <h1>Lights On: screen</h1>
         <PhaseBadge />
         {buildingId && <p>Waking building {buildingId}</p>}
-        {/* Placeholder skyline: a flat field where phone pointers show up as colored dots (real skyline is Phase 2). */}
-        <div data-testid="field" style={{ position: "relative", height: "60vh", border: "1px solid #334", borderRadius: 12, background: "#10131c", overflow: "hidden" }}>
-          {Object.entries(pointers).map(([id, p]) => (
-            <div
-              key={id}
-              data-testid="dot"
-              style={{ position: "absolute", left: `${p.x * 100}%`, top: `${p.y * 100}%`, width: 22, height: 22, marginLeft: -11, marginTop: -11, borderRadius: "50%", background: p.color, boxShadow: `0 0 16px ${p.color}`, transition: "left 60ms linear, top 60ms linear" }}
-            >
-              <span style={{ position: "absolute", top: 26, left: 0, fontSize: 12, whiteSpace: "nowrap" }}>{players[id]?.nickname}</span>
-            </div>
-          ))}
-        </div>
+        <City />
       </section>
       <aside>
         {qr && (
