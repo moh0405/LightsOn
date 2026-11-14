@@ -427,7 +427,7 @@ class Room:
         if 'city' in data:
             city = data['city']
             room.city = City(needs=city['needs'], buildings_revived=city['buildings_revived'],
-                sqft_reimagined=city['sqft_reimagined'], song_layers=city['song_layers'], counted=data.get('counted_floors', {}))
+                sqft_reimagined=city['sqft_reimagined'], song_categories=list(city.get('song_categories', [])), counted=data.get('counted_floors', {}))
         room.energy_nonces = {pid: set(nonces) for pid, nonces in data.get('energy_nonces', {}).items()}
         room.energy_at = {pid: datetime.fromisoformat(at) for pid, at in data.get('energy_at', {}).items()}
         for pid, at in room.energy_at.items():

@@ -125,11 +125,13 @@ export function reduce(s: GameState, msg: ServerMessage, now = Date.now()): Part
     case "building_revived": {
       const previous = s.revivedColors[msg.building_id];
       if (previous && msg.floors.every((floor) => previous.floors.includes(floor))) return {};
+      const categories = s.city?.song_categories ?? [];
+      const songCategories = categories.includes(msg.category) || categories.length >= 8 ? categories : [...categories, msg.category];
       return {
         charge: 100, revival: { ...msg, at: now },
         revivedColors: withRevivedBuilding(s.revivedColors, msg.building_id, msg.floors, msg.color),
         city: s.city ? { ...s.city, buildings_revived: s.city.buildings_revived + (previous ? 0 : 1),
-          sqft_reimagined: s.city.sqft_reimagined + msg.sqft, song_layers: s.city.song_layers + 1 } : null,
+          sqft_reimagined: s.city.sqft_reimagined + msg.sqft, song_categories: songCategories, song_layers: songCategories.length } : null,
       };
     }
     case "neighborhood_updated": return { city: s.city ? { ...s.city, needs: msg.needs, most_needed: msg.most_needed } : null };

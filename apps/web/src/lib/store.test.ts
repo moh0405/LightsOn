@@ -71,7 +71,9 @@ describe("round events", () => {
     expect(reduce(after, event)).toEqual({});
     const next = reduce(after, { ...event, floors: [17, 18], color: "#ff55bb", sqft: 33060 }, 456);
     expect(next.revivedColors?.["233953"]).toEqual({ floors: [6, 7, 8, 17, 18], color: "#ff55bb", floorColors: { "6": "#00ffff", "7": "#00ffff", "8": "#00ffff", "17": "#ff55bb", "18": "#ff55bb" } });
-    expect(next.city).toMatchObject({ buildings_revived: 1, sqft_reimagined: 127569, song_layers: 2 });
+    expect(next.city).toMatchObject({ buildings_revived: 1, sqft_reimagined: 127569, song_layers: 1 });
+    const housing = reduce({ ...after, ...next }, { ...event, building_id: "999", floors: [3], category: "housing" as const, sqft: 1000 }, 789);
+    expect(housing.city).toMatchObject({ song_layers: 2, song_categories: ["culture", "housing"] });
     const snapshot = reduce(after, { ...state, revived: after.revivedColors, city: after.city!, charge: 100,
       pitches: [{ player_id: "p1", text: "An art space", origin: "web", at: "2026-11-13T22:00:00Z" }],
       revisions: [{ player_id: "p1", text: "An open art space", origin: "web", revision: true, at: "2026-11-13T22:01:00Z" }],

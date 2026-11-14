@@ -37,7 +37,7 @@ class City:
     needs: dict = field(default_factory=lambda: dict(START_NEEDS))
     buildings_revived: int = 0
     sqft_reimagined: int = 0
-    song_layers: int = 0
+    song_categories: list[str] = field(default_factory=list)
     counted: dict[str, list[int]] = field(default_factory=dict)
 
     def revive(self, building_id: str, floors: list[int], category: str, sqft: int) -> None:
@@ -50,11 +50,17 @@ class City:
         self.buildings_revived += int(not seen)
         self.counted[building_id] = sorted(set(seen) | set(floors))
         self.sqft_reimagined += sqft
-        self.song_layers += 1
+        if category not in self.song_categories and len(self.song_categories) < 8:
+            self.song_categories.append(category)
         need = FEEDS.get(category)
         if need:
             self.needs[need] = min(100, self.needs[need] + min(30, sqft / 1000))
 
+    @property
+    def song_layers(self) -> int:
+        return len(self.song_categories)
+
     def snapshot(self) -> dict:
         return {'buildings_revived': self.buildings_revived, 'sqft_reimagined': self.sqft_reimagined,
-                'needs': dict(self.needs), 'most_needed': most_needed(self.needs), 'song_layers': self.song_layers}
+                'needs': dict(self.needs), 'most_needed': most_needed(self.needs), 'song_layers': self.song_layers,
+                'song_categories': list(self.song_categories)}

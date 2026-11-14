@@ -12,7 +12,7 @@ export type Need = "housing" | "food_retail" | "entertainment" | "community";
 export type Needs = Record<Need, number>;
 export interface CityState {
   buildings_revived: number; sqft_reimagined: number; needs: Needs;
-  most_needed: Need; song_layers: number;
+  most_needed: Need; song_layers: number; song_categories?: Category[];
 }
 export interface Intro { text: string; audio_url: string | null; mood: string; analyst_line: string | null }
 export interface PitchView { player_id: string; text: string; origin: "web" | "voice" | "imessage" }
