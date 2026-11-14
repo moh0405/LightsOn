@@ -17,7 +17,7 @@ interface Hover { player: string; building: string; color: string }
 export function City() {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<CityMap | null>(null);
-  const { pointers, players, phase, buildingId, revivedColors } = useGame();
+  const { pointers, players, phase, buildingId, revivedColors, dataMode, hasState } = useGame();
   const current = useRef({ pointers, phase });
   current.current = { pointers, phase };
   const [ready, setReady] = useState(false);
@@ -28,13 +28,21 @@ export function City() {
   const factError = useCallback(() => setError("Building facts are unavailable. You can still aim and wake a building."), []);
 
   useEffect(() => {
+    if (!hasState) return;
     let active = true;
+    setFactsReady(false);
+    setBuildings([]);
     void getData<Building[]>("/api/buildings").then(async (b) => {
       if (!active) return;
       setBuildings(b);
       await prefetchDossiers(b);
       if (active) setFactsReady(true);
     }).catch(() => { if (active) factError(); });
+    return () => { active = false; };
+  }, [dataMode, hasState, factError]);
+
+  useEffect(() => {
+    let active = true;
     let map: CityMap;
     try {
       map = new CityMap({ container: container.current!, center: CENTER, zoom: 15.5, pitch: 60,
@@ -127,7 +135,7 @@ export function City() {
         <span style={{ position: "absolute", top: 26, fontSize: 12 }}>{players[id]?.nickname}</span>
       </div>)}
       <div style={{ position: "absolute", left: 16, top: 16, display: "grid", gap: 8, pointerEvents: "none" }}>
-        {hovers.map((h) => <HoverCard key={`${h.player}-${h.building}`} id={h.building} color={h.color} onError={factError} />)}
+        {hovers.map((h) => <HoverCard key={`${dataMode}-${h.player}-${h.building}`} id={h.building} color={h.color} onError={factError} />)}
       </div>
     </div>
   </>;

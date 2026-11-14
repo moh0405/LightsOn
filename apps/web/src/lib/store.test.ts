@@ -4,7 +4,7 @@ import type { RoomStateMsg } from "./protocol";
 
 const state: RoomStateMsg = {
   type: "room_state", room: "ABCD", phase: "EXPLORE", round_id: null, building_id: null, target_floors: [],
-  ends_at: null, data_mode: "kit", hero_building_ids: ["233953"],
+  ends_at: null, data_mode: "kit", data_mode_scope: "process", hero_building_ids: ["233953"],
   players: [{ id: "p1", nickname: "Ann", color: "#f00", connected: true }],
 };
 
@@ -22,6 +22,7 @@ describe("game reducer", () => {
     expect(patch.players?.p1?.nickname).toBe("Ann");
     expect(patch.pointers).toEqual({});
     expect(patch.hasState).toBe(true);
+    expect(patch.dataModeScope).toBe("process");
   });
 
   it("pointer events update the colored dot", () => {

@@ -75,3 +75,11 @@ The standalone sweep intentionally exits 1 while these findings remain; unlike t
 Machine-readable results: `apps/web/e2e/artifacts/qa-phase2/results.json`. Final sweep captured 145 screenshots across both modes, with screen/admin/all three phones per phase and important failures. Images remain local and gitignored; they are embedded above for local review. Example successful artifacts: `kit-hover-screen.png`, `kit-restarted-screen.png`, `fixtures-restarted-screen.png`, and `{kit,fixtures}-{INTRO,PITCH,CHALLENGE,NEGOTIATE,VERDICT,POWER_UP,REVIVED,EXPLORE}-{screen,phone-1,phone-2,phone-3}.png` in the same artifact directory.
 
 Remaining work: coordinator assigns product fixes for the three findings, removes the two expected-failure annotations after they pass, and reruns the unmocked sweep. No contracts or product files were modified by QA.
+
+## Phase 2 fixes: provider behavior
+
+The host data-mode switch applies to the entire server process and every room, including new and restored rooms. `room_state` now includes `data_mode_scope: "process"`; the admin displays “all rooms.” `/api/health`, `/api/buildings` and dossier responses use the same selection. A switch validates the provider before changing state; an unavailable kit leaves the previous mode active and returns an error for the UI toast.
+
+Run one server process for this mode switch. The choice lasts until process exit; on restart, `DATA_MODE` is authoritative, including for restored room snapshots. No `.env` file is modified. Clients invalidate pending and resolved dossiers when the reported mode changes, refetch building lists and prefetch all dossiers; late responses from the previous mode cannot repopulate the cache. Floor geometry remains the deterministic export of the same seven buildings in either mode.
+
+Dossiers now keep `building_height_ft` as the kit value or null. Rendering uses `render.floor_height_m` with `render.floor_height_source` (`costar` or `assumption`); the 3.8 m fallback is labelled as an assumption and never presented as a building fact.

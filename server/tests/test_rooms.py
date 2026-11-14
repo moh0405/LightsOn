@@ -167,3 +167,15 @@ def test_new_room_defaults_to_process_data_mode(tmp_path, monkeypatch, mode):
     monkeypatch.setenv('DATA_MODE', mode)
     mgr, _ = make(tmp_path)
     assert mgr.create().snapshot()['data_mode'] == mode
+
+
+def test_restored_room_uses_current_process_provider(tmp_path, monkeypatch):
+    monkeypatch.setenv('DATA_MODE', 'kit')
+    mgr, _ = make(tmp_path)
+    room = mgr.create('ABCD')
+    assert room.data_mode == 'kit'
+    mgr.close()
+    monkeypatch.setenv('DATA_MODE', 'fixtures')
+    restored, _ = make(tmp_path)
+    assert restored.get('ABCD').snapshot()['data_mode'] == 'fixtures'
+    restored.close()

@@ -16,6 +16,7 @@ export interface RoomStateMsg {
   target_floors: number[];
   ends_at: string | null;
   data_mode: string;
+  data_mode_scope: "process";
   hero_building_ids: string[];
   players: PlayerView[];
 }

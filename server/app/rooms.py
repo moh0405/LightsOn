@@ -89,6 +89,7 @@ class Room:
             "target_floors": self.target_floors,
             "ends_at": self.ends_at.isoformat() if self.ends_at else None,
             "data_mode": self.data_mode,
+            "data_mode_scope": "process",
             "hero_building_ids": self.hero_ids,
             "players": [p.public() for p in self.players.values()],
         }
@@ -210,7 +211,7 @@ class Room:
     @classmethod
     def restore(cls, path: Path, hero_ids: list[str], state_dir: Path, **kw) -> "Room":
         data = json.loads(path.read_text())
-        room = cls(code=data["room"], hero_ids=hero_ids, data_mode=data.get("data_mode") or os.getenv("DATA_MODE") or "kit",
+        room = cls(code=data["room"], hero_ids=hero_ids, data_mode=os.getenv("DATA_MODE") or "kit",
                    state_dir=state_dir, **kw)
         room.phase = data["phase"]
         room.round_id = data.get("round_id")
