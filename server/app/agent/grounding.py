@@ -49,7 +49,10 @@ def check_line(line: str, fact_ids: list[str], dossier: dict, impact: dict | Non
         supported = False
         for fact in cited:
             expected = fact['value']
-            if type(expected) in (int, float) and math.isclose(value, expected, rel_tol=.001, abs_tol=.005):
+            exact = (fact['key'].startswith('construction_') or fact['key'] in
+                     {'yearBuilt', 'yearRenovated', 'numStoriesAboveGrade', 'dark_floor_count'})
+            if type(expected) in (int, float) and math.isclose(value, expected,
+                    rel_tol=0 if exact else .001, abs_tol=0 if exact else .005):
                 fact_unit = fact['unit'] or {'numStoriesAboveGrade': 'stories', 'parkingRatio': 'spaces_per_1000_sqft'}.get(fact['key'])
                 if unit is None or unit == fact_unit:
                     supported = True

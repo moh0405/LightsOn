@@ -10,10 +10,11 @@ from .tools import PROPERTY_KEYS, HISTORY_KEYS, DERIVED_KEYS, DETECTION_KEYS
 
 
 def safe_facts(dossier: dict) -> list[dict]:
-    allowed = PROPERTY_KEYS | HISTORY_KEYS | DERIVED_KEYS | DETECTION_KEYS
+    allowed = PROPERTY_KEYS | HISTORY_KEYS | DERIVED_KEYS | DETECTION_KEYS | {
+        'construction_ConstructionComplete', 'construction_RenovationFinished', 'construction_CommonAreaRenovated'}
     return [{k: f.get(k) for k in ('id', 'key', 'say_as', 'value', 'unit', 'source', 'kind')}
             for f in dossier.get('facts', []) if f.get('key') in allowed
-            or re.fullmatch(r'floor_-?\d+_(?:size|available|occupied)_sqft|construction_\w+', f.get('key', ''))]
+            or re.fullmatch(r'floor_-?\d+_(?:size|available|occupied)_sqft', f.get('key', ''))]
 
 
 def persona_for(dossier: dict) -> dict:

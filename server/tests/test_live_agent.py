@@ -28,6 +28,7 @@ def test_prompt_contains_only_allowed_source_fields(dossier):
     dossier = copy.deepcopy(dossier)
     dossier['contacts'] = {'owner': 'PRIVATE_CONTACT'}
     dossier['facts'].append(dict(id='secret', key='ownerName', value='PRIVATE_CONTACT', say_as='PRIVATE_CONTACT'))
+    dossier['facts'].append(dict(id='secret2', key='construction_ownerName', value='PRIVATE_CONTACT', say_as='PRIVATE_CONTACT'))
     prompt = build_prompt(dossier, 'proud', City(), 'No earlier rounds.')
     assert 'PRIVATE_CONTACT' not in prompt
     assert 'FACTS' in prompt and 'CONSTRAINTS' in prompt and 'game simulation' in prompt
@@ -41,6 +42,8 @@ def test_grounding_rejects_unknown_numbers_units_and_unlabelled_estimates(dossie
     assert check_line(f"I stand {fact['value']:g} square feet tall.", [fact['id']], dossier)
     assert check_line('I stand 987654 feet tall.', [fact['id']], dossier)
     assert check_line('I have a secret tunnel.', ['missing'], dossier)
+    year = next(f for f in dossier['facts'] if f['key'] == 'construction_ConstructionComplete')
+    assert check_line(f"Completed in {year['value'] + 1:.0f}.", [year['id']], dossier)
     estimate = next(f for f in dossier['facts'] if f['kind'] == 'estimate')
     assert check_line(estimate['say_as'], [estimate['id']], dossier)
     assert check_line(fallback_line([estimate['id']], dossier), [estimate['id']], dossier) is None
@@ -197,7 +200,7 @@ async def test_live_room_round_passes_actions_and_persists_mood(dossier, monkeyp
     await room.advance()
     await room._agent_task
     assert room.verdict.winner_player_id == a.id
-    assert room.mood == 'offended'
+    assert room.mood == 'bitter'  # the later, strong revision moves one step from offended
     restored = Room.restore(tmp_path / 'TEST.json', ['233953'], tmp_path)
     assert restored.mood == room.mood
     restored.close()
@@ -243,3 +246,21 @@ async def test_pending_live_snapshot_resumes_offline_when_flag_changes(dossier, 
     assert back.challenges and back.challenges[0].player_id == player.id
     room.close()
     back.close()
+
+
+async def test_each_scored_pitch_moves_mood_while_revision_keeps_better_score(dossier):
+    from app.rooms import Room
+    room = Room(code='TEST', hero_ids=['233953'], durations={})
+    player = room.add_player('Ann')
+    await room.set_phase('EXPLORE')
+    await room.start_round('233953')
+    room.mood = 'proud'
+    await room.advance()
+    await room.submit_pitch(player.id, 'A community studio open at night', 'web', room.round_id, False)
+    await room.advance()
+    await room.advance()
+    await room.submit_pitch(player.id, 'I need 9000000 square feet on a single floor', 'web', room.round_id, True)
+    await room.advance()
+    assert room.verdict.scores[0].data_fit == 7  # the weaker revision cannot hurt the round score
+    assert room.mood == 'proud'  # original: proud -> hopeful; revision: hopeful -> proud
+    room.close()

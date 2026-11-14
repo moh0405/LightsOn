@@ -244,7 +244,7 @@ class Room:
                 await self._set_phase('EXPLORE')
                 return
         if phase == 'VERDICT' and self.verdict and not pending_live:
-            self._score_mood()
+            self._score_mood(batches)
         if phase == "INTRO" and self.dossier:
             self.intro = {**fake_agent.intro(self.dossier), "analyst_line": analyst_line(self.city.needs)}
         seconds = self.durations.get(phase)
@@ -279,14 +279,17 @@ class Room:
         else:
             self._arm_timer(seconds)
 
-    def _score_mood(self) -> None:
-        if not self.verdict:
-            return
-        scores = {s.player_id: s for s in self.verdict.scores}
-        for p in self.pitches.values():
-            injection = any(live_agent.safety_reason(candidate.text) == 'injection'
-                            for candidate in (p, self.revisions.get(p.player_id)) if candidate)
-            self.mood = live_agent.mood_after(self.mood, scores[p.player_id].data_fit, injection=injection)
+    def _score_mood(self, batches) -> None:
+        # Every original and revision is scored fresh. Mood follows each validated
+        # pitch, while the round score still retains only the better submission.
+        for proposal, pitches in batches:
+            validated = validate_verdict([(proposal, pitches)], dossier=self.dossier,
+                player_ids=set(self.players), round_id=self.round_id, city=self.city,
+                sqft=target_sqft(self.dossier, self.target_floors))
+            scores = {score.player_id: score for score in validated.scores}
+            for pitch in pitches:
+                self.mood = live_agent.mood_after(self.mood, scores[pitch.player_id].data_fit,
+                    injection=live_agent.safety_reason(pitch.text) == 'injection')
         if self.intro:
             self.intro['mood'] = self.mood
 
@@ -338,7 +341,8 @@ class Room:
                                    for batch in (originals, revised) if batch]
                         self.verdict = validate_verdict(batches, dossier=self.dossier, player_ids=set(self.players),
                             round_id=round_id, city=self.city, sqft=target_sqft(self.dossier, self.target_floors))
-                    self._score_mood()
+                        result = batches
+                    self._score_mood(result)
                     await self.broadcast('room_state', self.snapshot())
                     await self.broadcast('verdict', self.verdict.model_dump())
                 seconds = self.durations.get(phase)
