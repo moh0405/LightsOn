@@ -121,3 +121,4 @@
 - 17:3x PR #21 merged (hypothetical-prefix bypass closed; prep sub-cap = cap - 0.30). Paid re-check ($0.074, ledger $2.703): challenges 1/8 fallbacks PASS (the one = eval sub-cap), model-only p50/p90 2.69/4.13 s, first grounded line 2.2-2.4 s PASS; verdicts 2/2 fallback (number_match + sub-cap). Claude Opus fixing verdict number matching and the eval sub-cap.
 - 17:4x PR #22 (Phase 6A audio/voice) merged: 483 pytest, 42 web. Wrote docs/handoff.md (current state for a new session/account).
 - 17:5x PR #23 merged: verdicts may use scores, player/pitch counts and the housing estimate; the rejected line was the pitch's own "one floor". Eval sub-cap = min(ledger + 0.96, cap - 0.30). Open: hyphenated number words not parsed.
+- 17:5x User switched Orca Claude workers to the second account. Started LLM council (codex, claude-opus, grok; chairman claude-opus) on remaining scope.
