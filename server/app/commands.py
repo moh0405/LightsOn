@@ -4,8 +4,10 @@ from __future__ import annotations
 import hmac
 import logging
 import os
+import sqlite3
 from typing import Any
 
+from .data.provider import provider_for_mode
 from .rooms import Conn, Room, RoomError, RoomManager
 
 log = logging.getLogger("lights_on.commands")
@@ -98,7 +100,17 @@ class CommandService:
             mode = cmd.get("data_mode")
             if mode not in DATA_MODES:
                 raise RoomError("bad_payload", "data_mode must be kit or fixtures.")
-            room.data_mode = mode
-            room.save_players()
-            await room.broadcast("room_state", room.snapshot())
+            try:
+                # Confirm the requested provider is usable before changing any labels.
+                provider_for_mode(mode).buildings()
+            except (OSError, ValueError, sqlite3.Error) as exc:
+                log.error("data provider switch failed (%s)", type(exc).__name__)
+                raise RoomError("data_unavailable", "Building data is unavailable; the data mode has not changed.") from exc
+            os.environ["DATA_MODE"] = mode
+            rooms = list(self.manager.rooms.values())
+            for active in rooms:
+                active.data_mode = mode
+                active.save_players()
+            for active in rooms:
+                await active.broadcast("room_state", active.snapshot())
         return {"phase": room.phase}

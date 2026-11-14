@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { create } from "zustand";
 import type { RevivedColors } from "./floor-colors";
+import { setBuildingDataMode } from "./buildings";
 import { fetchHealth } from "./api";
 import type { PlayerView, PointerView, ServerMessage } from "./protocol";
 import type { Phase } from "./types";
@@ -44,6 +45,7 @@ export interface GameState {
   buildingId: string | null;
   endsAt: string | null;
   dataMode: string;
+  dataModeScope: "process";
   heroIds: string[];
   players: Record<string, PlayerView>;
   pointers: Record<string, PointerView>;
@@ -60,6 +62,7 @@ export const initialGame: GameState = {
   buildingId: null,
   endsAt: null,
   dataMode: "kit",
+  dataModeScope: "process",
   heroIds: [],
   players: {},
   pointers: {},
@@ -80,6 +83,7 @@ export function reduce(s: GameState, msg: ServerMessage, now = Date.now()): Part
         buildingId: msg.building_id,
         endsAt: msg.ends_at,
         dataMode: msg.data_mode,
+        dataModeScope: msg.data_mode_scope,
         heroIds: msg.hero_building_ids,
         players: Object.fromEntries(msg.players.map((p) => [p.id, p])),
         pointers: {},
@@ -124,7 +128,10 @@ export function useRoomSocket(
       room,
       role,
       getPlayerId: () => getter.current?.() ?? null,
-      onMessage: (m) => useGame.setState((s) => reduce(s, m)),
+      onMessage: (m) => {
+        if (m.type === "room_state") setBuildingDataMode(m.data_mode);
+        useGame.setState((s) => reduce(s, m));
+      },
       onStatus: (conn) => useGame.setState({ conn }),
     });
     ref.current = sock;

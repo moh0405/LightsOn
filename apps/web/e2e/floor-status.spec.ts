@@ -24,8 +24,6 @@ test('real partial and unknown floors retain their PRD colors', async ({ page, r
   const unknown = floors.features.find((f) => f.properties?.source_status === 'unknown');
   expect(partial).toBeTruthy();
   expect(unknown).toBeTruthy();
-  // Known Phase 2 integration bug: generated game_status=lit overrides both.
-  test.fail(true, 'Real partial/unknown floors are currently painted warm gold');
   expect.soft(expression.value.evaluate({ zoom: 15.5 }, { type: 'Polygon', properties: partial!.properties! })).toBe('#4a4636');
   expect.soft(expression.value.evaluate({ zoom: 15.5 }, { type: 'Polygon', properties: unknown!.properties! })).toBe('#3a3f52');
 });

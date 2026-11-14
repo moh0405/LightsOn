@@ -6,7 +6,11 @@
   "lng": -95.3705243,
   "footprint": null,
   "stories": 34,
-  "floor_height_m": 3.8,
+  "building_height_ft": null,
+  "render": {
+    "floor_height_m": 3.8,
+    "floor_height_source": "assumption"
+  },
   "floors": [
     {
       "floor_id": 3232967,
@@ -16,7 +20,7 @@
       "available_sqft": 0,
       "occupied_sqft": 4967.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233935_floor_1_size_sqft",
         "F_233935_floor_1_available_sqft",
@@ -31,7 +35,7 @@
       "available_sqft": 0,
       "occupied_sqft": 27277.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233935_floor_2_size_sqft",
         "F_233935_floor_2_available_sqft",
@@ -46,7 +50,7 @@
       "available_sqft": 0,
       "occupied_sqft": 27255.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233935_floor_3_size_sqft",
         "F_233935_floor_3_available_sqft",
@@ -61,7 +65,7 @@
       "available_sqft": 0,
       "occupied_sqft": 27255.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233935_floor_4_size_sqft",
         "F_233935_floor_4_available_sqft",
@@ -76,7 +80,7 @@
       "available_sqft": 0,
       "occupied_sqft": 27277.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233935_floor_5_size_sqft",
         "F_233935_floor_5_available_sqft",
@@ -91,7 +95,7 @@
       "available_sqft": 0,
       "occupied_sqft": 27261.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233935_floor_6_size_sqft",
         "F_233935_floor_6_available_sqft",
@@ -106,7 +110,7 @@
       "available_sqft": 0,
       "occupied_sqft": 27258.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233935_floor_7_size_sqft",
         "F_233935_floor_7_available_sqft",
@@ -121,7 +125,7 @@
       "available_sqft": 0,
       "occupied_sqft": 27277.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233935_floor_8_size_sqft",
         "F_233935_floor_8_available_sqft",
@@ -136,7 +140,7 @@
       "available_sqft": 0,
       "occupied_sqft": 32277.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233935_floor_9_size_sqft",
         "F_233935_floor_9_available_sqft",
@@ -151,7 +155,7 @@
       "available_sqft": 0,
       "occupied_sqft": 2863.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233935_floor_10_size_sqft",
         "F_233935_floor_10_available_sqft",
@@ -179,9 +183,9 @@
       "name": "TwelfthFloor",
       "size_sqft": 27277.0,
       "available_sqft": 20552.0,
-      "occupied_sqft": 6946.0,
+      "occupied_sqft": null,
       "source_status": "partial",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233935_floor_12_size_sqft",
         "F_233935_floor_12_available_sqft",
@@ -194,9 +198,9 @@
       "name": "ThirteenthFloor",
       "size_sqft": 27498.0,
       "available_sqft": 27500.0,
-      "occupied_sqft": 0,
-      "source_status": "dark",
-      "game_status": "dark",
+      "occupied_sqft": null,
+      "source_status": "partial",
+      "game_status": null,
       "fact_ids": [
         "F_233935_floor_13_size_sqft",
         "F_233935_floor_13_available_sqft",
@@ -211,7 +215,7 @@
       "available_sqft": 0,
       "occupied_sqft": 29358.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233935_floor_14_size_sqft",
         "F_233935_floor_14_available_sqft",
@@ -226,7 +230,7 @@
       "available_sqft": 0,
       "occupied_sqft": 27869.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233935_floor_15_size_sqft",
         "F_233935_floor_15_available_sqft",
@@ -256,7 +260,7 @@
       "available_sqft": 0,
       "occupied_sqft": 27689.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233935_floor_17_size_sqft",
         "F_233935_floor_17_available_sqft",
@@ -286,7 +290,7 @@
       "available_sqft": 6592.0,
       "occupied_sqft": 21097.0,
       "source_status": "partial",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233935_floor_19_size_sqft",
         "F_233935_floor_19_available_sqft",
@@ -301,7 +305,7 @@
       "available_sqft": 0,
       "occupied_sqft": 27689.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233935_floor_20_size_sqft",
         "F_233935_floor_20_available_sqft",
@@ -316,7 +320,7 @@
       "available_sqft": 10234.0,
       "occupied_sqft": 17640.0,
       "source_status": "partial",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233935_floor_21_size_sqft",
         "F_233935_floor_21_available_sqft",
@@ -346,7 +350,7 @@
       "available_sqft": 0,
       "occupied_sqft": 27703.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233935_floor_23_size_sqft",
         "F_233935_floor_23_available_sqft",
@@ -376,7 +380,7 @@
       "available_sqft": 24444.0,
       "occupied_sqft": 3337.0,
       "source_status": "partial",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233935_floor_25_size_sqft",
         "F_233935_floor_25_available_sqft",
@@ -391,7 +395,7 @@
       "available_sqft": 12561.0,
       "occupied_sqft": 11237.0,
       "source_status": "partial",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233935_floor_26_size_sqft",
         "F_233935_floor_26_available_sqft",
@@ -406,7 +410,7 @@
       "available_sqft": 0,
       "occupied_sqft": 0,
       "source_status": "unknown",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233935_floor_27_size_sqft",
         "F_233935_floor_27_available_sqft",
@@ -421,7 +425,7 @@
       "available_sqft": 5757.0,
       "occupied_sqft": 3904.0,
       "source_status": "partial",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233935_floor_28_size_sqft",
         "F_233935_floor_28_available_sqft",
@@ -436,7 +440,7 @@
       "available_sqft": 0,
       "occupied_sqft": 28374.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233935_floor_29_size_sqft",
         "F_233935_floor_29_available_sqft",
@@ -451,7 +455,7 @@
       "available_sqft": 0,
       "occupied_sqft": 34379.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233935_floor_30_size_sqft",
         "F_233935_floor_30_available_sqft",
@@ -466,7 +470,7 @@
       "available_sqft": 0,
       "occupied_sqft": 28101.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233935_floor_31_size_sqft",
         "F_233935_floor_31_available_sqft",
@@ -481,7 +485,7 @@
       "available_sqft": 0,
       "occupied_sqft": 28063.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233935_floor_32_size_sqft",
         "F_233935_floor_32_available_sqft",
@@ -496,7 +500,7 @@
       "available_sqft": 0,
       "occupied_sqft": 14826.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233935_floor_33_size_sqft",
         "F_233935_floor_33_available_sqft",
@@ -511,7 +515,7 @@
       "available_sqft": 11629.0,
       "occupied_sqft": 11182.0,
       "source_status": "partial",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233935_floor_34_size_sqft",
         "F_233935_floor_34_available_sqft",
@@ -526,7 +530,7 @@
       "available_sqft": 0,
       "occupied_sqft": 0,
       "source_status": "unknown",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233935_floor_id_1086713_size_sqft",
         "F_233935_floor_id_1086713_available_sqft",
@@ -541,7 +545,7 @@
       "available_sqft": 0,
       "occupied_sqft": 13609.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233935_floor_id_1089614_size_sqft",
         "F_233935_floor_id_1089614_available_sqft",
@@ -556,7 +560,7 @@
       "available_sqft": 0,
       "occupied_sqft": 0,
       "source_status": "unknown",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233935_floor_id_1457656_size_sqft",
         "F_233935_floor_id_1457656_available_sqft",
@@ -571,7 +575,7 @@
       "available_sqft": 2956.0,
       "occupied_sqft": 10879.0,
       "source_status": "partial",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233935_floor_id_2780883_size_sqft",
         "F_233935_floor_id_2780883_available_sqft",
@@ -586,7 +590,7 @@
       "available_sqft": 11412.0,
       "occupied_sqft": 3500.0,
       "source_status": "partial",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233935_floor_id_3065170_size_sqft",
         "F_233935_floor_id_3065170_available_sqft",
@@ -858,12 +862,12 @@
     {
       "id": "F_233935_floor_12_occupied_sqft",
       "key": "floor_12_occupied_sqft",
-      "value": 6946.0,
+      "value": null,
       "unit": "sqft",
       "source": "costar",
       "source_field": "location-occupancy.spaces.squareFeetOccupied",
       "kind": "verified",
-      "say_as": "6,946.0 sqft"
+      "say_as": null
     },
     {
       "id": "F_233935_floor_14_size_sqft",
@@ -1338,12 +1342,12 @@
     {
       "id": "F_233935_floor_13_occupied_sqft",
       "key": "floor_13_occupied_sqft",
-      "value": 0,
+      "value": null,
       "unit": "sqft",
       "source": "costar",
       "source_field": "location-occupancy.spaces.squareFeetOccupied",
       "kind": "verified",
-      "say_as": "0 sqft"
+      "say_as": null
     },
     {
       "id": "F_233935_floor_17_size_sqft",
@@ -2036,12 +2040,12 @@
     {
       "id": "F_233935_occupied_sqft",
       "key": "occupied_sqft",
-      "value": 608349.0,
+      "value": null,
       "unit": "sqft",
       "source": "costar",
       "source_field": "location-occupancy.spaces.squareFeetOccupied",
       "kind": "verified",
-      "say_as": "608,349.0 sqft"
+      "say_as": null
     },
     {
       "id": "F_233935_matterport_models",

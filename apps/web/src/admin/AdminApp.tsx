@@ -15,7 +15,7 @@ export function AdminApp() {
   const [pin, setPin] = useState<string>(safeGet("lo.pin", "session") ?? "");
   const [msg, setMsg] = useState<string | null>(null);
   const sock = useRoomSocket(active, "admin");
-  const { dataMode, players, conn } = useGame();
+  const { dataMode, dataModeScope, players, conn } = useGame();
 
   const run = async (extra: Record<string, unknown>) => {
     setMsg(null);
@@ -39,7 +39,7 @@ export function AdminApp() {
       {active && (
         <>
           <PhaseBadge />
-          <p>Room {active} · {conn} · {Object.keys(players).length} players · data mode: {dataMode}</p>
+          <p>Room {active} · {conn} · {Object.keys(players).length} players · data mode: {dataMode} ({dataModeScope === "process" ? "all rooms" : ""})</p>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {ACTIONS.map((a) => (
               <button key={a.action} style={button} disabled={!pin} onClick={() => void run({ action: a.action })}>{a.label}</button>

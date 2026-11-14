@@ -6,6 +6,7 @@ import type { RoomSocket } from "../lib/ws";
 import { aim, clamp, rateLimit, smooth, type Point } from "./pointer";
 
 export function Explore({ sock, color, sensors = false }: { sock: MutableRefObject<RoomSocket | null>; color: string; sensors?: boolean }) {
+  const dataMode = useGame((s) => s.dataMode);
   const heroIds = useGame((s) => s.heroIds);
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [error, setError] = useState(false);
@@ -15,9 +16,11 @@ export function Explore({ sock, color, sensors = false }: { sock: MutableRefObje
   const smoothed = useRef<Point>({ x: 0.5, y: 0.5 });
   useEffect(() => {
     let active = true;
+    setBuildings([]);
+    setError(false);
     void getData<Building[]>("/api/buildings").then((b) => { if (active) setBuildings(b); }).catch(() => { if (active) setError(true); });
     return () => { active = false; };
-  }, []);
+  }, [dataMode]);
   useEffect(() => {
     if (!sensors) return;
     const onOrientation = (e: DeviceOrientationEvent) => {

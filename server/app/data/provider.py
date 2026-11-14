@@ -21,9 +21,12 @@ def summary(dossier: dict, heroes: set[str]) -> dict:
 
 
 def get_provider() -> DataProvider:
+    return provider_for_mode(os.getenv('DATA_MODE') or 'kit')
+
+
+def provider_for_mode(mode: str) -> DataProvider:
     from .fixtures import FixtureProvider
     from .kit import KitProvider
-    mode = os.getenv('DATA_MODE') or 'kit'
     heroes = {x.strip() for x in os.getenv('HERO_PROPERTY_IDS', '233953,233899').split(',') if x.strip()}
     if mode == 'fixtures':
         return FixtureProvider(DEFAULT_DOSSIERS, heroes)

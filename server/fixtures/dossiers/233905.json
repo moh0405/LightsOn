@@ -6,7 +6,11 @@
   "lng": -95.366467,
   "footprint": null,
   "stories": 56,
-  "floor_height_m": 3.8,
+  "building_height_ft": null,
+  "render": {
+    "floor_height_m": 3.8,
+    "floor_height_source": "assumption"
+  },
   "floors": [
     {
       "floor_id": 1092116,
@@ -16,7 +20,7 @@
       "available_sqft": 0,
       "occupied_sqft": 0,
       "source_status": "unknown",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_1_size_sqft",
         "F_233905_floor_1_available_sqft",
@@ -31,7 +35,7 @@
       "available_sqft": 8892.0,
       "occupied_sqft": 16439.0,
       "source_status": "partial",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_2_size_sqft",
         "F_233905_floor_2_available_sqft",
@@ -46,7 +50,7 @@
       "available_sqft": 20654.0,
       "occupied_sqft": 5354.0,
       "source_status": "partial",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_3_size_sqft",
         "F_233905_floor_3_available_sqft",
@@ -61,7 +65,7 @@
       "available_sqft": 0,
       "occupied_sqft": 26728.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_4_size_sqft",
         "F_233905_floor_4_available_sqft",
@@ -76,7 +80,7 @@
       "available_sqft": 0,
       "occupied_sqft": 26664.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_5_size_sqft",
         "F_233905_floor_5_available_sqft",
@@ -91,7 +95,7 @@
       "available_sqft": 0,
       "occupied_sqft": 30009.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_6_size_sqft",
         "F_233905_floor_6_available_sqft",
@@ -106,7 +110,7 @@
       "available_sqft": 0,
       "occupied_sqft": 15599.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_7_size_sqft",
         "F_233905_floor_7_available_sqft",
@@ -121,7 +125,7 @@
       "available_sqft": 0,
       "occupied_sqft": 0,
       "source_status": "unknown",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_8_size_sqft",
         "F_233905_floor_8_available_sqft",
@@ -136,7 +140,7 @@
       "available_sqft": 0,
       "occupied_sqft": 30005.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_9_size_sqft",
         "F_233905_floor_9_available_sqft",
@@ -151,7 +155,7 @@
       "available_sqft": 0,
       "occupied_sqft": 30005.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_10_size_sqft",
         "F_233905_floor_10_available_sqft",
@@ -166,7 +170,7 @@
       "available_sqft": 0,
       "occupied_sqft": 30000.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_11_size_sqft",
         "F_233905_floor_11_available_sqft",
@@ -181,7 +185,7 @@
       "available_sqft": 0,
       "occupied_sqft": 30000.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_12_size_sqft",
         "F_233905_floor_12_available_sqft",
@@ -196,7 +200,7 @@
       "available_sqft": 0,
       "occupied_sqft": 30012.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_13_size_sqft",
         "F_233905_floor_13_available_sqft",
@@ -211,7 +215,7 @@
       "available_sqft": 0,
       "occupied_sqft": 30000.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_14_size_sqft",
         "F_233905_floor_14_available_sqft",
@@ -226,7 +230,7 @@
       "available_sqft": 0,
       "occupied_sqft": 30000.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_15_size_sqft",
         "F_233905_floor_15_available_sqft",
@@ -241,7 +245,7 @@
       "available_sqft": 0,
       "occupied_sqft": 30284.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_16_size_sqft",
         "F_233905_floor_16_available_sqft",
@@ -256,7 +260,7 @@
       "available_sqft": 23947.0,
       "occupied_sqft": 3328.0,
       "source_status": "partial",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_17_size_sqft",
         "F_233905_floor_17_available_sqft",
@@ -301,7 +305,7 @@
       "available_sqft": 17017.0,
       "occupied_sqft": 0,
       "source_status": "partial",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_20_size_sqft",
         "F_233905_floor_20_available_sqft",
@@ -316,7 +320,7 @@
       "available_sqft": 0,
       "occupied_sqft": 30000.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_21_size_sqft",
         "F_233905_floor_21_available_sqft",
@@ -331,7 +335,7 @@
       "available_sqft": 0,
       "occupied_sqft": 30000.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_22_size_sqft",
         "F_233905_floor_22_available_sqft",
@@ -346,7 +350,7 @@
       "available_sqft": 0,
       "occupied_sqft": 30000.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_23_size_sqft",
         "F_233905_floor_23_available_sqft",
@@ -361,7 +365,7 @@
       "available_sqft": 13609.0,
       "occupied_sqft": 11433.0,
       "source_status": "partial",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_24_size_sqft",
         "F_233905_floor_24_available_sqft",
@@ -376,7 +380,7 @@
       "available_sqft": 0,
       "occupied_sqft": 30000.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_25_size_sqft",
         "F_233905_floor_25_available_sqft",
@@ -391,7 +395,7 @@
       "available_sqft": 0,
       "occupied_sqft": 30000.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_26_size_sqft",
         "F_233905_floor_26_available_sqft",
@@ -406,7 +410,7 @@
       "available_sqft": 0,
       "occupied_sqft": 12985.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_27_size_sqft",
         "F_233905_floor_27_available_sqft",
@@ -451,7 +455,7 @@
       "available_sqft": 0,
       "occupied_sqft": 25943.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_30_size_sqft",
         "F_233905_floor_30_available_sqft",
@@ -466,7 +470,7 @@
       "available_sqft": 0,
       "occupied_sqft": 18851.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_31_size_sqft",
         "F_233905_floor_31_available_sqft",
@@ -481,7 +485,7 @@
       "available_sqft": 0,
       "occupied_sqft": 25900.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_32_size_sqft",
         "F_233905_floor_32_available_sqft",
@@ -496,7 +500,7 @@
       "available_sqft": 0,
       "occupied_sqft": 23557.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_33_size_sqft",
         "F_233905_floor_33_available_sqft",
@@ -511,7 +515,7 @@
       "available_sqft": 0,
       "occupied_sqft": 23557.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_34_size_sqft",
         "F_233905_floor_34_available_sqft",
@@ -526,7 +530,7 @@
       "available_sqft": 0,
       "occupied_sqft": 24746.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_35_size_sqft",
         "F_233905_floor_35_available_sqft",
@@ -541,7 +545,7 @@
       "available_sqft": 0,
       "occupied_sqft": 22800.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_36_size_sqft",
         "F_233905_floor_36_available_sqft",
@@ -556,7 +560,7 @@
       "available_sqft": 0,
       "occupied_sqft": 22800.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_37_size_sqft",
         "F_233905_floor_37_available_sqft",
@@ -571,7 +575,7 @@
       "available_sqft": 0,
       "occupied_sqft": 22800.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_38_size_sqft",
         "F_233905_floor_38_available_sqft",
@@ -586,7 +590,7 @@
       "available_sqft": 423.0,
       "occupied_sqft": 24158.0,
       "source_status": "partial",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_39_size_sqft",
         "F_233905_floor_39_available_sqft",
@@ -616,7 +620,7 @@
       "available_sqft": 1841.0,
       "occupied_sqft": 17559.0,
       "source_status": "partial",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_41_size_sqft",
         "F_233905_floor_41_available_sqft",
@@ -631,7 +635,7 @@
       "available_sqft": 0,
       "occupied_sqft": 28030.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_42_size_sqft",
         "F_233905_floor_42_available_sqft",
@@ -646,7 +650,7 @@
       "available_sqft": 0,
       "occupied_sqft": 19400.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_43_size_sqft",
         "F_233905_floor_43_available_sqft",
@@ -661,7 +665,7 @@
       "available_sqft": 0,
       "occupied_sqft": 0,
       "source_status": "unknown",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_44_size_sqft",
         "F_233905_floor_44_available_sqft",
@@ -676,7 +680,7 @@
       "available_sqft": 6134.0,
       "occupied_sqft": 13308.0,
       "source_status": "partial",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_45_size_sqft",
         "F_233905_floor_45_available_sqft",
@@ -691,7 +695,7 @@
       "available_sqft": 0,
       "occupied_sqft": 10903.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_46_size_sqft",
         "F_233905_floor_46_available_sqft",
@@ -704,9 +708,9 @@
       "name": "FortySeventhFloor",
       "size_sqft": 10000.0,
       "available_sqft": 3573.0,
-      "occupied_sqft": 5000.0,
+      "occupied_sqft": null,
       "source_status": "partial",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_47_size_sqft",
         "F_233905_floor_47_available_sqft",
@@ -766,7 +770,7 @@
       "available_sqft": 6686.0,
       "occupied_sqft": 0,
       "source_status": "partial",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_51_size_sqft",
         "F_233905_floor_51_available_sqft",
@@ -796,7 +800,7 @@
       "available_sqft": 0,
       "occupied_sqft": 4186.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_53_size_sqft",
         "F_233905_floor_53_available_sqft",
@@ -811,7 +815,7 @@
       "available_sqft": 0,
       "occupied_sqft": 4186.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_54_size_sqft",
         "F_233905_floor_54_available_sqft",
@@ -826,7 +830,7 @@
       "available_sqft": 0,
       "occupied_sqft": 0,
       "source_status": "unknown",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_55_size_sqft",
         "F_233905_floor_55_available_sqft",
@@ -841,7 +845,7 @@
       "available_sqft": 0,
       "occupied_sqft": 0,
       "source_status": "unknown",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_56_size_sqft",
         "F_233905_floor_56_available_sqft",
@@ -856,7 +860,7 @@
       "available_sqft": 0,
       "occupied_sqft": 1061.0,
       "source_status": "occupied",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_id_196486_size_sqft",
         "F_233905_floor_id_196486_available_sqft",
@@ -871,7 +875,7 @@
       "available_sqft": 0,
       "occupied_sqft": 0,
       "source_status": "unknown",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_id_1088490_size_sqft",
         "F_233905_floor_id_1088490_available_sqft",
@@ -886,7 +890,7 @@
       "available_sqft": 10000.0,
       "occupied_sqft": 0,
       "source_status": "partial",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_id_1092873_size_sqft",
         "F_233905_floor_id_1092873_available_sqft",
@@ -901,7 +905,7 @@
       "available_sqft": 0,
       "occupied_sqft": 0,
       "source_status": "unknown",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_id_1124683_size_sqft",
         "F_233905_floor_id_1124683_available_sqft",
@@ -916,7 +920,7 @@
       "available_sqft": 0,
       "occupied_sqft": 0,
       "source_status": "unknown",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_id_1320381_size_sqft",
         "F_233905_floor_id_1320381_available_sqft",
@@ -931,7 +935,7 @@
       "available_sqft": 0,
       "occupied_sqft": 0,
       "source_status": "unknown",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_id_2430585_size_sqft",
         "F_233905_floor_id_2430585_available_sqft",
@@ -946,7 +950,7 @@
       "available_sqft": 0,
       "occupied_sqft": 0,
       "source_status": "unknown",
-      "game_status": "lit",
+      "game_status": null,
       "fact_ids": [
         "F_233905_floor_id_2684894_size_sqft",
         "F_233905_floor_id_2684894_available_sqft",
@@ -2388,12 +2392,12 @@
     {
       "id": "F_233905_floor_47_occupied_sqft",
       "key": "floor_47_occupied_sqft",
-      "value": 5000.0,
+      "value": null,
       "unit": "sqft",
       "source": "costar",
       "source_field": "location-occupancy.spaces.squareFeetOccupied",
       "kind": "verified",
-      "say_as": "5,000.0 sqft"
+      "say_as": null
     },
     {
       "id": "F_233905_floor_49_size_sqft",
@@ -3120,12 +3124,12 @@
     {
       "id": "F_233905_occupied_sqft",
       "key": "occupied_sqft",
-      "value": 877590.0,
+      "value": null,
       "unit": "sqft",
       "source": "costar",
       "source_field": "location-occupancy.spaces.squareFeetOccupied",
       "kind": "verified",
-      "say_as": "877,590.0 sqft"
+      "say_as": null
     },
     {
       "id": "F_233905_matterport_models",

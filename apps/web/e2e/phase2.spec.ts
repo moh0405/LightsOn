@@ -38,6 +38,21 @@ test("Phase 2: skyline, touch beam, cached facts and wake dive", async ({ browse
     });
     expect(dark).toEqual([6, 7, 8]);
 
+    // Readiness includes prefetched dossiers; the first hover must paint facts
+    // synchronously even if the network becomes unavailable afterward.
+    await expect(screen.getByTestId("field")).toHaveAttribute("data-facts-ready", "true");
+    expect(factsRequests).toBe(1);
+    await screen.route(/\/api\/buildings\/[^/?]+$/, (route) => route.abort());
+    await screen.evaluate(() => {
+      const field = document.querySelector('[data-testid="field"]')!;
+      field.setAttribute("data-saw-loading", "false");
+      new MutationObserver((records) => {
+        if (records.some((r) => Array.from(r.addedNodes).some((n) => n.textContent?.includes("Loading facts")))) {
+          field.setAttribute("data-saw-loading", "true");
+        }
+      }).observe(field, { childList: true, subtree: true });
+    });
+
     // Locate an actually rendered hero pixel, then send it through the phone trackpad.
     const hit = await screen.evaluate(() => {
       const map = window.__lightsOnMap!;
@@ -52,6 +67,7 @@ test("Phase 2: skyline, touch beam, cached facts and wake dive", async ({ browse
     await expect(screen.getByTestId("hover-card")).toContainText("Esperson");
     await expect(screen.getByTestId("hover-card")).toContainText("27 stories");
     await expect(screen.getByTestId("hover-card")).toContainText("3 dark floors");
+    await expect(screen.getByTestId("field")).toHaveAttribute("data-saw-loading", "false");
     const outlines = await screen.evaluate(() => window.__lightsOnMap!.getStyle().layers!.filter((l) => l.id.startsWith("hover-")).map((l) => window.__lightsOnMap!.getFilter(l.id)));
     expect(JSON.stringify(outlines)).toContain("233953");
     expect(factsRequests).toBe(1);

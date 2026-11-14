@@ -9,12 +9,12 @@ const SOURCE_COLORS: Record<Status, string> = { dark: "#1a1d2b", partial: "#4a46
 export function withRevivedBuilding(previous: RevivedColors, buildingId: string, floors: number[], color: string): RevivedColors {
   return { ...previous, [buildingId]: { floors: [...floors], color } };
 }
-export function resolveFloorColor(source: Status, game: string, buildingId: string, floor: number, revived: RevivedColors): string {
+export function resolveFloorColor(source: Status, game: string | null, buildingId: string, floor: number, revived: RevivedColors): string {
   if (game === "revived") {
     const entry = revived[buildingId];
     return entry?.floors.includes(floor) ? entry.color : GOLD;
   }
-  return game === "lit" ? GOLD : SOURCE_COLORS[source];
+  return SOURCE_COLORS[source];
 }
 export function floorColorExpression(revived: RevivedColors): ExpressionSpecification {
   let revival: string | ExpressionSpecification = GOLD;
@@ -23,7 +23,6 @@ export function floorColorExpression(revived: RevivedColors): ExpressionSpecific
   }
   return ["case",
     ["==", ["get", "game_status"], "revived"], revival,
-    ["==", ["get", "game_status"], "lit"], GOLD,
     ["match", ["get", "source_status"], "dark", SOURCE_COLORS.dark, "partial", SOURCE_COLORS.partial, "occupied", GOLD, SOURCE_COLORS.unknown],
   ];
 }

@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { getDossier, type Dossier } from "../../lib/buildings";
+import { cachedDossier, getDossier, type Dossier } from "../../lib/buildings";
 
 export function HoverCard({ id, color, onError }: { id: string; color: string; onError: () => void }) {
-  const [data, setData] = useState<Dossier | null>(null);
+  const [data, setData] = useState<Dossier | null>(() => cachedDossier(id));
   useEffect(() => {
     let active = true;
-    setData(null);
+    setData(cachedDossier(id));
     void getDossier(id).then((d) => { if (active) setData(d); }).catch(() => { if (active) onError(); });
     return () => { active = false; };
   }, [id, onError]);

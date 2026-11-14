@@ -71,3 +71,46 @@ def test_host_force_phase_over_ws_and_bad_pin(client):
         assert recv_until(admin, "error")["code"] == "bad_pin"
         admin.send_json({"type": "host_action", "action": "skip_phase", "pin": "1234", "nonce": "b"})
         assert recv_until(admin, "phase_changed")["phase"] == "EXPLORE"
+
+
+def test_host_switch_changes_process_provider_and_all_room_states(tmp_path, monkeypatch):
+    from app.data.provider import ROOT
+    if not (ROOT / 'data/costar/index.sqlite').is_file():
+        pytest.skip('Real CoStar index absent')
+    monkeypatch.setenv('STATE_DIR', str(tmp_path))
+    monkeypatch.setenv('HOST_PIN', '1234')
+    monkeypatch.setenv('DATA_MODE', 'fixtures')
+    with TestClient(app) as client:
+        first = client.post('/api/rooms').json()['room']
+        second = client.post('/api/rooms').json()['room']
+        with client.websocket_connect(f'/ws/{first}?role=admin') as admin, client.websocket_connect(f'/ws/{second}?role=screen') as screen:
+            assert admin.receive_json()['data_mode'] == 'fixtures'
+            assert screen.receive_json()['data_mode'] == 'fixtures'
+            for mode in ['kit', 'fixtures']:
+                admin.send_json({'type': 'host_action', 'action': 'set_data_mode', 'data_mode': mode, 'pin': '1234'})
+                for ws in [admin, screen]:
+                    state = recv_until(ws, 'room_state')
+                    assert state['data_mode'] == mode
+                    assert state['data_mode_scope'] == 'process'
+                recv_until(admin, 'ack')
+                assert client.get('/api/buildings/233953').json()['data_mode'] == mode
+                assert len(client.get('/api/buildings').json()) == 7
+                assert client.get('/api/health').json()['data_mode'] == mode
+                code = client.post('/api/rooms').json()['room']
+                with client.websocket_connect(f'/ws/{code}?role=screen') as fresh:
+                    assert fresh.receive_json()['data_mode'] == mode
+
+
+def test_unavailable_provider_switch_preserves_process_mode(tmp_path, monkeypatch):
+    monkeypatch.setenv('STATE_DIR', str(tmp_path))
+    monkeypatch.setenv('HOST_PIN', '1234')
+    monkeypatch.setenv('DATA_MODE', 'fixtures')
+    monkeypatch.setenv('COSTAR_DATA_DIR', str(tmp_path / 'missing-kit'))
+    with TestClient(app) as client:
+        code = client.post('/api/rooms').json()['room']
+        with client.websocket_connect(f'/ws/{code}?role=admin') as admin:
+            admin.receive_json()
+            admin.send_json({'type': 'host_action', 'action': 'set_data_mode', 'data_mode': 'kit', 'pin': '1234'})
+            assert recv_until(admin, 'error')['code'] == 'data_unavailable'
+            assert client.get('/api/buildings/233953').json()['data_mode'] == 'fixtures'
+            assert client.get('/api/health').json()['data_mode'] == 'fixtures'

@@ -31,7 +31,9 @@ def build_dossier(db: sqlite3.Connection, pid: str, enums: dict) -> dict | None:
                           if isinstance(value, (int, float)) else str(value)))
         return fid
     stories = data.get('numStoriesAboveGrade'); height = data.get('buildingHeightInFeet')
-    floor_height = height * .3048 / stories if height is not None and stories else 3.8
+    render = dict(floor_height_m=3.8, floor_height_source='assumption')
+    if height is not None and stories:
+        render = dict(floor_height_m=height * .3048 / stories, floor_height_source='costar')
     for key, value in data.items():
         if key not in {'primaryAddress', 'constructionEvents'}:
             fact(key, value, f'commercial-property.{key}',
@@ -43,8 +45,12 @@ def build_dossier(db: sqlite3.Connection, pid: str, enums: dict) -> dict | None:
     numbers = floor_numbers(enums); floors = []
     for floor_id, name, size in db.execute('SELECT floor_id,name,size FROM floors WHERE property_id=? ORDER BY floor_id', (pid,)):
         a = db.execute('SELECT coalesce(sum(area),0) FROM available WHERE property_id=? AND floor_id=?', (pid, floor_id)).fetchone()[0]
-        o = db.execute('SELECT coalesce(sum(area),0) FROM occupied WHERE property_id=? AND floor_id=?', (pid, floor_id)).fetchone()[0]
-        status = floor_status(a, o, size, name); number = numbers.get(name)
+        current, known, total = db.execute(
+            'SELECT count(*),count(area),sum(area) FROM occupied WHERE property_id=? AND floor_id=?',
+            (pid, floor_id)).fetchone()
+        # An unknown tenancy area must never become evidence of no occupancy.
+        o = None if known < current else (total or 0)
+        status = floor_status(a, o, size, name, has_current_tenancy=current > 0); number = numbers.get(name)
         prefix = f'floor_{number}' if number is not None else f'floor_id_{floor_id}'
         available_fields = [r[0] for r in db.execute('SELECT DISTINCT source_field FROM available WHERE property_id=? AND floor_id=? ORDER BY source_field', (pid, floor_id))]
         available_source = 'commercial-listing-summary.forLeaseSummary.spaces.' + '|'.join(available_fields or ['squareFeetMax|squareFeetMin'])
@@ -53,7 +59,7 @@ def build_dossier(db: sqlite3.Connection, pid: str, enums: dict) -> dict | None:
                     fact(prefix + '_occupied_sqft', o, 'location-occupancy.spaces.squareFeetOccupied', 'sqft')]
         floors.append(dict(floor_id=floor_id, number=number, name=name, size_sqft=size,
                            available_sqft=a, occupied_sqft=o, source_status=status,
-                           game_status='dark' if status == 'dark' else 'lit', fact_ids=fact_ids))
+                           game_status='dark' if status == 'dark' else None, fact_ids=fact_ids))
     floors.sort(key=lambda f: (f['number'] is None, f['number'] or 0, f['floor_id']))
     history = json.loads(db.execute('SELECT data FROM tenant_history WHERE property_id=?', (pid,)).fetchone()[0])
     records, current = history['records'], history['current']
@@ -65,7 +71,8 @@ def build_dossier(db: sqlite3.Connection, pid: str, enums: dict) -> dict | None:
     # Include unmatched-floor space in building totals, never in an arbitrary floor.
     for table, key, field in [('available', 'available_sqft', 'commercial-listing-summary.forLeaseSummary.spaces.squareFeetMax|squareFeetMin'),
                               ('occupied', 'occupied_sqft', 'location-occupancy.spaces.squareFeetOccupied')]:
-        total = db.execute(f'SELECT coalesce(sum(area),0) FROM {table} WHERE property_id=?', (pid,)).fetchone()[0]
+        count, known, area = db.execute(f'SELECT count(*),count(area),sum(area) FROM {table} WHERE property_id=?', (pid,)).fetchone()
+        total = None if table == 'occupied' and known < count else (area or 0)
         fact(key, total, field, 'sqft')
     models = [dict(model_id=r[0], caption=None) for r in db.execute('SELECT model_id FROM matterport WHERE property_id=? ORDER BY model_id', (pid,))]
     fact('matterport_models', [m['model_id'] for m in models], 'commercial-properties.csv.MatterportModelId')
@@ -73,7 +80,7 @@ def build_dossier(db: sqlite3.Connection, pid: str, enums: dict) -> dict | None:
     fact('address', street, 'commercial-property.primaryAddress')
     return dict(id=str(pid), name=data['buildingName'], address=street,
                 lat=address['latitude'], lng=address['longitude'], footprint=None,
-                stories=stories, floor_height_m=floor_height, floors=floors, facts=facts,
+                stories=stories, building_height_ft=height, render=render, floors=floors, facts=facts,
                 tenant_history=history, media=dict(matterport=models, photos=[], aerial=dict(ortho=None, obliques=[])),
                 neighbors=[other for other in property_ids() if other != str(pid)], data_mode='kit')
 
