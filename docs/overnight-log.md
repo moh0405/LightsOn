@@ -38,3 +38,4 @@
 - 08:49 Scheduled resume fired late (the session was waiting out the Claude usage limit; nothing ran between ~00:15 and
   08:49). Phase 4B prep deepagent started on Codex (gpt-6.1-sol, high) in worktree phase4-prep-agent, with the extra
   instruction to fix Vexcel detection wording and keep negative detections out of citable facts.
+- 09:0x User asked for reviews by strong models only. Started two read-only reviews of PR #9 + #10 (03e32e4..82f4f8f): Codex gpt-6.1-sol high and Claude Opus 5.5. Workflow doc updated: final reviews are always Codex high + Claude Opus.

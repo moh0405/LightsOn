@@ -48,8 +48,10 @@ Specs must stand alone. Include:
 
 ## Post-merge review
 
-After each phase merges, Grok reviews the merged diff (correctness, PRD/AGENTS.md rule violations, invented facts,
-contacts leakage, "vacant"). If Grok's review is shallow or wrong, a fresh Codex worker reviews it again.
+After each phase merges, two strong models review the merged diff independently: Codex (gpt-6.1-sol, high effort) and
+Claude (Opus 5.5). Checks: correctness, PRD/AGENTS.md rule violations, invented facts, contacts leakage, "vacant".
+Work built or reviewed by a fallback agent (Antigravity, Grok, a cheaper model) during a rate limit is re-reviewed by
+both once they are available. Fallback agents never give the final review.
 Findings become follow-up PRs, not direct pushes to main.
 
 Dispatch from Claude Code:
