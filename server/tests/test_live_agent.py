@@ -768,6 +768,7 @@ def test_latency_percentiles_use_nearest_rank(monkeypatch):
 @pytest.mark.parametrize('line', [
     "My typical floor gives you 25,529 square feet—a restaurant needs way more than that. Show me a restaurant concept that fits one floor. Let's make a deal.",
     'Bring me a studio that fits one floor.',
+    "Pitch a restaurant that fits one floor, and I'll light it up nightly.",
 ])
 def test_retained_one_floor_request_is_a_plan_not_a_floor_count(game_mode, line):
     d = provider_for_mode(game_mode).dossier('233899')
@@ -785,3 +786,44 @@ async def test_hypothetical_prefix_cannot_hide_uncited_existing_feature(dossier)
     assert await agent.grounded([('Could your studio use my swimming pool?', [])], dossier,
                                 monotonic() + 1, step='verdict', attempt=0)
     assert called
+
+
+def test_game_bedrock_only_refuses_at_the_shared_cap(monkeypatch, tmp_path, dossier):
+    """Paid latency check: one challenge refused under the eval's $0.12 per-run sub-cap.
+    The game sets no sub-cap, so the same four parallel reservations fit under $3.00."""
+    import json
+    from concurrent.futures import ThreadPoolExecutor
+    import boto3
+    from app.agent.live_agent import Bedrock, Challenges
+    from app.agent.prompts import challenge_prompt
+    from app.agent.spend import SpendLedger, SpendUnavailable
+    ledger = tmp_path / 'spend.json'
+    monkeypatch.setenv('BEDROCK_SPEND_LEDGER', str(ledger))
+    monkeypatch.delenv('BEDROCK_SPEND_CAP_USD', raising=False)
+    class Stream:
+        def __iter__(self):
+            yield {'contentBlockStart': {'contentBlockIndex': 0, 'start': {'toolUse': {'name': 'answer'}}}}
+            yield {'contentBlockDelta': {'contentBlockIndex': 0, 'delta': {'toolUse': {'input': '{"challenges":[]}'}}}}
+            yield {'metadata': {'usage': {'inputTokens': 10, 'outputTokens': 5}}}
+        def close(self): pass
+    class Client:
+        def converse_stream(self, **request):
+            return {'stream': Stream()}
+    monkeypatch.setattr(boto3, 'client', lambda *a, **kw: Client())
+    def seed(total):
+        ledger.write_text(json.dumps(dict(total_usd=total, input_tokens=0, output_tokens=0, calls=[])))
+    def call(_):
+        try:
+            Bedrock()('challenge', challenge_prompt(dossier, 'hopeful'), pitch_data([pitch()]), Challenges, 1)
+            return True
+        except SpendUnavailable as error:
+            assert error.cause == 'budget'
+            return False
+    # Ledger as the paid check left it, plus a round's in-flight reservations, far past
+    # that run's $2.676 sub-cap: the game still has headroom below $3.00.
+    seed(2.70)
+    assert SpendLedger().cap == 3.0
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        assert all(pool.map(call, range(4)))
+    seed(2.9999)
+    assert call(0) is False
