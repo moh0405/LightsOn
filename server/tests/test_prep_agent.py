@@ -715,3 +715,60 @@ def test_failed_forced_prep_keeps_previous_trusted_cache(tmp_path, monkeypatch, 
     assert (dossier_path.read_text(), persona_path.read_text()) == before
     monkeypatch.undo()
     assert prep_agent.read_cached_building(PID, provider=kwargs['provider'], cache=kwargs['cache']) == first
+
+
+@pytest.mark.parametrize('text', ['A mural 300 ft wide', 'A 400 ft long indoor running track',
+                                  'A 350-foot-long banquet table', 'A plaza 500 ft by 400 ft',
+                                  'A 320 ft deep aquarium tunnel stretching across the block',
+                                  'A 600-foot zipline across the street'])
+def test_horizontal_feet_never_trigger_the_height_limit(text):
+    from app.agent.fake_agent import challenge
+    from app.agent.persona import fake_persona, limit_applies, physical_limits
+    dossier = source_dossier()
+    dossier['persona'] = fake_persona(dossier).model_dump()
+    height = next(l for l in physical_limits(dossier) if l['constraint'] == 'height')
+    assert not limit_applies(height, text, 'entertainment')
+    assert challenge(pitch(text), dossier).line != height['text']
+
+
+@pytest.mark.parametrize('text', ['A 350 ft tall spire', 'A sculpture rising 400 feet', 'A 300-foot-high light tower',
+                                  'An antenna 310 feet in height'])
+def test_vertical_feet_trigger_the_height_limit(text):
+    from app.agent.persona import fake_persona, limit_applies, physical_limits
+    dossier = source_dossier()
+    height = next(l for l in physical_limits(dossier) if l['constraint'] == 'height')
+    assert limit_applies(height, text, 'entertainment')
+
+
+def _boundary_text(limit, value):
+    n = f'{value:,.2f}'.rstrip('0').rstrip('.')
+    return {
+        'floor_plate': f'A single floor studio needing {n} sq ft',
+        'dark_area': (f'A studio on floor {limit["floor"]} needing {n} sq ft' if limit.get('floor') is not None
+                      else f'A {n} sq ft market across my dark floors'),
+        'stories': f'A {n}-story vertical farm',
+        'height': f'A spire {n} ft tall',
+        'parking': f'A food hall with {n} parking spaces per 1,000 sq ft',
+    }[limit['constraint']]
+
+
+def _every_limit():
+    from app.agent.persona import physical_limits
+    return physical_limits(source_dossier())
+
+
+@pytest.mark.parametrize('offset,fires', [(-1, False), (0, False), (1, True)])
+@pytest.mark.parametrize('index', range(13))
+def test_every_limit_is_strict_at_its_threshold(index, offset, fires):
+    from app.agent.fake_agent import challenge
+    from app.agent.persona import fake_persona, limit_applies
+    limits = _every_limit()
+    assert len(limits) == 13 and {l['constraint'] for l in limits} == {'floor_plate', 'dark_area', 'stories', 'height', 'parking'}
+    limit = limits[index]
+    step = 0.01 if limit['constraint'] == 'parking' else 1
+    text = _boundary_text(limit, limit['threshold'] + offset * step)
+    assert limit_applies(limit, text, 'food_retail') is fires, text
+    dossier = source_dossier()
+    dossier['persona'] = {**fake_persona(dossier).model_dump(), 'hard_limits': [limit]}
+    reply = challenge(pitch(text), dossier)
+    assert (reply.line == limit['text'] and reply.fact_ids == [limit['fact_ref']]) is fires, text

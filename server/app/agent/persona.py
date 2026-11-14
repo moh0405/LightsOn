@@ -404,6 +404,26 @@ def _num(text: str) -> float:
     return float(text.replace(',', ''))
 
 
+_HORIZONTAL_AFTER = re.compile(r"[ -]*(?:wide|long|deep|across|in (?:length|width|diameter)|of frontage|by\b|x\b)", re.I)
+_HORIZONTAL_BEFORE = re.compile(r"\b(?:by|x|wide|long|deep|stretching|spanning|across|length of|width of)\s*$", re.I)
+_VERTICAL_AFTER = re.compile(r"[ -]*(?:tall|high|in height|up\b|above|skyward)", re.I)
+_VERTICAL_BEFORE = re.compile(r"\b(?:reaching|rising|rises|climbing|towering|soaring|height of|up to|stands?|standing)\s*$", re.I)
+_VERTICAL_CUE = re.compile(r"\b(?:tall|taller|high|higher|height|vertical|towers?|spires?|observation|on top|rooftop|sky\w*|antennas?|masts?)\b", re.I)
+
+
+def _vertical(text: str, m: re.Match) -> bool:
+    """A feet quantity is a height need only when it is stated vertically.
+
+    Explicit width/length/depth never counts; a bare quantity counts only when
+    the pitch itself talks about height (tall, tower, rooftop...). Anything
+    else is ambiguous and ignored rather than guessed.
+    """
+    before, after = text[max(0, m.start() - 30):m.start()], text[m.end():m.end() + 20]
+    if _HORIZONTAL_AFTER.match(after) or _HORIZONTAL_BEFORE.search(before):
+        return False
+    return bool(_VERTICAL_AFTER.match(after) or _VERTICAL_BEFORE.search(before) or _VERTICAL_CUE.search(text))
+
+
 def pitch_needs(text: str) -> dict:
     """Quantities a pitch explicitly states; nothing is inferred from category or tone."""
     rest = text
@@ -416,7 +436,7 @@ def pitch_needs(text: str) -> dict:
         ratios += [max(spaces) / (max(areas) / 1000)]
     named = [int(m[1] or m[2]) for m in re.finditer(r'\bfloor\s+(-?\d+)\b|\b(\d+)(?:st|nd|rd|th)\s+floor\b', rest, re.I)]
     stories = [int(m[1]) for m in re.finditer(r'\b(\d+)[ -](?:stor(?:y|ey|ies|eys)|floors?)\b', rest, re.I)] + named
-    feet = [_num(m[1]) for m in re.finditer(_NUM + r'[ -]?(?:ft|feet|foot)\b', rest, re.I)]
+    feet = [_num(m[1]) for m in re.finditer(_NUM + r'[ -]?(?:ft|feet|foot)\b', rest, re.I) if _vertical(rest, m)]
     single = bool(re.search(r'\b(?:single[ -]floor|one floor|a floor)\b', text, re.I)) or bool(named)
     return dict(areas=areas, floors=named, stories=stories, feet=feet, parking=ratios, single_floor=single)
 
