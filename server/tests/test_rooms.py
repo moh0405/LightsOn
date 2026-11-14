@@ -50,6 +50,9 @@ async def test_full_round_via_host_skip(tmp_path, monkeypatch):
     assert room.phase == "INTRO" and room.round_id and room.building_id == "233953"
     walked = []
     while room.phase != "EXPLORE":
+        if room.phase == 'PITCH':
+            await cmds.handle({'type': 'submit_pitch', 'room': room.code, 'player_id': a['player_id'],
+                               'round_id': room.round_id, 'text': 'A museum'}, 'web')
         await cmds.handle({"type": "host_action", "room": room.code, "action": "skip_phase", "pin": "1234"}, "host")
         walked.append(room.phase)
     assert walked == ["PITCH", "CHALLENGE", "NEGOTIATE", "VERDICT", "POWER_UP", "REVIVED", "EXPLORE"]
@@ -117,7 +120,7 @@ async def test_pointer_goes_to_screen_only(tmp_path):
 
 
 async def test_timers_fire_and_phase_changed_carries_ends_at(tmp_path):
-    fast = {"INTRO": 0.05, "PITCH": 0.05, "CHALLENGE": None}
+    fast = {"INTRO": 0.05, "PITCH": 0.15, "CHALLENGE": None}
     mgr, cmds = make(tmp_path, fast)
     room = mgr.create()
     screen = Sink()
@@ -125,7 +128,10 @@ async def test_timers_fire_and_phase_changed_carries_ends_at(tmp_path):
     a = await join(cmds, room, "Ann")
     await join(cmds, room, "Bo")
     await cmds.handle({"type": "wake", "room": room.code, "player_id": a["player_id"], "building_id": "233953"}, "web")
-    await asyncio.sleep(0.3)
+    await asyncio.sleep(0.08)
+    await cmds.handle({'type': 'submit_pitch', 'room': room.code, 'player_id': a['player_id'],
+                       'round_id': room.round_id, 'text': 'A museum'}, 'web')
+    await asyncio.sleep(0.25)
     assert room.phase == "CHALLENGE" and room.ends_at is None
     changes = [e for e in screen.events if e["type"] == "phase_changed"]
     assert [c["phase"] for c in changes][-3:] == ["INTRO", "PITCH", "CHALLENGE"]

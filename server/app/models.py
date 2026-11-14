@@ -73,3 +73,21 @@ class Verdict(BaseModel):
     desire_met: bool
     desire_reveal: str
     impact: dict | None  # housing only, labeled estimate
+
+
+class ProposalScore(BaseModel):
+    player_id: str
+    data_fit: int
+    neighborhood_fit: int
+    creativity: int
+    charm: int
+
+
+class VerdictProposal(BaseModel):
+    winner_player_id: str
+    scores: list[ProposalScore]
+    reason_line: str
+    fact_ids: list[str]
+    category: Category
+    desire_met: bool
+    desire_reveal: str
