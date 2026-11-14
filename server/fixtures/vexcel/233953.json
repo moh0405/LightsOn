@@ -573,7 +573,7 @@
   "detections": [
     {
       "label": "parking lot",
-      "count": 0,
+      "count": null,
       "confidences": []
     },
     {
@@ -615,17 +615,17 @@
     },
     {
       "label": "rooftop terrace",
-      "count": 0,
+      "count": null,
       "confidences": []
     },
     {
       "label": "solar panel",
-      "count": 0,
+      "count": null,
       "confidences": []
     },
     {
       "label": "tree",
-      "count": 0,
+      "count": null,
       "confidences": []
     }
   ]

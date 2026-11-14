@@ -106,12 +106,12 @@ def fetch_building(pid: str, labels: list[str], client: VexcelClient, media_root
 
     # 4. Elements detect
     detect_resp = client.detect(parcel_wkt, labels=labels, property_id=pid)
-    detections_summary: dict[str, dict] = {label: {"count": 0, "confidences": []} for label in labels}
+    detections_summary: dict[str, dict] = {label: {"count": None, "confidences": []} for label in labels}
     for feat in detect_resp.get("features", []):
         lbl = feat.get("properties", {}).get("label")
-        dets = feat.get("properties", {}).get("detections", [])
-        if lbl in detections_summary:
-            detections_summary[lbl]["count"] += len(dets)
+        dets = feat.get("properties", {}).get("detections")
+        if lbl in detections_summary and isinstance(dets, list):
+            detections_summary[lbl]["count"] = (detections_summary[lbl]["count"] or 0) + len(dets)
             detections_summary[lbl]["confidences"].extend([round(d["confidence"], 3) for d in dets if "confidence" in d])
 
     # 5. Build compact fixture dictionary

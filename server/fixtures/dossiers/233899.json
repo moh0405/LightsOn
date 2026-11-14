@@ -3698,16 +3698,6 @@
       "say_as": "1000 Louisiana St"
     },
     {
-      "id": "F_233899_vexcel_detection_parking_lot",
-      "key": "vexcel_detection_parking_lot",
-      "value": 0,
-      "unit": "count",
-      "source": "vexcel+vision",
-      "source_field": "vexcel.elements/detect",
-      "kind": "estimate",
-      "say_as": "on the 2022 flyover, no parking lot detected"
-    },
-    {
       "id": "F_233899_vexcel_detection_car",
       "key": "vexcel_detection_car",
       "value": 8,
@@ -3715,27 +3705,7 @@
       "source": "vexcel+vision",
       "source_field": "vexcel.elements/detect",
       "kind": "estimate",
-      "say_as": "on the 2022 flyover, 8 car detected"
-    },
-    {
-      "id": "F_233899_vexcel_detection_rooftop_terrace",
-      "key": "vexcel_detection_rooftop_terrace",
-      "value": 0,
-      "unit": "count",
-      "source": "vexcel+vision",
-      "source_field": "vexcel.elements/detect",
-      "kind": "estimate",
-      "say_as": "on the 2022 flyover, no rooftop terrace detected"
-    },
-    {
-      "id": "F_233899_vexcel_detection_solar_panel",
-      "key": "vexcel_detection_solar_panel",
-      "value": 0,
-      "unit": "count",
-      "source": "vexcel+vision",
-      "source_field": "vexcel.elements/detect",
-      "kind": "estimate",
-      "say_as": "on the 2022 flyover, no solar panel detected"
+      "say_as": "on the 2022 flyover, 8 cars detected within about 30 m of the parcel"
     },
     {
       "id": "F_233899_vexcel_detection_tree",
@@ -3745,7 +3715,7 @@
       "source": "vexcel+vision",
       "source_field": "vexcel.elements/detect",
       "kind": "estimate",
-      "say_as": "on the 2022 flyover, 2 tree detected"
+      "say_as": "on the 2022 flyover, 2 trees detected within about 30 m of the parcel"
     }
   ],
   "tenant_history": {
