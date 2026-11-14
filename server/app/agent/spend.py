@@ -115,6 +115,7 @@ class SpendLedger:
 class CappedBedrockConverse(ChatBedrockConverse):
     """Every supervisor/subagent request, including tool-bound copies, is metered."""
     spend_path: Path | None = None
+    spend_cap: float | None = None
 
     def invoke(self, *args, **kwargs):
         with tracing_context(enabled=bool(os.getenv('LANGSMITH_API_KEY'))):
@@ -127,7 +128,7 @@ class CappedBedrockConverse(ChatBedrockConverse):
     def _generate(self, messages, stop=None, run_manager=None, **kwargs):
         # SDK formatting resolves aliases, nested inference config, tools and cache points first.
         # A per-call copy avoids mutating clients shared by concurrent tool-bound invocations.
-        metered = self.model_copy(update={'client': MeteredClient(self.client, self.spend_path)})
+        metered = self.model_copy(update={'client': MeteredClient(self.client, self.spend_path, self.spend_cap)})
         return super(CappedBedrockConverse, metered)._generate(messages, stop, run_manager, **kwargs)
 
     def get_num_tokens_from_messages(self, messages, tools=None):
@@ -140,8 +141,8 @@ class CappedBedrockConverse(ChatBedrockConverse):
 
 class MeteredClient:
     """The sole SDK request boundary: reserve the exact model and output bound sent."""
-    def __init__(self, client, path):
-        self.client, self.path = client, path
+    def __init__(self, client, path, cap=None):
+        self.client, self.path, self.cap = client, path, cap
 
     def converse(self, **request):
         model = request.get('modelId')
@@ -177,5 +178,8 @@ class MeteredClient:
                 input_token_details=dict(cache_read=read, cache_creation=write,
                     ephemeral_5m_input_tokens=sum(d['inputTokens'] for d in details if d['ttl'] == '5m'),
                     ephemeral_1h_input_tokens=sum(d['inputTokens'] for d in details if d['ttl'] == '1h')))
-        return SpendLedger(self.path).call(model, bound, output, lambda: self.client.converse(**request),
-                                           usage, input_multiplier=cache_rate)
+        ledger = SpendLedger(self.path)
+        if self.cap is not None:
+            ledger.cap = min(ledger.cap, self.cap)
+        return ledger.call(model, bound, output, lambda: self.client.converse(**request),
+                           usage, input_multiplier=cache_rate)

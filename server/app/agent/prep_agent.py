@@ -241,3 +241,87 @@ def prep_building(property_id: str, force: bool = False, *, provider=None, model
         write_json(result_path, result)
         steps.record('complete', 'validate_persona')
         return result
+
+
+def regenerate_persona(property_id: str, research: Path, *, provider=None, model=None,
+                       cache: Path | None = None, personas: Path | None = None,
+                       ledger=None, estimate_only: bool = False) -> dict:
+    """Run only persona_writer on cached scout selections; never call scout tools."""
+    from langchain_core.messages import SystemMessage, HumanMessage
+    from .spend import SpendLedger, PRICES
+    tools = BuildingTools(property_id, provider)
+    source = {fact['id']: fact for fact in tools.facts}
+    selections = {}
+    researched = set()
+    for filename in ('facts_property.json', 'facts_spatial.json'):
+        value = json.loads((research / filename).read_text())
+        if (not isinstance(value, dict) or set(value) != {'fact_ids'}
+                or not isinstance(value['fact_ids'], list)
+                or any(not isinstance(ref, str) or ref not in source for ref in value['fact_ids'])):
+            raise ValueError('Cached research must select current source facts')
+        selections[filename] = value
+        researched.update(value['fact_ids'])
+    # New deterministic aggregates inherit only already-researched source families.
+    keys = {source[ref]['key'] for ref in researched}
+    derived = []
+    for fact in tools.facts:
+        if fact['source'] != 'derived':
+            continue
+        key = fact['key']
+        if key in {'dark_floor_count', 'dark_sqft'}:
+            dependencies = {ref for floor in tools.dossier['floors'] for ref in floor['fact_ids']}
+            supported = dependencies <= researched
+        else:
+            supported = {'tenant_records', 'current_tenants', 'tenant_industries'} <= keys
+        if supported:
+            researched.add(fact['id'])
+            derived.append(fact['id'])
+    selections['facts_property.json'] = {'fact_ids': sorted(set(selections['facts_property.json']['fact_ids']) | set(derived))}
+    dossier = {**tools.dossier, 'facts': [source[ref] for ref in source if ref in researched]}
+    # Construction is local; all inference, including structured/tool-bound calls, is metered.
+    model = model or CappedBedrockConverse(
+        model_id=os.getenv('BEDROCK_SMART_MODEL_ID', 'us.anthropic.claude-sonnet-4-6'),
+        region_name=os.getenv('AWS_REGION', 'us-east-1'), temperature=0, max_tokens=4096,
+        disable_streaming=True, spend_cap=2.90,
+        config=Config(connect_timeout=10, read_timeout=60, retries={'total_max_attempts': 1}))
+    messages = [SystemMessage(content=PERSONA_WRITER_PROMPT + writer_instructions(dossier)),
+                HumanMessage(content=json.dumps(dict(building_id=property_id, cached_research=selections)))]
+    # Include serialized structured-output schema and SDK overhead in the local token bound.
+    from ..models import Persona
+    bound = model.get_num_tokens_from_messages(messages) + len(json.dumps(Persona.model_json_schema()).encode()) + 8192
+    rates = PRICES.get(model.model_id)
+    if rates is None:
+        raise SpendUnavailable('Unpriced persona writer')
+    output = model.max_tokens
+    if type(output) is not int or output <= 0:
+        raise SpendUnavailable('Unbounded persona writer')
+    estimate = (bound * rates[0] + output * rates[1]) / 1e6
+    ledger = ledger or SpendLedger()
+    if isinstance(model, CappedBedrockConverse):
+        model = model.model_copy(update={'spend_path': ledger.path, 'spend_cap': min(ledger.cap, 2.90)})
+    before = ledger.snapshot()['total_usd']
+    summary = dict(estimated_usd=estimate, ledger_before_usd=before, input_token_bound=bound, max_output_tokens=output)
+    if before + estimate >= 2.90:
+        return dict(prep_status='unaffordable', **summary)
+    if estimate_only:
+        return dict(prep_status='estimate', **summary)
+    directory = (cache or CACHE) / property_id
+    directory.mkdir(parents=True, exist_ok=True)
+    with (directory / '.prep.lock').open('a') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        # Exactly one writer inference. Old published artifacts survive any provider/validation failure.
+        proposed = model.with_structured_output(Persona).invoke(messages)
+        value = proposed.model_dump() if hasattr(proposed, 'model_dump') else proposed
+        workspace = directory / 'work'
+        workspace.mkdir(exist_ok=True)
+        for filename, selection in selections.items():
+            write_json(workspace / filename, selection)
+        write_json(workspace / 'persona.json', value)
+        result = merge_research(tools, workspace)
+        from ..voice.tts import render_intro
+        result.update(prep_status='ready', intro_audio_url=render_intro(result['persona']),
+                      source_fingerprint=source_fingerprint(tools))
+        write_json((personas or PERSONAS) / f'{property_id}.json', result['persona'])
+        write_json(directory / 'dossier.json', result)
+        Steps(directory / 'agent_steps.json').record('persona_writer', 'validate_persona')
+        return {**result, 'writer_estimate': summary}
