@@ -55,7 +55,7 @@ class Bedrock:
         import boto3
         # No SDK retries, bounded sockets, AWS default credential chain only.
         client = boto3.client('bedrock-runtime', region_name=os.getenv('AWS_REGION', 'us-east-1'),
-                              config=Config(connect_timeout=1, read_timeout=max(1, min(3, timeout)),
+                              config=Config(connect_timeout=1, read_timeout=max(1, timeout),
                                             retries={'total_max_attempts': 1}))
         model = os.getenv('BEDROCK_SMART_MODEL_ID' if step == 'verdict' else 'BEDROCK_FAST_MODEL_ID') or (SMART if step == 'verdict' else FAST)
         request = dict(modelId=model, system=[{'text': system}],
@@ -160,8 +160,11 @@ class LiveAgent:
                     if attempt:
                         for c in result.challenges:
                             refs = [f['id'] for f in safe_facts(dossier) if f['id'] in c.fact_ids and f['value'] is not None]
+                            source_pitch = next(p for p in safe if p.player_id == c.player_id)
+                            offline = fake_agent.challenge(source_pitch, dossier)
+                            refs = refs or offline.fact_ids
                             output[c.player_id] = c.model_copy(update={'line': fallback_line(refs, dossier), 'fact_ids': refs,
-                                'counteroffer': 'Give me a plan with a little imagination. What would you change?'})
+                                'counteroffer': offline.counteroffer})
                         await self.fallback('grounding', started)
                     else:
                         content += '\nRegenerate all challenges. Grounding failure: ' + reason[:240]

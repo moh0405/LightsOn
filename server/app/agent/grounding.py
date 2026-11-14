@@ -43,7 +43,7 @@ def check_line(line: str, fact_ids: list[str], dossier: dict, impact: dict | Non
                         lambda m: str(float(m[1].replace(',', '')) * float(m[2])), normalized)
     for match in NUMBER.finditer(normalized):
         value = float(match[0].replace(',', ''))
-        tail = normalized[match.end():].lstrip().casefold()
+        tail = normalized[match.end():].lstrip(' -').casefold()
         unit = next((u for u, pattern in sorted(UNITS.items(), key=lambda x: -len(x[1]))
                      if re.match(pattern + r'\b', tail)), None)
         supported = False
@@ -62,7 +62,7 @@ def check_line(line: str, fact_ids: list[str], dossier: dict, impact: dict | Non
         if impact and 'looks like' in line.casefold() and value in [v for v in impact.values() if type(v) in (int, float)]:
             supported = True
         if not supported:
-            return 'Number or unit is not supported by cited evidence'
+            return f'Number {match[0]} ({unit or "unspecified unit"}) is not supported by cited evidence; omit it or use a cited value'
     return None
 
 

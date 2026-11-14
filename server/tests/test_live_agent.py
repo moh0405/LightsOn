@@ -74,6 +74,7 @@ async def test_claim_failure_regenerates_then_templates(dossier):
                    {'challenges': [c]}, {'checks': [{'supported': False, 'reason': 'unsupported tunnel'}]}])
     result = await LiveAgent(model=model).challenge([pitch()], dossier, City())
     assert 'tunnel' not in result[0].line
+    assert result[0].counteroffer == fake_agent.challenge(pitch(), dossier).counteroffer
     assert 'unsupported tunnel' in model.calls[2][1]
     assert check_line(result[0].line, result[0].fact_ids, dossier) is None
 
@@ -204,3 +205,41 @@ async def test_live_room_round_passes_actions_and_persists_mood(dossier, monkeyp
     await room.advance()
     assert room.city.buildings_revived == 1 and room.phase == 'REVIVED'
     room.close()
+
+
+def test_bedrock_socket_timeout_uses_the_remaining_step_budget(monkeypatch, tmp_path):
+    """Cold inference can take more than three seconds before its first delta."""
+    import boto3
+    from app.agent.live_agent import Bedrock, Challenges
+    monkeypatch.setenv('BEDROCK_SPEND_LEDGER', str(tmp_path / 'spend.json'))
+    configs = []
+    class Stream:
+        def __iter__(self):
+            yield {'contentBlockStart': {'contentBlockIndex': 0, 'start': {'toolUse': {'name': 'answer', 'toolUseId': 't'}}}}
+            yield {'contentBlockDelta': {'contentBlockIndex': 0, 'delta': {'toolUse': {'input': '{"challenges":[]}'}}}}
+            yield {'metadata': {'usage': {'inputTokens': 10, 'outputTokens': 5}}}
+        def close(self): pass
+    class Client:
+        def converse_stream(self, **kw): return {'stream': Stream()}
+    def client(*args, **kwargs):
+        configs.append(kwargs['config'])
+        return Client()
+    monkeypatch.setattr(boto3, 'client', client)
+    Bedrock()('challenge', 'system', 'pitches', Challenges, 7.5)
+    assert configs[0].read_timeout == 7.5
+
+
+async def test_pending_live_snapshot_resumes_offline_when_flag_changes(dossier, tmp_path):
+    from app.rooms import Room
+    room = Room(code='TEST', hero_ids=['233953'], state_dir=tmp_path, durations={})
+    player = room.add_player('Ann')
+    room.phase, room.round_id, room.building_id = 'CHALLENGE', 'TEST-1', '233953'
+    room.dossier = dossier
+    room.pitches[player.id] = pitch(player=player.id)
+    room._save()
+    back = Room.restore(tmp_path / 'TEST.json', room.hero_ids, tmp_path, durations={})
+    back.resume_timer()
+    await asyncio.sleep(.02)
+    assert back.challenges and back.challenges[0].player_id == player.id
+    room.close()
+    back.close()

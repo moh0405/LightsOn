@@ -534,8 +534,11 @@ class Room:
 
     def resume_timer(self) -> None:
         """After a restart, continue the interrupted phase timer (fires immediately if overdue)."""
-        if self.phase in ('CHALLENGE', 'VERDICT') and self.ends_at is None and live_agent.enabled():
-            self._agent_task = asyncio.create_task(self._finish_live((self.round_id, self._round_seq, self.phase)))
+        if self.phase in ('CHALLENGE', 'VERDICT') and self.ends_at is None:
+            if live_agent.enabled():
+                self._agent_task = asyncio.create_task(self._finish_live((self.round_id, self._round_seq, self.phase)))
+            else:
+                self._agent_task = asyncio.create_task(self.set_phase(self.phase))
         elif self.ends_at is not None:
             self._arm_timer((self.ends_at - utcnow()).total_seconds())
 

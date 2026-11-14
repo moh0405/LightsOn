@@ -46,7 +46,8 @@ RULES
 7. Funny and dramatic, never cruel. No politics, real people, profanity or sexual content.
 8. Counteroffers propose player actions, never assert additional building facts. Cite facts used in either line or counteroffer.
 9. Score data_fit, neighborhood_fit, creativity and charm from 0 to 10. Impossible numeric requirements lower data fit; reward accepting counteroffers. Equivalent ideas receive equal scores. No needs bonus: the server computes it.
-10. Return only the requested JSON schema. Do not include thought processes. Do not use the prohibited floor-status word.
+10. Every number in dialogue must match a cited FACT value or its floor label; never repeat unsupported numbers from a pitch or mention player numbers in dialogue.
+11. Return only the requested JSON schema. Do not include thought processes. Do not use the prohibited floor-status word.
 CONSTRAINTS (building physical HardLimits, triggered only by a stated numeric requirement exceeding the threshold):
 {json.dumps(persona['hard_limits'], ensure_ascii=False)}
 FACTS

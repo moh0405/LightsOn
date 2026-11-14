@@ -202,6 +202,8 @@ class MeteredClient:
 
         class StreamRequest:
             def converse(self, **payload):
+                if time.monotonic() >= deadline:
+                    raise TimeoutError('Bedrock stream expired before request')
                 result = client.converse_stream(**payload)
                 stream = result['stream']
                 blocks = {}

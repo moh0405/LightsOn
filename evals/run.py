@@ -25,7 +25,7 @@ load_dotenv(ROOT / '.env')
 from app.actions import validate_verdict, select_target_floors, target_sqft
 from app.agent import fake_agent
 from app.agent.grounding import check_line
-from app.agent.live_agent import LiveAgent, FAST, SMART, mood_after, safety_reason
+from app.agent.live_agent import LiveAgent, FAST, SMART, safety_reason
 from app.agent.prompts import persona_for, build_prompt
 from app.agent.spend import SpendLedger, PRICES
 from app.city import City
@@ -199,10 +199,13 @@ def report(result, before, after, estimate):
         f'| Offline/template fallback steps | {metrics["fallbacks"]} | reported separately |',
         f'| Invalid model schema attempts | {metrics["schema_failures"]} | 0 |',
         f'| Completed paid requests | {len(complete)}/{len(calls)} | usage reconciled |',
+        f'| Retained unconfirmed reservations | {len(calls)-len(complete)} | not discarded |',
         f'| Run spend (includes retained reservations) | ${spend:.6f} | ≤$0.80 |',
         f'| Shared ledger total | ${after["total_usd"]:.6f} | <$2.60 |', '',
         '## Method and limits', '',
-        '32 challenge cases (16 per hero), batched four at a time; three verdict matchups per hero repeated three times. '
+        f'Executed {len(result["challenges"])}/32 planned challenge cases and {metrics["completed_verdicts"]}/18 planned verdict evaluations; '
+        f'{len(result["winners"])}/6 matchups have all three repeats. '
+        'The planned suite has 32 challenge cases (16 per hero), batched four at a time; three verdict matchups per hero repeated three times. '
         'Strong fit, impossible numeric requirements, borderline, desire match, funny, injection, unsafe, mixed language and equivalent ideas are included. '
         'Only challenges and verdicts use Bedrock; claim checks use Haiku and verdict proposals use Sonnet. '
         'Player text is screened locally before calls. All displayed text passes source ID/number/unit checks and a batched cheap model claim check, or uses trusted source templates. '
