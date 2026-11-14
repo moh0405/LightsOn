@@ -78,3 +78,10 @@
   worker's ledger to it, so subsequent main-checkout prep/live adapters inherit tonight's $1.6183695 spent instead
   of resetting at merge. SpendLedger resolves symlinks before locking and atomically saving; a regression test
   verifies the link survives calls. No credentials, caches, state files or media are committed.
+- Preserved the five validated prep JSON artifacts in the original checkout's ignored server/cache/prep/233953/
+  as well, so the CLI/POST remain cache hits after merge. Supplementary model-written reports were not copied.
+- Final Phase 4B checks: full Playwright 16/16 passed (including the new persona subtitles test in kit and fixtures),
+  33 web tests + messaging typecheck passed; offline coverage also exercises forced prep, WebSocket agent_step delivery,
+  concurrent spending at the cap and symlink-safe accounting. No additional paid calls were made during validation.
+- Final Python validation: `cd server && uv run pytest -q` passed 153 tests, with only the opt-in Vexcel live test
+  skipped; `uv run --project server python evals/run.py --quick` passed all 20 prep safety checks.

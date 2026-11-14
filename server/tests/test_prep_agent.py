@@ -173,6 +173,8 @@ def test_prep_deepagent_uses_three_subagents_and_is_idempotent(tmp_path, mode):
     assert prep_building(PID, **kwargs) == result
     assert model._calls == calls
     assert (tmp_path / f'personas/{PID}.json').is_file()
+    assert prep_building(PID, force=True, **kwargs) == result
+    assert model._calls > calls
 
 
 def test_tts_silent_without_credentials(monkeypatch):
@@ -250,7 +252,13 @@ def test_prep_http_routes_are_cached_and_unknown_ids_do_not_invoke(monkeypatch, 
     with TestClient(app) as client:
         assert client.post('/api/buildings/999999999/prep').status_code == 404
         assert calls == []
-        assert client.post(f'/api/buildings/{PID}/prep?force=true').status_code == 200
+        room = client.post('/api/rooms').json()['room']
+        with client.websocket_connect(f'/ws/{room}?role=screen') as ws:
+            assert ws.receive_json()['type'] == 'room_state'
+            assert client.post(f'/api/buildings/{PID}/prep?force=true').status_code == 200
+            event = ws.receive_json()
+            assert event == dict(type='agent_step', step='persona_writer', tool='write_file',
+                                 summary='Persona prepared', duration_ms=1)
         assert calls == [(PID, True)]
 
 
@@ -300,3 +308,22 @@ def test_spend_symlink_shares_accounting_without_replacing_link(tmp_path):
     ledger.call(MODEL, 10, 10, lambda: {'input_tokens': 10, 'output_tokens': 10}, lambda r: r)
     assert link.is_symlink()
     assert SpendLedger(shared).snapshot() == ledger.snapshot()
+
+
+def test_concurrent_spend_requests_share_one_cap(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+    path = tmp_path / 'spend.json'
+    calls = []
+    def request(_):
+        def invoke():
+            calls.append(True)
+            return {'input_tokens': 10, 'output_tokens': 10}
+        try:
+            SpendLedger(path, 0.0003).call(MODEL, 10, 10, invoke, lambda r: r)
+            return True
+        except SpendUnavailable:
+            return False
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        assert sorted(pool.map(request, range(2))) == [False, True]
+    assert len(calls) == 1
+    assert SpendLedger(path).snapshot()['total_usd'] <= 0.0003
