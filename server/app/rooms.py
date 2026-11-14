@@ -93,6 +93,7 @@ class Room:
     intro: dict | None = None
     mood: str = "hopeful"
     _agent_task: asyncio.Task | None = field(default=None, repr=False)
+    _last_live_agent: live_agent.LiveAgent | None = field(default=None, repr=False)
     charge: int = 0
     auto_completed: bool = False
     city: City = field(default_factory=City)
@@ -307,6 +308,7 @@ class Room:
                     await self.broadcast('error', {'code': 'agent_fallback',
                         'message': 'The building is using its offline judge for this step.'})
         agent = live_agent.LiveAgent(emit=trace)
+        self._last_live_agent = agent
         originals, revised = list(self.pitches.values()), list(self.revisions.values())
         memory = f'{self.city.buildings_revived} buildings revived in this game; {self.city.sqft_reimagined} square feet reimagined.'
         try:

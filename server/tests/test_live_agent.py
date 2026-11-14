@@ -463,3 +463,111 @@ async def test_unexpected_live_failure_recovers_and_arms_timer(dossier, monkeypa
         assert any(e['type'] == 'error' and e['code'] == 'agent_fallback' for e in events)
     finally:
         room.close()
+
+
+@pytest.mark.parametrize('retry_failure', ['number', 'timeout'])
+async def test_bad_candidate_does_not_replace_other_grounded_players(dossier, retry_failure):
+    players = [pitch(player=f'p{i}') for i in range(4)]
+    candidates = [fake_agent.challenge(p, dossier).model_copy(update={
+        'counteroffer': 'Could your studio welcome neighbors after sunset?'}) for p in players]
+    bad = candidates[-1].model_copy(update={'line': 'I stand 987654 feet tall.'})
+    retry = TimeoutError() if retry_failure == 'timeout' else {'challenges': [bad.model_dump()]}
+    model = Model([{'challenges': [c.model_dump() for c in candidates[:-1]] + [bad.model_dump()]},
+                   {'checks': [{'supported': True, 'reason': ''} for _ in range(3)]}, retry])
+    agent = LiveAgent(model=model)
+    results = await agent.challenge(players, dossier)
+    assert results[:3] == candidates[:3]
+    assert results[-1] != bad
+    assert agent.challenge_fallback_causes == {('timeout' if retry_failure == 'timeout' else 'number_match'): 1}
+    assert agent.fallback_player_ids == {'p3'}
+    assert 'player="p0"' not in model.calls[-1][1]
+
+
+def test_null_source_fields_are_explicitly_unknown_and_not_citable(dossier):
+    from app.agent.prompts import context_facts, persona_for, safe_facts
+    missing = next(f for f in safe_facts(dossier) if f['value'] is None
+                   and re.fullmatch(r'floor_\d+_occupied_sqft', f['key']))
+    pitches = [pitch(f"A studio on floor {missing['key'].split('_')[1]}")]
+    nulls = [f for f in context_facts(dossier, persona_for(dossier), pitches) if f['value'] is None]
+    assert nulls  # real missing source data, never filled with invented values
+    prompt = build_prompt(dossier, 'hopeful', City(), pitches=pitches)
+    assert all(f['id'] not in prompt for f in nulls)
+    assert all(f['key'] in prompt for f in nulls)
+    assert 'unknown, do not cite' in prompt
+
+
+def test_small_paid_check_plan_and_budget_ceiling(monkeypatch):
+    import sys
+    from pathlib import Path
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2]))
+    from evals.live_quality import budget_ceiling, challenge_plan
+    assert budget_ceiling(2.44) == pytest.approx(2.64)
+    assert budget_ceiling(2.60) < 2.70
+    plan = challenge_plan()
+    assert sum(len(rows) for rows in plan.values()) == 8
+    assert len(plan) == 2
+    assert all(not safety_reason(row['text']) for rows in plan.values() for row in rows)
+
+
+async def test_eval_latency_excludes_fallback_only_batches(dossier, monkeypatch):
+    from pathlib import Path
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2]))
+    from evals.run import measured_challenge
+    monkeypatch.setenv('AGENT_MODE', 'live')
+    async def offline(self, pitches, dossier, *args):
+        self.fallback_player_ids = {p.player_id for p in pitches}
+        return [fake_agent.challenge(p, dossier) for p in pitches]
+    monkeypatch.setattr(LiveAgent, 'challenge', offline)
+    _, _, grounded_at, _, _, _, model_full, fallback_full = await measured_challenge([pitch()], dossier, City())
+    assert grounded_at is None and model_full is None
+    assert fallback_full is not None
+
+
+async def test_small_check_runs_exactly_two_batched_rounds_without_network(game_mode, monkeypatch):
+    import html
+    from pathlib import Path
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2]))
+    from evals import live_quality
+    calls = []
+    class Offline:
+        def __call__(self, step, system, content, schema, timeout):
+            calls.append(step)
+            if step == 'claim_check':
+                return {'checks': [{'supported': True, 'reason': ''} for _ in json.loads(content)]}
+            d = provider_for_mode(game_mode).dossier('233953' if 'Esperson' in system else '233899')
+            ps = [pitch(html.unescape(text), player=pid) for pid, text in
+                  re.findall(r'<pitch player="([^"]+)"[^>]*>(.*?)</pitch>', content)]
+            if step == 'challenge':
+                return {'challenges': [fake_agent.challenge(p, d).model_dump() for p in ps]}
+            return fake_agent.verdict(ps, d, City()).model_dump()
+    monkeypatch.setattr(live_quality, 'Bedrock', Offline)
+    result = await live_quality.evaluate(live_quality.challenge_plan())
+    assert calls.count('challenge') == 2 and calls.count('verdict') == 2
+    assert len(result['challenges']) == 8 and len(result['verdicts']) == 2
+    assert all(row['ground_error'] is None for row in result['challenges'] + result['verdicts'])
+    assert not any(row['fallback_cause'] for row in result['challenges'] + result['verdicts'])
+
+
+async def test_failure_during_fallback_validation_returns_to_explore(dossier, monkeypatch, tmp_path):
+    import app.rooms as rooms
+    from app.actions import ActionError
+    monkeypatch.setenv('AGENT_MODE', 'live')
+    async def proposals(self, originals, revised, dossier, city, *args):
+        return [(fake_agent.verdict(originals, dossier, city), originals)]
+    def reject(*args, **kwargs):
+        raise ActionError('deliberately invalid candidate')
+    monkeypatch.setattr(LiveAgent, 'verdict_batches', proposals)
+    monkeypatch.setattr(rooms, 'validate_verdict', reject)
+    room = rooms.Room(code='TEST', hero_ids=['233953'], state_dir=tmp_path, durations={})
+    events = []
+    async def send(event): events.append(event)
+    room.conns.append(rooms.Conn('screen', send))
+    player = room.add_player('Ann')
+    room.round_id, room.building_id, room.dossier = 'TEST-1', '233953', dossier
+    room.pitches[player.id] = pitch(player=player.id)
+    await room.set_phase('VERDICT')
+    task = room._agent_task
+    await asyncio.wait_for(task, .5)
+    assert room.phase == 'EXPLORE' and room.round_id is None
+    assert any(e['type'] == 'error' and e['code'] == 'invalid_verdict' for e in events)
+    room.close()

@@ -26,7 +26,7 @@ Latency measures the actual Room phase transition and counteroffer emissions to 
 
 Preflight estimate before retries/regeneration: $0.778; actual requests are independently reserved conservatively in spend.py. The live runner lowers the shared cap to min(start + $0.80, $2.59) and stops scheduling steps with less than $0.12 headroom. It never overwrites or resets the shared ledger.
 
-Target assessment: grounding PASS; schema PASS; winner stability PASS; grounded first subtitle MISS; full challenge p90 PASS.
+Target assessment: grounding PASS; schema PASS; winner stability PASS. The recorded subtitle and full-challenge latencies above include fallback dialogue; **model challenge latency was not measured**, so those values cannot establish a model latency PASS. All six challenge batches fell back, including the one sourced template in Wells Fargo Plaza's second batch. The follow-up runner separates model and fallback timings.
 
 The paid run used a 3-second socket read timeout, which caused four retained timeout reservations. After the run, the adapter was corrected offline to use the remaining 8-second challenge / 12-second verdict step budget, and prompts/grounding feedback were tightened to avoid repeating unsupported pitch numbers. These changes have offline regression coverage but were not re-evaluated on Bedrock: this report is the one paid run, not a measurement of those later changes. Fourteen of fifteen evaluated live steps required a fallback; only one verdict delivered model dialogue without fallback. Further live reliability validation is still needed, especially for Wells Fargo Plaza.
 

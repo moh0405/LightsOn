@@ -50,6 +50,8 @@ def context_facts(dossier: dict, persona: dict, pitches=()) -> list[dict]:
 def build_prompt(dossier: dict, mood: str, city, memory: str = '', *, pitches=()) -> str:
     persona = persona_for(dossier)
     facts = context_facts(dossier, persona, pitches)
+    unknown = [f['key'] for f in facts if f['value'] is None]
+    facts = [f for f in facts if f['value'] is not None]
     address = next((f['value'] for f in facts if f['key'] == 'address'), None)
     table = '\n'.join(' | '.join(json.dumps(value, ensure_ascii=False) for value in
                                 (f['id'], f['say_as'], fact_line(f), f['value'], f['unit'], f['source'], f['kind'])) for f in facts)
@@ -74,6 +76,7 @@ RULES
 12. FACTS include exact source say_as and ready-to-speak wording for the same evidence. Prefer that spoken wording for the constraint, then add your attitude. Cite only facts actually used; prefer one verified numeric constraint per challenge. Do not recite unrelated facts or quote pitch requirements as building facts.
 CONSTRAINTS (building physical HardLimits, triggered only by a stated numeric requirement exceeding the threshold):
 {json.dumps(persona['hard_limits'], ensure_ascii=False)}
+UNKNOWN fields (null = unknown, do not cite): {json.dumps(unknown)}
 FACTS
 id | exact say_as | spoken wording | value | unit | source | kind
 {table}'''
