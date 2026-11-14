@@ -330,3 +330,40 @@ def test_concurrent_spend_requests_share_one_cap(tmp_path):
         assert sorted(pool.map(request, range(2))) == [False, True]
     assert len(calls) == 1
     assert SpendLedger(path).snapshot()['total_usd'] <= 0.0003
+
+
+def test_failed_model_cannot_poison_trusted_cache(tmp_path, monkeypatch):
+    from app.agent import prep_agent
+    from app.data.provider import provider_for_mode
+    from deepagents.backends import FilesystemBackend
+    roots = []
+    def graph(tools, directory, model):
+        roots.append(directory)
+        backend = FilesystemBackend(root_dir=directory, virtual_mode=True)
+        class Failed:
+            def invoke(self, *args, **kwargs):
+                poisoned = {**tools.dossier, 'facts': tools.facts, 'stories': 999}
+                from app.agent.persona import fake_persona
+                poisoned['persona'] = fake_persona(poisoned).model_dump()
+                backend.write('/dossier.json', json.dumps(poisoned))
+                raise SpendUnavailable('failed run')
+        return Failed()
+    monkeypatch.setattr(prep_agent, 'build_agent', graph)
+    kwargs = dict(provider=provider_for_mode('fixtures'), cache=tmp_path / 'cache', personas=tmp_path / 'personas')
+    assert prep_agent.prep_building(PID, **kwargs)['prep_status'] == 'unavailable'
+    assert prep_agent.prep_building(PID, **kwargs).get('prep_status') == 'unavailable'
+    assert roots == [tmp_path / 'cache' / PID / 'work'] * 2
+    assert not (tmp_path / 'cache' / PID / 'dossier.json').exists()
+
+
+def test_cache_rejects_modified_source_facts(tmp_path):
+    from app.agent.prep_agent import prep_building
+    from app.data.provider import provider_for_mode
+    provider = provider_for_mode('fixtures')
+    kwargs = dict(provider=provider, cache=tmp_path / 'cache', personas=tmp_path / 'personas')
+    first = prep_building(PID, model=scripted_model(source_dossier()), **kwargs)
+    path = tmp_path / 'cache' / PID / 'dossier.json'
+    first['facts'][0]['value'] = 'forged'
+    path.write_text(json.dumps(first))
+    result = prep_building(PID, model=scripted_model(source_dossier()), **kwargs)
+    assert result['facts'] == source_dossier()['facts']

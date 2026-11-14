@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import fcntl
+import hashlib
 import json
 import logging
 import os
@@ -130,6 +131,29 @@ def merge_research(tools: BuildingTools, directory: Path) -> dict:
     return dossier
 
 
+def source_snapshot(tools: BuildingTools) -> dict:
+    return {**{k: v for k, v in tools.dossier.items()
+               if k not in {'persona', 'intro_audio_url', 'data_mode'}}, 'facts': tools.facts}
+
+
+def source_fingerprint(tools: BuildingTools) -> str:
+    return hashlib.sha256(json.dumps(source_snapshot(tools), sort_keys=True).encode()).hexdigest()
+
+
+def cached_result(tools: BuildingTools, path: Path) -> dict | None:
+    try:
+        result = json.loads(path.read_text())
+        if (result.get('prep_status') != 'ready'
+                or result.get('source_fingerprint') != source_fingerprint(tools)
+                or any(result.get(k) != v for k, v in source_snapshot(tools).items())):
+            return None
+        persona = validate_persona(result['persona'], {**tools.dossier, 'facts': tools.facts})
+        return {**result, **source_snapshot(tools), 'persona': persona.model_dump(),
+                'data_mode': tools.dossier['data_mode']}
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
 def prep_building(property_id: str, force: bool = False, *, provider=None, model=None,
                   cache: Path | None = None, personas: Path | None = None, emit=None) -> dict:
     provider = provider or get_provider()
@@ -140,10 +164,11 @@ def prep_building(property_id: str, force: bool = False, *, provider=None, model
         fcntl.flock(lock, fcntl.LOCK_EX)
         result_path = directory / 'dossier.json'
         if result_path.is_file() and not force:
-            result = json.loads(result_path.read_text())
-            validate_persona(result['persona'], result)
-            result['data_mode'] = tools.dossier['data_mode']
-            return result
+            if (result := cached_result(tools, result_path)) is not None:
+                return result
+        result_path.unlink(missing_ok=True)
+        workspace = directory / 'work'
+        workspace.mkdir(exist_ok=True)
         steps = Steps(directory / 'agent_steps.json', emit)
         if property_id not in HEROES:
             result = {**tools.dossier, 'facts': tools.facts}
@@ -151,9 +176,9 @@ def prep_building(property_id: str, force: bool = False, *, provider=None, model
             steps.record('fallback', 'fake_agent')
         else:
             for name in ('facts_property.json', 'facts_spatial.json', 'persona.json'):
-                (directory / name).unlink(missing_ok=True)
+                (workspace / name).unlink(missing_ok=True)
             try:
-                agent = build_agent(tools, directory, model)
+                agent = build_agent(tools, workspace, model)
             except Exception as exc:
                 log.error('Bedrock initialization unavailable (%s); using offline fallback', type(exc).__name__)
                 steps.record('fallback', 'fake_agent')
@@ -164,7 +189,7 @@ def prep_building(property_id: str, force: bool = False, *, provider=None, model
                     with tracing_context(enabled=bool(os.getenv('LANGSMITH_API_KEY'))):
                         agent.invoke({'messages': [('user', prompt)]},
                                      config={'callbacks': [steps], 'recursion_limit': 100})
-                    result = merge_research(tools, directory)
+                    result = merge_research(tools, workspace)
                     break
                 except SpendUnavailable:
                     steps.record('fallback', 'fake_agent')
@@ -179,6 +204,7 @@ def prep_building(property_id: str, force: bool = False, *, provider=None, model
         from ..voice.tts import render_intro
         result['intro_audio_url'] = render_intro(result['persona'])
         result['prep_status'] = 'ready'
+        result['source_fingerprint'] = source_fingerprint(tools)
         # Published only after all validation; the model backend can never write here.
         write_json((personas or PERSONAS) / f'{property_id}.json', result['persona'])
         write_json(result_path, result)
