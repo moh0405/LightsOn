@@ -78,8 +78,59 @@ class VexcelClient:
         else:
             hashed = hashlib.sha256((key_hint or "generic").encode()).hexdigest()[:16]
             dir_path = self.cache_dir / f"_key_{hashed}"
-        dir_path.mkdir(parents=True, exist_ok=True)
         return dir_path
+
+    @staticmethod
+    def _collection(data: Any) -> dict[str, Any]:
+        if not isinstance(data, dict) or not isinstance(data.get("features"), list):
+            raise ValueError("Expected a feature collection")
+        for feature in data["features"]:
+            if not isinstance(feature, dict) or not isinstance(feature.get("properties", {}), dict):
+                raise ValueError("Invalid feature")
+            detections = feature.get("properties", {}).get("detections", [])
+            if not isinstance(detections, list) or any(not isinstance(d, dict) for d in detections):
+                raise ValueError("Invalid detections")
+        return data
+
+    def _read_bytes(self, path: Path) -> bytes | None:
+        try:
+            return path.read_bytes()
+        except FileNotFoundError:
+            return None
+        except OSError as exc:
+            logger.warning("Vexcel cache read failed: %s", exc.__class__.__name__)
+            return None
+
+    def _read_json(self, path: Path) -> dict[str, Any] | None:
+        content = self._read_bytes(path)
+        if content is None:
+            return None
+        try:
+            return self._collection(json.loads(content))
+        except (ValueError, TypeError) as exc:
+            logger.warning("Vexcel cached JSON is malformed: %s", exc.__class__.__name__)
+            return None
+
+    def _write(self, path: Path, data: bytes | dict[str, Any]) -> None:
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data if isinstance(data, bytes) else json.dumps(data, indent=2).encode())
+        except OSError as exc:
+            logger.warning("Vexcel cache write failed: %s", exc.__class__.__name__)
+
+    @staticmethod
+    def _directions(data: dict[str, Any]) -> list[str]:
+        features = data["features"]
+        dates = [f.get("properties", {}).get("last-capture-date") for f in features]
+        newest = max((d for d in dates if isinstance(d, str) and d), default=None)
+        if features and newest is None:
+            raise ValueError("Collection has no capture date")
+        available = [f.get("properties", {}).get("product-type") for f in features
+                     if f.get("properties", {}).get("last-capture-date") == newest]
+        directions = [d for d in ["oblique-north", "oblique-south", "oblique-east", "oblique-west"] if d in available]
+        if features and not directions:
+            raise ValueError("Collection has no advertised oblique direction")
+        return directions
 
     @staticmethod
     def _request_key(request: dict[str, Any]) -> str:
@@ -145,11 +196,9 @@ class VexcelClient:
     ) -> dict[str, Any]:
         """Fetch parcel + structure footprints (latest=true, include=precomputed)."""
         cache_path = self._get_cache_dir(property_id, f"prop_{lat}_{lon}") / "property.json"
-        if cache_path.is_file():
-            try:
-                return json.loads(cache_path.read_text())
-            except Exception as exc:
-                logger.warning("Failed to read cached property data at %s: %s", cache_path, exc)
+        cached = self._read_json(cache_path)
+        if cached is not None:
+            return cached
 
         point_wkt = f"POINT({lon} {lat})"
         params = {
@@ -167,10 +216,7 @@ class VexcelClient:
         if resp.status_code == 404:
             logger.info("No Vexcel property record at lat=%.6f, lon=%.6f (404)", lat, lon)
             fallback = {"type": "FeatureCollection", "features": []}
-            try:
-                cache_path.write_text(json.dumps(fallback, indent=2))
-            except Exception:
-                pass
+            self._write(cache_path, fallback)
             return fallback
 
         if not resp.is_success:
@@ -178,11 +224,11 @@ class VexcelClient:
             return {"type": "FeatureCollection", "features": []}
 
         try:
-            data = resp.json()
-            cache_path.write_text(json.dumps(data, indent=2))
+            data = self._collection(resp.json())
+            self._write(cache_path, data)
             return data
         except Exception as exc:
-            logger.error("Failed to parse Vexcel property response: %s", exc)
+            logger.error("Failed to parse Vexcel property response: %s", exc.__class__.__name__)
             return {"type": "FeatureCollection", "features": []}
 
     def ortho(
@@ -193,11 +239,9 @@ class VexcelClient:
         """Fetch ortho image clipped to parcel with outline."""
         wkt_str = to_wkt(parcel_wkt)
         cache_path = self._get_cache_dir(property_id, f"ortho_{wkt_str}") / f"ortho_{self._request_key({'wkt': wkt_str})}.jpg"
-        if cache_path.is_file():
-            try:
-                return cache_path.read_bytes()
-            except Exception as exc:
-                logger.warning("Failed to read cached ortho image at %s: %s", cache_path, exc)
+        cached = self._read_bytes(cache_path)
+        if cached:
+            return cached
 
         body = {
             "wkt": wkt_str,
@@ -219,10 +263,7 @@ class VexcelClient:
 
         content = resp.content
         if content:
-            try:
-                cache_path.write_bytes(content)
-            except Exception:
-                pass
+            self._write(cache_path, content)
         return content
 
     def obliques(
@@ -235,16 +276,15 @@ class VexcelClient:
         # Geometry namespaces also prevent coverage and images from a previous parcel
         # being reused after the parcel changes. Ignore legacy incomplete caches.
         target_dir = self._get_cache_dir(property_id, f"obliques_{wkt_str}") / f"obliques_{self._request_key({'wkt': wkt_str})}"
-        target_dir.mkdir(parents=True, exist_ok=True)
         obliques_dir = target_dir / "images"
-        obliques_dir.mkdir(parents=True, exist_ok=True)
         collections_cache = target_dir / "oriented_collections.json"
-        collections_data = None
-        if collections_cache.is_file():
+        collections_data = self._read_json(collections_cache)
+        if collections_data is not None:
             try:
-                collections_data = json.loads(collections_cache.read_text())
-            except Exception as exc:
-                logger.warning("Failed reading cached oblique metadata: %s", exc.__class__.__name__)
+                self._directions(collections_data)
+            except ValueError:
+                logger.warning("Vexcel cached collection has no capture date")
+                collections_data = None
 
         if collections_data is None:
             params = {
@@ -264,40 +304,21 @@ class VexcelClient:
                 return {}
             else:
                 try:
-                    collections_data = coll_resp.json()
+                    collections_data = self._collection(coll_resp.json())
+                    self._directions(collections_data)
                 except Exception as exc:
                     logger.error("Failed to parse oriented/collections response: %s", exc.__class__.__name__)
                     return {}
-            try:
-                collections_cache.write_text(json.dumps(collections_data, indent=2))
-            except OSError as exc:
-                logger.warning("Failed writing oblique metadata: %s", exc.__class__.__name__)
+            self._write(collections_cache, collections_data)
 
-        features = collections_data.get("features", [])
-        if not features:
-            return {}
-
-        newest = max((f["properties"]["last-capture-date"] for f in features), default=None)
-        available = {
-            f["properties"]["product-type"]
-            for f in features
-            if f["properties"].get("last-capture-date") == newest
-        }
-        directions = [
-            d for d in ["oblique-north", "oblique-south", "oblique-east", "oblique-west"]
-            if d in available
-        ]
-
+        directions = self._directions(collections_data)
         results: dict[str, bytes] = {}
         for direction in directions:
             image_path = obliques_dir / f"{direction}.jpg"
-            try:
-                cached = image_path.read_bytes() if image_path.is_file() else None
-                if cached:
-                    results[direction] = cached
-                    continue
-            except OSError as exc:
-                logger.warning("Failed reading cached oblique image: %s", exc.__class__.__name__)
+            cached = self._read_bytes(image_path)
+            if cached:
+                results[direction] = cached
+                continue
             body = {
                 "wkt": wkt_str,
                 "srid": 4326,
@@ -318,10 +339,7 @@ class VexcelClient:
             img_resp = self._send("POST", "oriented/extract", json_body=body)
             if img_resp is not None and img_resp.is_success and img_resp.content:
                 results[direction] = img_resp.content
-                try:
-                    (obliques_dir / f"{direction}.jpg").write_bytes(img_resp.content)
-                except Exception:
-                    pass
+                self._write(image_path, img_resp.content)
             else:
                 logger.warning("Failed to extract oblique direction %s", direction)
 
@@ -358,11 +376,9 @@ class VexcelClient:
             },
         }
         cache_path = self._get_cache_dir(property_id, f"detect_{wkt_str}") / f"detect_{self._request_key(body)}.json"
-        if cache_path.is_file():
-            try:
-                return json.loads(cache_path.read_text())
-            except Exception as exc:
-                logger.warning("Failed to read cached detect data: %s", exc.__class__.__name__)
+        cached = self._read_json(cache_path)
+        if cached is not None:
+            return cached
 
         resp = self._send("POST", "elements/detect", json_body=body)
         if resp is None or not resp.is_success:
@@ -370,11 +386,11 @@ class VexcelClient:
             return {"type": "FeatureCollection", "features": []}
 
         try:
-            data = resp.json()
-            cache_path.write_text(json.dumps(data, indent=2))
+            data = self._collection(resp.json())
+            self._write(cache_path, data)
             return data
         except Exception as exc:
-            logger.error("Failed to parse Vexcel elements/detect response: %s", exc)
+            logger.error("Failed to parse Vexcel elements/detect response: %s", exc.__class__.__name__)
             return {"type": "FeatureCollection", "features": []}
 
 
