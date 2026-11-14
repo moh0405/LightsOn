@@ -26,7 +26,7 @@ THINKING = 'Darling, you have my attention. Let me consider your pitch.'
 REFUSAL = 'Darling, keep it kind and keep it about an idea for this space.'
 INJECTION = 'Nice try, hotshot. Pitch an idea instead of trying to boss the judge.'
 # Short local screening is also applied to generated dialogue. No blocked text is logged.
-BLOCK = re.compile(r'\b(?:porn(?:ography)?|sexual|sex|nude|naked|slut|fuck\w*|shit\w*|bitch\w*|nigg\w*|fagg\w*|retard\w*|heil|nazi\w*|election|republican\w*|democrat\w*|politic\w*|trump|biden|obama|musk|putin|hitler|modi)\b', re.I)
+BLOCK = re.compile(r'\b(?:porn(?:ography)?|sexual|sex|nude|naked|slut|fuck\w*|shit\w*|bitch\w*|nigg\w*|fagg\w*|retard\w*|heil|nazi\w*|election|republican\w*|democrat\w*|politic\w*|trump|biden|obama|musk|putin|hitler|modi|celebrity|politician|slur|taylor\s+swift|elon\s+musk|narendra\s+modi)\b', re.I)
 INJECT = re.compile(r'ignore\b.{0,50}\b(?:rules|instructions|previous)|\b(?:system prompt|developer message|pick me|override|jailbreak)\b|</?\s*(?:pitch|system|assistant)\b', re.I | re.S)
 
 
@@ -60,7 +60,7 @@ class Bedrock:
         model = os.getenv('BEDROCK_SMART_MODEL_ID' if step == 'verdict' else 'BEDROCK_FAST_MODEL_ID') or (SMART if step == 'verdict' else FAST)
         request = dict(modelId=model, system=[{'text': system}],
                        messages=[{'role': 'user', 'content': [{'text': content}]}],
-                       inferenceConfig={'maxTokens': 1100 if step == 'challenge' else 1600 if step == 'verdict' else 300, 'temperature': 0},
+                       inferenceConfig={'maxTokens': 900 if step == 'challenge' else 800 if step == 'verdict' else 300, 'temperature': 0},
                        toolConfig={'tools': [{'toolSpec': {'name': 'answer', 'description': 'Return the structured game proposal.',
                                                           'inputSchema': {'json': schema.model_json_schema()}}}],
                                    'toolChoice': {'tool': {'name': 'answer'}}})
@@ -110,6 +110,8 @@ class LiveAgent:
     async def grounded(self, lines, dossier, deadline):
         # One batched fast-model check, with one explicit result per line.
         for line, refs in lines:
+            if len(line) > 480:
+                return 'Dialogue must use short sentences'
             reason = check_line(line, refs, dossier)
             if reason:
                 return reason
@@ -150,7 +152,8 @@ class LiveAgent:
                     ids = [c.player_id for c in result.challenges]
                     if len(ids) != len(set(ids)) or set(ids) != {p.player_id for p in safe}:
                         raise ValueError('Challenge players mismatch')
-                    reason = await self.grounded([(c.line + ' ' + c.counteroffer, c.fact_ids) for c in result.challenges], dossier, deadline)
+                    reason = ('Challenge must cite a researched constraint' if any(not c.fact_ids for c in result.challenges)
+                              else await self.grounded([(c.line + ' ' + c.counteroffer, c.fact_ids) for c in result.challenges], dossier, deadline))
                     if not reason:
                         output.update({c.player_id: c for c in result.challenges})
                         break

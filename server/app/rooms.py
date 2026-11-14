@@ -188,6 +188,7 @@ class Room:
             self._round_seq += 1
             self.round_id = f'{self.code}-{self._round_seq}'
             self.building_id = building_id
+            dossier = {**dossier, 'persona': live_agent.persona_for(dossier)}
             self.dossier = dossier
             self.mood = live_agent.persona_for(dossier)['mood_baseline']
             self.target_floors = targets
@@ -224,6 +225,8 @@ class Room:
             self.target_floors = []
             self.dossier = None
             self._clear_round_inputs()
+        if phase == 'CHALLENGE' and any(live_agent.safety_reason(p.text) == 'injection' for p in self.pitches.values()):
+            self.mood = 'offended'
         if phase == 'CHALLENGE' and not pending_live:
             self.challenges = [fake_agent.challenge(p, self.dossier) for p in self.pitches.values()]
         if phase == 'VERDICT' and not pending_live:
@@ -350,6 +353,8 @@ class Room:
     async def advance(self, expected: tuple | None = None) -> None:
         async with self._lock:
             if expected is not None and (self.phase, self._round_seq, self.ends_at) != expected:
+                return
+            if self.phase == 'VERDICT' and self._agent_task and not self._agent_task.done():
                 return
             if self.phase == 'POWER_UP':
                 await self._revive(auto_completed=True)

@@ -50,7 +50,8 @@ def check_line(line: str, fact_ids: list[str], dossier: dict, impact: dict | Non
         for fact in cited:
             expected = fact['value']
             if type(expected) in (int, float) and math.isclose(value, expected, rel_tol=.001, abs_tol=.005):
-                if unit is None or unit == fact['unit']:
+                fact_unit = fact['unit'] or {'numStoriesAboveGrade': 'stories', 'parkingRatio': 'spaces_per_1000_sqft'}.get(fact['key'])
+                if unit is None or unit == fact_unit:
                     supported = True
             # Floor labels, capture dates, and ratio denominator come from the cited source clause.
             if unit is None and (match[0] in NUMBER.findall(fact.get('say_as') or '')
