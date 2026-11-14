@@ -49,7 +49,7 @@ export function Explore({ sock, color, sensors = false }: { sock: MutableRefObje
       Drag to aim at the skyline
     </div>
     <p>Wake a building:</p>
-    {heroIds.map((id) => <button key={id} style={button} onClick={() => void sock.current?.send({ type: "wake", building_id: id }).catch((error: unknown) => useGame.setState({ lastError: { code: "wake_failed", message: error instanceof Error ? error.message : "Could not wake this building." } }))}>
+    {heroIds.map((id) => <button key={id} style={button} onClick={() => void sock.current?.send({ type: "wake", building_id: id }).catch((error: unknown) => useGame.setState({ lastError: { code: "wake_failed", message: error instanceof Error ? error.message : "Could not wake this building.", at: Date.now() } }))}>
       Wake building {buildings.find((b) => String(b.id) === id)?.name ?? id}
     </button>)}
   </section>;

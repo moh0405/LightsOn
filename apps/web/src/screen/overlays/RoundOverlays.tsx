@@ -13,14 +13,21 @@ export function Subtitles() {
   return <section style={card} data-testid="subtitles" aria-live="polite"><p>{intro.text}</p><p>{intro.analyst_line}</p><small>Mood: {intro.mood}</small></section>;
 }
 export function Bubbles() {
-  const { pitches, players, phase } = useGame();
+  const { pitches, players, phase, counteroffers } = useGame();
   if (!["PITCH", "CHALLENGE", "NEGOTIATE"].includes(phase)) return null;
-  return <section aria-label="Player pitches" className="pitch-grid" style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>{Object.values(pitches).map((p) => <blockquote style={{ ...card, borderColor: players[p.player_id]?.color, margin: 0, flex: "1 1 280px" }} key={p.player_id}><strong>{players[p.player_id]?.nickname ?? "Player"}</strong><p>{p.text}</p></blockquote>)}</section>;
+  // Once a player has a counteroffer, their pitch moves into that card so four
+  // players' counteroffers and evidence fit the projector without scrolling.
+  const waiting = Object.values(pitches).filter((p) => phase === "PITCH" || !counteroffers[p.player_id]);
+  if (!waiting.length) return null;
+  return <section aria-label="Player pitches" className="pitch-grid" style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>{waiting.map((p) => <blockquote style={{ ...card, borderColor: players[p.player_id]?.color, margin: 0, flex: "1 1 280px" }} key={p.player_id}><strong>{players[p.player_id]?.nickname ?? "Player"}</strong><p>{p.text}</p></blockquote>)}</section>;
 }
 export function ChallengeCards() {
-  const { counteroffers, players, phase, mood } = useGame();
+  const { counteroffers, players, phase, mood, pitches } = useGame();
   if (!["CHALLENGE", "NEGOTIATE"].includes(phase)) return null;
-  return <section aria-label="Building counteroffers" className="challenge-grid" style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>{Object.values(counteroffers).map((c) => <article style={{ ...card, flex: "1 1 280px" }} key={c.player_id}><h3>To {players[c.player_id]?.nickname ?? "Player"}</h3><p aria-live="polite">{c.line}</p><small>Mood: {mood}</small><strong>{c.counteroffer}</strong><Evidence ids={c.fact_ids} /></article>)}</section>;
+  return <section aria-label="Building counteroffers" className="challenge-grid" style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>{Object.values(counteroffers).map((c) => <article className="challenge-card" style={{ ...card, borderColor: players[c.player_id]?.color ?? "#39455a", flex: "1 1 280px" }} key={c.player_id}>
+    <h3>To {players[c.player_id]?.nickname ?? "Player"} <small>· Mood: {mood}</small></h3>
+    {pitches[c.player_id] && <p className="pitch-quote" title={pitches[c.player_id]!.text}>“{pitches[c.player_id]!.text}”</p>}
+    <p aria-live="polite">{c.line}</p><p><strong>{c.counteroffer}</strong></p><Evidence ids={c.fact_ids} /></article>)}</section>;
 }
 export function Evidence({ ids }: { ids: string[] }) {
   const { buildingId, dataMode } = useGame();
@@ -65,5 +72,5 @@ export function NeedsBars() {
   return <section aria-label="City needs"><h3 style={{ fontSize: 28, margin: "8px 0 4px" }}>City needs</h3>{(Object.keys(labels) as Need[]).map((key) => <label key={key} style={{ display: "block", marginTop: 2, fontSize: 28 }}>{labels[key]}: {Math.round(city.needs[key])}<span className="needs-track"><span aria-hidden="true" style={{ width: `${city.needs[key]}%` }} /><meter aria-label={labels[key]} min={0} max={100} value={Math.round(city.needs[key])} /></span></label>)}<p style={{ margin: "8px 0 0" }}>Most needed: {labels[city.most_needed]}</p></section>;
 }
 export function RoundOverlays() {
-  return <div className="round-overlays" style={{ position: "absolute", bottom: 12, left: 12, right: 12, maxHeight: "90%", overflowY: "auto", display: "grid", gap: 12, fontSize: 28 }}><Subtitles /><Bubbles /><ChallengeCards /><ScoreCard /><EnergyMeter /><ConceptCard /></div>;
+  return <div className="round-overlays" style={{ position: "absolute", bottom: 12, left: 12, right: 12, maxHeight: "calc(100% - 24px)", overflowY: "auto", display: "grid", gap: 12, fontSize: 28 }}><Subtitles /><Bubbles /><ChallengeCards /><ScoreCard /><EnergyMeter /><ConceptCard /></div>;
 }

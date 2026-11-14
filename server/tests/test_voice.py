@@ -52,11 +52,11 @@ def test_voice_routes_validate_and_use_commands(monkeypatch, tmp_path, game_mode
     monkeypatch.setenv('STATE_DIR', str(tmp_path))
     monkeypatch.setattr(stt, 'transcribe', lambda *_: 'A community space.')
     with TestClient(app) as client:
-        assert client.post('/api/tts', json={'text': 'Game invitation.', 'voice_id': ''}).json() == {'audio_url': None}
         code = client.post('/api/rooms').json()['room']
         room = app.state.manager.get(code)
         player = room.add_player('Ann')
         room.phase, room.round_id = 'PITCH', 'R1'
+        assert client.post('/api/tts', json={'room': code, 'round_id': 'R1', 'text': 'Game invitation.'}).json() == {'audio_url': None}
         args = {'player_id': player.id, 'phase': 'PITCH', 'round_id': 'R1'}
         def stale(*_):
             room.round_id = 'R2'
@@ -82,3 +82,74 @@ def test_voice_routes_validate_and_use_commands(monkeypatch, tmp_path, game_mode
         response = client.post(f'/api/rooms/{code}/pitch_audio', data={**args, 'phase': 'NEGOTIATE'}, files={'audio': ('voice.webm', b'voice', 'audio/webm')})
         assert response.status_code == 503
         assert response.json()['detail']['code'] == 'stt_unavailable'
+
+
+def test_tts_requires_an_active_round_and_server_lines(monkeypatch, tmp_path, game_mode):
+    monkeypatch.setenv('STATE_DIR', str(tmp_path))
+    monkeypatch.setenv('HOST_PIN', '4321')
+    from app import main
+    rendered = []
+    monkeypatch.setattr(tts, 'render_speech', lambda text, voice='': rendered.append((text, voice)) or '/api/tts/x.mp3')
+    with TestClient(app) as client:
+        # No room: never reaches the paid adapter.
+        assert client.post('/api/tts', json={'text': 'Free credit.'}).status_code == 422
+        assert client.post('/api/tts', json={'room': 'NOPE', 'text': 'Free credit.'}).status_code == 404
+        code = client.post('/api/rooms').json()['room']
+        room = app.state.manager.get(code)
+        assert client.post('/api/tts', json={'room': code, 'text': 'Free credit.'}).status_code == 403  # lobby, no players
+        room.add_player('Ann')
+        room.phase, room.round_id = 'INTRO', 'R1'
+        room.intro = {'text': 'I have waited  a long time.', 'mood': 'lonely'}
+        room.dossier = {'persona': {'voice_id': 'abc123'}}
+        assert client.post('/api/tts', json={'room': code, 'round_id': 'R0', 'text': 'I have waited a long time.'}).status_code == 409
+        ok = client.post('/api/tts', json={'room': code, 'round_id': 'R1', 'text': 'I have waited a long time.', 'voice_id': 'abc123'})
+        assert ok.status_code == 200 and rendered[-1] == ('I have waited a long time.', 'abc123')
+        # Only the round's persona voice (or the default) may be used.
+        assert client.post('/api/tts', json={'room': code, 'text': 'I have waited a long time.', 'voice_id': 'other'}).status_code == 403
+        # Arbitrary text must be short and is rate limited per room.
+        assert client.post('/api/tts', json={'room': code, 'text': 'x' * 281}).status_code == 403
+        statuses = [client.post('/api/tts', json={'room': code, 'text': f'Short line {i}.'}).status_code for i in range(main.TTS_FREE_LINES + 2)]
+        assert statuses[:main.TTS_FREE_LINES] == [200] * main.TTS_FREE_LINES and statuses[-1] == 429
+        # Server lines are never rate limited.
+        assert client.post('/api/tts', json={'room': code, 'text': 'I have waited a long time.'}).status_code == 200
+        # The host PIN may render any bounded text, even outside a round.
+        room.phase, room.round_id = 'EXPLORE', None
+        assert client.post('/api/tts', json={'room': code, 'text': 'x' * 500}, headers={'X-Host-Pin': '4321'}).status_code == 200
+        assert client.post('/api/tts', json={'room': code, 'text': 'x' * 500}, headers={'X-Host-Pin': 'nope'}).status_code == 403
+
+
+def test_tts_cache_is_bounded(monkeypatch, tmp_path):
+    import os, time
+    monkeypatch.setattr(tts, 'CACHE', tmp_path)
+    monkeypatch.setattr(tts, 'CACHE_MAX_BYTES', 25)
+    for i in range(5):
+        path = tmp_path / f'{i:064x}.mp3'
+        path.write_bytes(b'0123456789')
+        os.utime(path, (time.time() + i, time.time() + i))
+    tts.prune_cache()
+    assert sorted(p.name for p in tmp_path.glob('*.mp3')) == [f'{i:064x}.mp3' for i in (3, 4)]
+
+
+def test_pitch_audio_rejects_oversized_uploads_before_parsing(monkeypatch, tmp_path, game_mode):
+    monkeypatch.setenv('STATE_DIR', str(tmp_path))
+    from starlette import formparsers
+    spooled = []
+    original = formparsers.MultiPartParser.parse
+    async def parse(self):
+        spooled.append(True)
+        return await original(self)
+    monkeypatch.setattr(formparsers.MultiPartParser, 'parse', parse)
+    with TestClient(app) as client:
+        code = client.post('/api/rooms').json()['room']
+        from app.main import PITCH_AUDIO_BODY_MAX
+        big = b'0' * (PITCH_AUDIO_BODY_MAX + 1)
+        declared = client.post(f'/api/rooms/{code}/pitch_audio', content=big,
+                               headers={'content-type': 'multipart/form-data; boundary=x'})
+        assert declared.status_code == 413
+        def chunks():
+            for i in range(0, len(big), 65536):
+                yield big[i:i + 65536]
+        streamed = client.post(f'/api/rooms/{code}/pitch_audio', content=chunks(),
+                               headers={'content-type': 'multipart/form-data; boundary=x'})
+        assert streamed.status_code == 413
+        assert not spooled

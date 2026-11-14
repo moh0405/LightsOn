@@ -61,8 +61,11 @@ export interface GameState {
   revival: (Revival & { at: number }) | null;
   city: CityState | null;
   hasState: boolean;
-  lastError: { code: string; message: string } | null;
+  lastError: { code: string; message: string; at: number } | null;
 }
+
+/** How long an error toast stays up; identical errors inside it are deduped. */
+export const TOAST_MS = 6000;
 
 export const initialGame: GameState = {
   agentSteps: [],
@@ -143,8 +146,13 @@ export function reduce(s: GameState, msg: ServerMessage, now = Date.now()): Part
       };
     }
     case "neighborhood_updated": return { city: s.city ? { ...s.city, needs: msg.needs, most_needed: msg.most_needed } : null };
-    case "error":
-      return msg.nonce ? {} : { lastError: { code: msg.code, message: msg.message } };
+    case "error": {
+      // Every error event is shown, matched nonce or not; identical repeats
+      // while the toast is still up do not stack or restart it.
+      const last = s.lastError;
+      if (last && last.code === msg.code && last.message === msg.message && now - last.at < TOAST_MS) return {};
+      return { lastError: { code: msg.code, message: msg.message, at: now } };
+    }
     default:
       return {};
   }

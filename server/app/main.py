@@ -38,6 +38,57 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Lights On", lifespan=lifespan)
 
+# Recording cap plus room for the multipart envelope and small form fields.
+PITCH_AUDIO_BODY_MAX = 5 * 1024 * 1024 + 256 * 1024
+
+
+class PitchAudioLimit:
+    """Rejects an oversized voice pitch before Starlette spools the multipart body to disk:
+    by Content-Length, or for chunked uploads by reading at most the limit first."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope['type'] != 'http' or scope['method'] != 'POST' or not scope['path'].endswith('/pitch_audio'):
+            return await self.app(scope, receive, send)
+        headers = dict(scope.get('headers') or [])
+        declared = headers.get(b'content-length')
+        if declared is not None:
+            try:
+                too_big = int(declared) > PITCH_AUDIO_BODY_MAX
+            except ValueError:
+                too_big = True
+            if too_big:
+                return await self._reject(send)
+            return await self.app(scope, receive, send)
+        body, more = bytearray(), True
+        while more:
+            message = await receive()
+            if message['type'] == 'http.disconnect':
+                return
+            body += message.get('body', b'')
+            more = message.get('more_body', False)
+            if len(body) > PITCH_AUDIO_BODY_MAX:
+                return await self._reject(send)
+        replayed = False
+        async def replay():
+            nonlocal replayed
+            if replayed:
+                return await receive()
+            replayed = True
+            return {'type': 'http.request', 'body': bytes(body), 'more_body': False}
+        return await self.app(scope, replay, send)
+
+    @staticmethod
+    async def _reject(send):
+        from fastapi.responses import JSONResponse
+        response = JSONResponse({'detail': {'code': 'bad_audio', 'message': 'Record up to 30 seconds, then release.'}}, status_code=413)
+        await response({'type': 'http'}, None, send)
+
+
+app.add_middleware(PitchAudioLimit)
+
 
 def env_example_keys() -> list[str]:
     """Names of every key declared in .env.example (values are never read)."""
@@ -149,13 +200,49 @@ def intro_audio(filename: str):
 
 
 class SpeechRequest(BaseModel):
+    room: str = Field(min_length=1, max_length=16)
+    round_id: str | None = Field(default=None, max_length=64)
     text: str = Field(min_length=1, max_length=2000)
     voice_id: str = Field(default='', max_length=128)
 
 
+# Text that is not a line the server produced this round: short and rate limited per room.
+TTS_FREE_CHARS = 280
+TTS_FREE_LINES = 6
+TTS_FREE_WINDOW_S = 60.0
+_tts_free_usage: dict[str, list[float]] = {}
+
+
+def host_pin_ok(request: Request) -> bool:
+    expected, supplied = os.getenv('HOST_PIN', ''), request.headers.get('X-Host-Pin', '')
+    return bool(expected) and secrets.compare_digest(supplied.encode('utf-8'), expected.encode('utf-8'))
+
+
 @app.post('/api/tts')
-async def speech(body: SpeechRequest) -> dict:
+async def speech(body: SpeechRequest, request: Request) -> dict:
+    """Paid voice is only for a room's active round (or the host): the round's own
+    lines, or a short rate-limited line, in the round persona's voice."""
     from .voice.tts import render_speech
+    room = request.app.state.manager.get(body.room.upper())
+    if room is None:
+        raise HTTPException(404, detail={'code': 'no_room', 'message': 'Room not found.'})
+    if not host_pin_ok(request):
+        if not room.players or not room.round_id or room.phase in ('LOBBY', 'EXPLORE'):
+            raise HTTPException(403, detail={'code': 'no_round', 'message': 'Voice is only available during a round.'})
+        if body.round_id is not None and body.round_id != room.round_id:
+            raise HTTPException(409, detail={'code': 'wrong_round', 'message': 'That round has ended.'})
+        persona_voice = ((room.dossier or {}).get('persona') or {}).get('voice_id') or ''
+        if body.voice_id not in ('', persona_voice):
+            raise HTTPException(403, detail={'code': 'bad_voice', 'message': 'Use the building voice.'})
+        if ' '.join(body.text.split()) not in room.spoken_lines():
+            if len(body.text) > TTS_FREE_CHARS:
+                raise HTTPException(403, detail={'code': 'not_a_round_line', 'message': 'Only this round\'s lines can be voiced.'})
+            loop_now = asyncio.get_running_loop().time()
+            recent = [t for t in _tts_free_usage.get(room.code, []) if loop_now - t < TTS_FREE_WINDOW_S]
+            if len(recent) >= TTS_FREE_LINES:
+                _tts_free_usage[room.code] = recent
+                raise HTTPException(429, detail={'code': 'rate_limited', 'message': 'Voice is busy. Subtitles remain.'})
+            _tts_free_usage[room.code] = [*recent, loop_now]
     return {'audio_url': await asyncio.to_thread(render_speech, body.text, body.voice_id)}
 
 
