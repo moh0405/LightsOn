@@ -41,6 +41,8 @@ class Steps(BaseCallbackHandler):
         self.path, self.emit = path, emit
         self.events: list[dict] = []
         self.starts: dict = {}
+        self.parents: dict = {}
+        self.owners: dict = {}
         self.lock = threading.Lock()
 
     def record(self, step: str, tool: str, duration_ms: int = 0):
@@ -51,16 +53,35 @@ class Steps(BaseCallbackHandler):
             if self.emit:
                 self.emit(event)
 
-    def on_tool_start(self, serialized, input_str, *, run_id, inputs=None, **kwargs):
-        name = serialized.get('name', 'tool')
-        step = 'research'
+    # Ownership follows the run tree: a scout's inner tool calls descend from its `task` run.
+    def _parent(self, run_id, parent_run_id):
+        if parent_run_id is not None:
+            self.parents[run_id] = parent_run_id
+
+    def owner(self, run_id) -> str:
+        seen = set()
+        while run_id is not None and run_id not in seen:
+            seen.add(run_id)
+            if run_id in self.owners:
+                return self.owners[run_id]
+            run_id = self.parents.get(run_id)
+        return 'research'
+
+    def on_chain_start(self, serialized, inputs, *, run_id, parent_run_id=None, **kwargs):
+        self._parent(run_id, parent_run_id)
+
+    def on_tool_start(self, serialized, input_str, *, run_id, parent_run_id=None, inputs=None, **kwargs):
+        self._parent(run_id, parent_run_id)
+        name = (serialized or {}).get('name', 'tool')
+        step = self.owner(parent_run_id)
         if name == 'task':
             try:
                 value = inputs or json.loads(input_str)
                 proposed = value.get('subagent_type')
                 if proposed in {'property_scout', 'spatial_scout', 'persona_writer'}:
                     step = proposed
-            except (ValueError, TypeError):
+                    self.owners[run_id] = proposed
+            except (ValueError, TypeError, AttributeError):
                 pass
         self.starts[run_id] = (time.monotonic(), step, name)
 
@@ -70,6 +91,20 @@ class Steps(BaseCallbackHandler):
 
     def on_tool_error(self, error, *, run_id, **kwargs):
         self.on_tool_end(None, run_id=run_id)
+
+
+HEROES = {'233953', '233899'}
+
+
+def finalize_floors(output: Path | None = None) -> None:
+    """Deterministic post-prep step shared by the CLI and the HTTP route: rebuild floor polygons."""
+    import sys
+    scripts = str(ROOT / 'scripts')
+    if scripts not in sys.path:
+        sys.path.insert(0, scripts)
+    from build_floors import build_floors
+    build_floors(ROOT / 'server/fixtures/dossiers', ROOT / 'apps/web/public/city.geojson',
+                 output or ROOT / 'apps/web/public/floors.geojson', HEROES)
 
 
 PERSONA_WRITER_PROMPT = (

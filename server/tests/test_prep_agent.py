@@ -772,3 +772,80 @@ def test_every_limit_is_strict_at_its_threshold(index, offset, fires):
     dossier['persona'] = {**fake_persona(dossier).model_dump(), 'hard_limits': [limit]}
     reply = challenge(pitch(text), dossier)
     assert (reply.line == limit['text'] and reply.fact_ids == [limit['fact_ref']]) is fires, text
+
+
+def test_inner_scout_tool_events_carry_their_owner(tmp_path):
+    from app.agent.prep_agent import prep_building
+    from app.data.provider import provider_for_mode
+    events = []
+    prep_building(PID, provider=provider_for_mode('fixtures'), model=scripted_model(source_dossier()),
+                  cache=tmp_path / 'cache', personas=tmp_path / 'personas', emit=events.append)
+    owners = {}
+    for event in events:
+        owners.setdefault(event['tool'], set()).add(event['step'])
+    for tool in ['kit_get_building', 'kit_get_floor_status', 'kit_get_tenant_history', 'kit_get_matterport_models']:
+        assert owners[tool] == {'property_scout'}, tool
+    for tool in ['vexcel_property', 'vexcel_imagery', 'vexcel_detect', 'matterport_get_model']:
+        assert owners[tool] == {'spatial_scout'}, tool
+    assert owners['read_file'] == {'persona_writer'}
+    assert owners['task'] == {'property_scout', 'spatial_scout', 'persona_writer'}
+    inner_writes = [e['step'] for e in events if e['tool'] == 'write_file']
+    assert sorted(inner_writes) == ['persona_writer', 'property_scout', 'spatial_scout']
+
+
+@pytest.mark.parametrize('failure,status,code', [(ValueError('secret grounding detail'), 422, 'prep_grounding_failed'),
+                                                 (RuntimeError('secret upstream detail'), 503, 'prep_unavailable')])
+def test_prep_failures_toast_without_leaking_exception_text(monkeypatch, tmp_path, failure, status, code):
+    from fastapi.testclient import TestClient
+    from app.main import app
+    from app.agent import prep_agent
+    monkeypatch.setenv('STATE_DIR', str(tmp_path))
+    monkeypatch.setenv('DATA_MODE', 'fixtures')
+    monkeypatch.setenv('HOST_PIN', 'test-host')
+    def prepare(pid, force, **kwargs):
+        raise failure
+    floors = []
+    monkeypatch.setattr(prep_agent, 'prep_building', prepare)
+    monkeypatch.setattr(prep_agent, 'finalize_floors', lambda: floors.append(1))
+    with TestClient(app) as client:
+        room = client.post('/api/rooms').json()['room']
+        with client.websocket_connect(f'/ws/{room}?role=screen') as ws:
+            assert ws.receive_json()['type'] == 'room_state'
+            response = client.post(f'/api/buildings/{PID}/prep?force=true', headers={'X-Host-Pin': 'test-host'})
+            assert response.status_code == status
+            event = ws.receive_json()
+    assert event['type'] == 'error' and event['code'] == code and event['message']
+    assert 'secret' not in json.dumps(event) + response.text
+    assert floors == []
+
+
+def test_http_forced_prep_rebuilds_floor_artifacts_only_when_ready(monkeypatch, tmp_path):
+    from fastapi.testclient import TestClient
+    from app.main import app
+    from app.agent import prep_agent
+    from app.agent.persona import fake_persona
+    monkeypatch.setenv('STATE_DIR', str(tmp_path))
+    monkeypatch.setenv('DATA_MODE', 'fixtures')
+    monkeypatch.setenv('HOST_PIN', 'test-host')
+    status = ['ready']
+    def prepare(pid, force, **kwargs):
+        dossier = source_dossier()
+        return {**dossier, 'persona': fake_persona(dossier).model_dump(), 'prep_status': status[0]}
+    floors = []
+    monkeypatch.setattr(prep_agent, 'prep_building', prepare)
+    monkeypatch.setattr(prep_agent, 'finalize_floors', lambda: floors.append(1))
+    with TestClient(app) as client:
+        headers = {'X-Host-Pin': 'test-host'}
+        assert client.post(f'/api/buildings/{PID}/prep?force=true', headers=headers).status_code == 200
+        assert floors == [1]
+        status[0] = 'unavailable'
+        assert client.post(f'/api/buildings/{PID}/prep?force=true', headers=headers).status_code == 200
+        assert floors == [1]
+
+
+def test_finalize_floors_matches_the_committed_floor_artifact(tmp_path):
+    from app.agent import prep_agent
+    out = tmp_path / 'floors.geojson'
+    prep_agent.finalize_floors(output=out)
+    committed = prep_agent.ROOT / 'apps/web/public/floors.geojson'
+    assert json.loads(out.read_text()) == json.loads(committed.read_text())
