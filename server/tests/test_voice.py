@@ -128,3 +128,28 @@ def test_tts_cache_is_bounded(monkeypatch, tmp_path):
         os.utime(path, (time.time() + i, time.time() + i))
     tts.prune_cache()
     assert sorted(p.name for p in tmp_path.glob('*.mp3')) == [f'{i:064x}.mp3' for i in (3, 4)]
+
+
+def test_pitch_audio_rejects_oversized_uploads_before_parsing(monkeypatch, tmp_path, game_mode):
+    monkeypatch.setenv('STATE_DIR', str(tmp_path))
+    from starlette import formparsers
+    spooled = []
+    original = formparsers.MultiPartParser.parse
+    async def parse(self):
+        spooled.append(True)
+        return await original(self)
+    monkeypatch.setattr(formparsers.MultiPartParser, 'parse', parse)
+    with TestClient(app) as client:
+        code = client.post('/api/rooms').json()['room']
+        from app.main import PITCH_AUDIO_BODY_MAX
+        big = b'0' * (PITCH_AUDIO_BODY_MAX + 1)
+        declared = client.post(f'/api/rooms/{code}/pitch_audio', content=big,
+                               headers={'content-type': 'multipart/form-data; boundary=x'})
+        assert declared.status_code == 413
+        def chunks():
+            for i in range(0, len(big), 65536):
+                yield big[i:i + 65536]
+        streamed = client.post(f'/api/rooms/{code}/pitch_audio', content=chunks(),
+                               headers={'content-type': 'multipart/form-data; boundary=x'})
+        assert streamed.status_code == 413
+        assert not spooled
