@@ -663,12 +663,12 @@ def test_one_floor_proposals_are_not_asserted_floor_counts(dossier, line):
     assert check_line('I have one floor for your studio.', ['F_233953_dark_sqft'], dossier)
 
 
-async def test_pure_voice_and_proposal_skip_remote_check_but_assertions_do_not(dossier):
+async def test_only_fact_free_templates_skip_remote_check(dossier):
     async def unexpected(*args):
-        pytest.fail('Pure voice/proposal must not call the model')
+        pytest.fail('Exact fact-free templates must not call the model')
     agent = LiveAgent(model=unexpected)
     from time import monotonic
-    for line in ['Darling, you have my attention.', 'Could your studio welcome neighbors after sunset?']:
+    for line in ['Darling, you have my attention.']:
         assert await agent.grounded([(line, [])], dossier, monotonic() + 1, step='verdict', attempt=0) is None
     checked = []
     async def model(*args):
@@ -828,3 +828,58 @@ def test_game_bedrock_only_refuses_at_the_shared_cap(monkeypatch, tmp_path, doss
         assert all(pool.map(call, range(4)))
     seed(2.9999)
     assert call(0) is False
+
+
+UNCITED_PRESUPPOSITIONS = [
+    'Offer panoramic views from the rooftop.',
+    'Give me a café beneath original marble arches.',
+    'Could your studio restore original brass doors?',
+    'Offer a studio; originally an opera house.',
+]
+
+
+@pytest.mark.parametrize('line', UNCITED_PRESUPPOSITIONS)
+async def test_hypothetical_prefix_lines_always_reach_claim_check(dossier, line):
+    from time import monotonic
+    called = []
+    async def model(step, system, content, schema, timeout):
+        called.append(step)
+        return {'checks': [{'supported': False, 'reason': 'Uncited building feature'}]}
+    agent = LiveAgent(model=model)
+    assert await agent.grounded([(line, [])], dossier, monotonic() + 1, step='verdict', attempt=0)
+    assert called == ['claim_check']
+
+
+async def test_uncited_history_verdict_falls_back_end_to_end(dossier):
+    """Review P1: an uncited 'originally an opera house' reason must never publish."""
+    from app.actions import validate_verdict
+    line = 'Offer a studio; originally an opera house.'
+    p = pitch()
+    calls = []
+    async def model(step, system, content, schema, timeout):
+        calls.append(step)
+        if step == 'claim_check':
+            return {'checks': [{'supported': False, 'reason': 'Uncited past use'} for _ in json.loads(content)]}
+        proposal = fake_agent.verdict([p.model_copy(update={'player_id': 'candidate_0'})], dossier, City())
+        return proposal.model_copy(update={'reason_line': line, 'fact_ids': []}).model_dump()
+    agent = LiveAgent(model=model)
+    batches = await agent.verdict_batches([p], [], dossier, City(), [])
+    verdict = validate_verdict(batches, dossier=dossier, player_ids={p.player_id}, round_id='R-1',
+                               city=City(), sqft=1000)
+    assert verdict.reason_line != line and 'opera' not in verdict.reason_line
+    assert calls.count('claim_check') == 2 and agent.fallbacks == 1
+    assert agent.fallback_causes == {'claim_check': 1}
+
+
+@pytest.mark.parametrize('line', ['Could your studio welcome neighbors after sunset?',
+                                  'Give me a pilot: start small and prove your idea works.',
+                                  'Offer the neighbors a reason to stay out late, darling.'])
+async def test_legitimate_counteroffers_pass_after_claim_check(dossier, line):
+    from time import monotonic
+    called = []
+    async def model(step, system, content, schema, timeout):
+        called.append(step)
+        return {'checks': [{'supported': True, 'reason': ''}]}
+    agent = LiveAgent(model=model)
+    assert await agent.grounded([(line, [])], dossier, monotonic() + 1, step='verdict', attempt=0) is None
+    assert called == ['claim_check']

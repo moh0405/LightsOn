@@ -17,7 +17,7 @@ from pydantic import BaseModel, ConfigDict, TypeAdapter
 
 from ..models import Challenge, Pitch, VerdictProposal
 from . import fake_agent
-from .grounding import ClaimChecks, NUMBER, check_line, fallback_line
+from .grounding import ClaimChecks, check_line, fallback_line
 from .prompts import CachedPrompt, build_prompt, challenge_prompt, persona_for, pitch_data, safe_facts
 from .spend import MeteredClient, SpendUnavailable
 
@@ -28,6 +28,9 @@ MOODS = ['offended', 'bitter', 'anxious', 'lonely', 'proud', 'hopeful', 'flatter
 THINKING = 'Darling, you have my attention. Let me consider your pitch.'
 REFUSAL = 'Darling, keep it kind and keep it about an idea for this space.'
 INJECTION = 'Nice try, hotshot. Pitch an idea instead of trying to boss the judge.'
+# Exact voice lines reviewed to contain no building facts; nothing else skips claim_check.
+FACT_FREE_TEMPLATES = frozenset({THINKING, REFUSAL, INJECTION, 'Darling, you have my attention.',
+                                 'Darling, you have my attention!', 'Darling, you have my attention'})
 # Short local screening is also applied to generated dialogue. No blocked text is logged.
 BLOCK = re.compile(r'\b(?:porn(?:ography)?|sexual|sex|nude|naked|slut|fuck\w*|shit\w*|bitch\w*|nigg\w*|fagg\w*|retard\w*|heil|nazi\w*|election|republican\w*|democrat\w*|politic\w*|trump|biden|obama|musk|putin|hitler|modi|celebrity|politician|slur|taylor\s+swift|elon\s+musk|narendra\s+modi)\b', re.I)
 INJECT = re.compile(r'ignore\b.{0,50}\b(?:rules|instructions|previous)|\b(?:system prompt|developer message|pick me|override|jailbreak)\b|</?\s*(?:pitch|system|assistant)\b', re.I | re.S)
@@ -169,16 +172,10 @@ class LiveAgent:
             elif BLOCK.search(line) or INJECT.search(line):
                 issues[index] = reject(line, refs, 'Unsafe generated dialogue', 'safety')
         def needs_check(line, refs):
-            if refs or NUMBER.search(line):
-                return True
-            # Only skip recognizable voice or hypothetical plans. Uncited factual
-            # assertions still need semantic validation, even without quantities.
-            if re.fullmatch(r'Darling, you have my attention[.!]?', line, re.I):
-                return False
-            assertion = re.search(r"\b(?:my|our|existing|already|have|has|had|was|were|is|are|since|built|contains|offers)\b|"
-                                  r"\b(?:tunnels?|windows?|ceilings?|daylight|capacity|history|years|decades|legal)\b", line, re.I)
-            pure = re.match(r"(?:could your |would your |can your |let['’]s |give me |start |offer )", line, re.I)
-            return bool(assertion) or not pure
+            # Only exact, pre-validated fact-free templates skip the semantic check.
+            # A question or proposal wrapper can still presuppose an uncited
+            # feature or past use ("Offer a studio; originally an opera house").
+            return line.strip() not in FACT_FREE_TEMPLATES
         pending = [i for i, issue in enumerate(issues) if issue is None and needs_check(*lines[i])]
         if not pending:
             return issues
