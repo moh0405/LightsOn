@@ -395,3 +395,55 @@ def test_physical_limits_reject_identity_require_two_and_challenge_oversize():
     unknown = {**dossier, 'facts': [], 'floors': []}
     empty = fake_persona(unknown).model_dump()
     assert empty['hard_limits'] == [] and empty['hard_limits_empty_reason']
+
+
+def test_spend_prices_prompt_cache_reads_and_both_write_ttls(tmp_path):
+    ledger = SpendLedger(tmp_path / 'spend.json', 3)
+    usage = dict(input_tokens=100, output_tokens=2,
+                 input_token_details=dict(cache_read=40, cache_creation=30,
+                    ephemeral_5m_input_tokens=10, ephemeral_1h_input_tokens=20))
+    ledger.call(MODEL, 100, 2, lambda: usage, lambda r: r)
+    # 30 uncached + 40 reads + 10 five-minute writes + 20 hour writes.
+    assert ledger.snapshot()['total_usd'] == pytest.approx((3.3 * (30 + 4 + 12.5 + 40) + 16.5 * 2) / 1e6)
+
+
+@pytest.mark.parametrize('override', [dict(inference_config={'max_tokens': 4096}),
+    dict(model_id='us.anthropic.claude-opus-4-6'), dict(additional_model_request_fields={'max_tokens': 4096}),
+    dict(service_tier='priority')])
+def test_spend_meters_or_refuses_final_request_overrides(tmp_path, monkeypatch, override):
+    from app.agent.spend import CappedBedrockConverse
+    monkeypatch.setenv('BEDROCK_SPEND_CAP_USD', '0.05')
+    class Client:
+        def converse(self, **kwargs):
+            pytest.fail('Unreserved or unpriced override reached Bedrock')
+    model = CappedBedrockConverse(client=Client(), model_id=MODEL, region_name='us-east-1',
+        max_tokens=1, disable_streaming=True, spend_path=tmp_path / 'spend.json')
+    with pytest.raises(SpendUnavailable):
+        model.invoke('Pitch', **override)
+
+
+def test_shared_ledger_environment_is_used(tmp_path, monkeypatch):
+    monkeypatch.setenv('BEDROCK_SPEND_LEDGER', str(tmp_path / 'shared.json'))
+    assert SpendLedger().path == (tmp_path / 'shared.json').resolve()
+
+
+def test_sdk_boundary_records_actual_model_output_and_cache_usage(tmp_path):
+    from app.agent.spend import CappedBedrockConverse
+    sent = []
+    class Client:
+        def converse(self, **request):
+            sent.append(request)
+            return dict(output={'message': {'role': 'assistant', 'content': [{'text': 'Ready.'}]}},
+                stopReason='end_turn', usage={'inputTokens': 10, 'outputTokens': 2,
+                    'cacheReadInputTokens': 20, 'cacheWriteInputTokens': 30,
+                    'cacheDetails': [{'ttl': '5m', 'inputTokens': 30}]}, metrics={'latencyMs': 1})
+    path = tmp_path / 'spend.json'
+    haiku = 'us.anthropic.claude-haiku-4-5-20251001-v1:0'
+    model = CappedBedrockConverse(client=Client(), model_id=MODEL, region_name='us-east-1',
+        max_tokens=1, disable_streaming=True, spend_path=path)
+    model.bind(model_id=haiku, inference_config={'max_tokens': 32}).invoke('Research')
+    row = SpendLedger(path).snapshot()['calls'][0]
+    assert row['model'] == sent[0]['modelId'] == haiku
+    assert sent[0]['inferenceConfig']['maxTokens'] == 32
+    assert row['cache_read_tokens'] == 20 and row['cache_write_5m_tokens'] == 30
+    assert row['cost_usd'] == pytest.approx((1.1 * (10 + 2 + 37.5) + 5.5 * 2) / 1e6)
