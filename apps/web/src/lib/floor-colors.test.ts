@@ -37,3 +37,12 @@ it("overlays authoritative revived colors even when source game_status is dark",
   expect(JSON.stringify(floorColorExpression(colors, animation, 1720))).not.toContain('interpolate');
   expect(JSON.stringify(floorColorExpression(colors))).toContain('#00ccff');
 });
+
+it("starts newly revived floors immediately when a building has earlier lit floors", () => {
+  const colors = { "233953": { floors: [6, 7, 8, 17, 18], color: "#ff55bb" } };
+  const animation = { building_id: "233953", floors: [17, 18], at: 1000 };
+  const expression = JSON.stringify(floorColorExpression(colors, animation, 1300));
+  expect(expression).toContain('["literal",0.5]');
+  expect(expression).toContain('["literal",0.4]');
+  expect(expression.match(/interpolate/g)).toHaveLength(2);
+});

@@ -69,15 +69,27 @@ describe("round events", () => {
     expect(after.revival?.at).toBe(123);
     expect(after.city).toMatchObject({ buildings_revived: 1, sqft_reimagined: 94509, song_layers: 1 });
     expect(reduce(after, event)).toEqual({});
-    const snapshot = reduce(after, { ...state, revived: after.revivedColors, city: after.city! });
+    const next = reduce(after, { ...event, floors: [17, 18], color: "#ff55bb", sqft: 33060 }, 456);
+    expect(next.revivedColors?.["233953"]).toEqual({ floors: [6, 7, 8, 17, 18], color: "#ff55bb" });
+    expect(next.city).toMatchObject({ buildings_revived: 1, sqft_reimagined: 127569, song_layers: 2 });
+    const snapshot = reduce(after, { ...state, revived: after.revivedColors, city: after.city!, charge: 100,
+      pitches: [{ player_id: "p1", text: "An art space", origin: "web", at: "2026-11-13T22:00:00Z" }],
+      revisions: [{ player_id: "p1", text: "An open art space", origin: "web", revision: true, at: "2026-11-13T22:01:00Z" }],
+      challenges: [{ player_id: "p1", line: "Tell me more", counteroffer: "Who can join?", fact_ids: [], category_guess: "culture" }],
+    });
+    expect(snapshot.charge).toBe(100);
+    expect(snapshot.pitches?.p1?.text).toBe("An open art space");
+    expect(snapshot.counteroffers?.p1?.counteroffer).toBe("Who can join?");
     expect(snapshot.revivedColors).toEqual(after.revivedColors);
     expect(snapshot.city).toEqual(after.city);
     expect(snapshot.revival).toBeNull();
     expect(reduce(after, { type: "neighborhood_updated", needs: { ...city.needs, entertainment: 45 }, most_needed: "food_retail" }).city?.needs.entertainment).toBe(45);
   });
-  it("clears old round dialogue and errors on round start or reset", () => {
+  it("clears old round dialogue on reset and errors when a new round starts", () => {
     const stale = { ...initialGame, charge: 75, lastError: { code: "no_pitches", message: "Round skipped" } };
     expect(reduce(stale, { type: "round_started", round_id: "r", building_id: "233953", target_floors: [6] })).toMatchObject({ charge: 0, lastError: null, pitches: {}, counteroffers: {} });
-    expect(reduce(stale, { type: "phase_changed", round_id: null, phase: "EXPLORE", ends_at: null }).charge).toBe(0);
+    const reset = { ...stale, ...reduce(stale, { type: "phase_changed", round_id: null, phase: "EXPLORE", ends_at: null }) };
+    expect(reset.charge).toBe(0);
+    expect(reset.lastError?.code).toBe("no_pitches");
   });
 });

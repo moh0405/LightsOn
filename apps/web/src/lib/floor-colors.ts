@@ -20,7 +20,8 @@ export function floorColorExpression(revived: RevivedColors, animation?: LightUp
   let result: ExpressionSpecification = ["case", ["==", ["get", "game_status"], "revived"], GOLD, SOURCE_EXPRESSION];
   for (const [id, entry] of Object.entries(revived)) {
     const sorted = [...entry.floors].sort((a, b) => a - b);
-    for (const [index, floor] of sorted.entries()) {
+    for (const floor of sorted) {
+      const index = animation ? [...animation.floors].sort((a, b) => a - b).indexOf(floor) : 0;
       const progress = animation?.building_id === id && animation.floors.includes(floor)
         ? Math.max(0, Math.min(1, (now - animation.at - index * 60) / 600)) : 1;
       const color: string | ExpressionSpecification = progress === 1 ? entry.color : ["interpolate", ["linear"], ["literal", progress], 0, SOURCE_EXPRESSION, 1, entry.color];

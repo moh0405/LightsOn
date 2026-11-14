@@ -96,7 +96,10 @@ export function reduce(s: GameState, msg: ServerMessage, now = Date.now()): Part
         players: Object.fromEntries(msg.players.map((p) => [p.id, p])),
         pointers: {},
         revivedColors: msg.revived ?? {}, city: msg.city ?? null,
-        intro: null, pitches: {}, counteroffers: {}, verdict: null, charge: 0, revival: null, lastError: null,
+        intro: null,
+        pitches: Object.fromEntries([...(msg.pitches ?? []), ...(msg.revisions ?? [])].map((p) => [p.player_id, p])),
+        counteroffers: Object.fromEntries((msg.challenges ?? []).map((c) => [c.player_id, { ...c, audio_url: null }])),
+        verdict: msg.verdict ?? null, charge: msg.charge ?? 0, revival: null, lastError: null,
       };
     case "player_joined":
     case "player_left":
@@ -105,7 +108,7 @@ export function reduce(s: GameState, msg: ServerMessage, now = Date.now()): Part
       return { pointers: { ...s.pointers, [msg.player_id]: { x: msg.x, y: msg.y, color: msg.color, at: now } } };
     case "phase_changed":
       return {
-        ...(msg.round_id ? {} : { intro: null, pitches: {}, counteroffers: {}, verdict: null, charge: 0, revival: null, lastError: null }),
+        ...(msg.round_id ? {} : { intro: null, pitches: {}, counteroffers: {}, verdict: null, charge: 0, revival: null }),
         phase: msg.phase,
         roundId: msg.round_id,
         endsAt: msg.ends_at,
@@ -120,11 +123,13 @@ export function reduce(s: GameState, msg: ServerMessage, now = Date.now()): Part
     case "verdict": return { verdict: msg };
     case "energy_updated": return { charge: msg.charge };
     case "building_revived": {
-      if (s.revivedColors[msg.building_id]) return {};
+      const previous = s.revivedColors[msg.building_id];
+      if (previous && msg.floors.every((floor) => previous.floors.includes(floor))) return {};
+      const floors = [...new Set([...(previous?.floors ?? []), ...msg.floors])].sort((a, b) => a - b);
       return {
         charge: 100, revival: { ...msg, at: now },
-        revivedColors: withRevivedBuilding(s.revivedColors, msg.building_id, msg.floors, msg.color),
-        city: s.city ? { ...s.city, buildings_revived: s.city.buildings_revived + 1,
+        revivedColors: withRevivedBuilding(s.revivedColors, msg.building_id, floors, msg.color),
+        city: s.city ? { ...s.city, buildings_revived: s.city.buildings_revived + (previous ? 0 : 1),
           sqft_reimagined: s.city.sqft_reimagined + msg.sqft, song_layers: s.city.song_layers + 1 } : null,
       };
     }

@@ -1,4 +1,5 @@
 import React from "react";
+import "./main.css";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { ScreenApp } from "./screen/ScreenApp";

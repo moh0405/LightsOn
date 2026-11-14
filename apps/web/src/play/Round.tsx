@@ -58,7 +58,7 @@ export function PowerUp({ sock, color }: { sock: SocketRef; color: string }) {
   }, [contribute]);
   return <section style={{ textAlign: "center", display: "grid", gap: 16 }}>
     <h1>Flick your phone up!</h1><p>Or tap to power up together.</p>
-    <button key={pulse} style={{ ...button, minHeight: 190, borderRadius: 40, borderColor: color, boxShadow: `0 0 ${pulse ? 45 : 24}px ${color}`, fontSize: 32, transform: pulse % 2 ? "scale(0.97)" : "scale(1)" }} onClick={contribute} disabled={conn !== "open" || charge >= 100}>Tap to charge</button>
+    <button style={{ ...button, minHeight: 190, borderRadius: 40, borderColor: color, boxShadow: `0 0 ${pulse ? 45 : 24}px ${color}`, fontSize: 32, transform: pulse % 2 ? "scale(0.97)" : "scale(1)" }} onClick={contribute} disabled={conn !== "open" || charge >= 100}>Tap to charge</button>
     <label>Shared energy <strong>{charge}%</strong><progress aria-label="Shared energy" max={100} value={charge} style={{ width: "100%", accentColor: color }} /></label>
     {error && <p role="alert">{error}</p>}
   </section>;

@@ -1,4 +1,4 @@
-import type { Category, Phase, Verdict } from "./types";
+import type { Category, Challenge, Phase, Pitch, Verdict } from "./types";
 
 export interface PlayerView {
   id: string;
@@ -31,6 +31,11 @@ export interface RoomStateMsg {
   hero_building_ids: string[];
   players: PlayerView[];
   city?: CityState;
+  pitches?: Pitch[];
+  revisions?: Pitch[];
+  challenges?: Challenge[];
+  verdict?: Verdict | null;
+  charge?: number;
   revived?: Record<string, { floors: number[]; color: string }>;
 }
 

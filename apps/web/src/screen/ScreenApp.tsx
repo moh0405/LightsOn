@@ -29,19 +29,19 @@ export function ScreenApp() {
   }, []);
 
   return (
-    <main style={{ ...page, display: "grid", gridTemplateColumns: "1fr 280px", gap: 16 }}>
+    <main style={{ ...page, display: "grid", gridTemplateColumns: "minmax(0, 1fr) 360px", gap: 16 }}>
       <section>
         <ConnBanner /><ErrorToast />
         {failed && <p role="alert">Could not reach the server.</p>}
         <h1>Lights On: screen</h1>
         <PhaseBadge />
         {buildingId && <p>Waking building {buildingId}</p>}
-        <City /><RoundOverlays />
+        <div style={{ position: "relative" }}><City /><RoundOverlays /></div>
       </section>
       <aside>
         {qr && (
           <>
-            <div data-testid="qr" style={{ background: "#fff", padding: 8, borderRadius: 8 }} dangerouslySetInnerHTML={{ __html: qr.svg }} />
+            <div data-testid="qr" style={{ background: "#fff", padding: 8, borderRadius: 8, width: 140 }} dangerouslySetInnerHTML={{ __html: qr.svg }} />
             <p style={{ wordBreak: "break-all", fontSize: 12 }}>{qr.url}</p>
             <p>Room code: <strong>{room}</strong></p>
           </>
