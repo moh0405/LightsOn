@@ -1,4 +1,5 @@
 import * as Tone from "tone";
+import { firstFloorAt } from "./effects";
 import { useEffect, useRef, useState } from "react";
 import type { Category } from "../lib/types";
 import type { Mood } from "../lib/protocol";
@@ -72,9 +73,11 @@ export class CityMusic {
     this.sync(TWO_BARS);
   }
   duck(speaking: boolean) { this.speaking = speaking; this.sync(0.15); }
-  signature(style: string) {
+  signature(style: string, atMs = Date.now()) {
     const motifs = [["D4", "F4", "A4"], ["A4", "F4", "D4"], ["D5", "C5", "A4"], ["F4", "E4", "D4"]];
-    const now = Tone.now();
+    // Tone.now() includes a look-ahead buffer; use the audio clock itself
+    // so that buffer does not push the motif past the first visible floor.
+    const now = Tone.immediate() + Math.max(0, atMs - Date.now()) / 1000;
     motifs[hash(style) % motifs.length]!.forEach((note, i) => this.motif?.triggerAttackRelease(note, "16n", now + i * 0.12));
   }
   private sync(seconds: number) {
@@ -195,8 +198,8 @@ export function useScreenAudio() {
       if (state.phase === "VERDICT" && state.verdict && state.verdict !== previous?.verdict) say(state.verdict.reason_line, null, state.mood);
       if (previous && state.revival && state.revival !== previous.revival) {
         cityMusic.revive(state.revival.category);
-        // The first floor starts immediately on revival; the motif shares that beat.
-        cityMusic.signature(`${state.buildingId}:${persona.voice_style}`);
+        // Share the visual flash lead-in and first-floor timestamp.
+        cityMusic.signature(`${state.buildingId}:${persona.voice_style}`, firstFloorAt(state.revival.at));
       }
     };
     sync(useGame.getState());
