@@ -1,0 +1,18 @@
+# secrets
+.env
+.env.*
+!.env.example
+
+# data (no trailing slash so symlinks in worktrees are ignored too)
+/data
+data/
+/apps/web/public/media
+
+# generated
+server/cache/
+server/state/
+docs/vendor/vexcel/output/
+node_modules/
+.venv/
+__pycache__/
+.DS_Store
