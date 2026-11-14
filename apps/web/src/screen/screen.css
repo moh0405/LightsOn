@@ -1,0 +1,44 @@
+@font-face { font-family: "Space Grotesk"; src: local("Space Grotesk"); font-display: swap; }
+@font-face { font-family: Inter; src: local("Inter"); font-display: swap; }
+.projector { font-family: Inter, system-ui, sans-serif !important; font-size: 28px; line-height: 1.25; }
+.projector * { box-sizing: border-box; min-width: 0; }
+.projector h1, .projector h2, .projector h3, .projector strong { font-family: "Space Grotesk", Inter, system-ui, sans-serif; }
+.projector h1 { font-size: 48px; margin: 0; letter-spacing: -2px; }
+.projector h2 { font-size: 36px; margin: 0 0 8px; }
+.projector h3 { font-size: 30px; margin: 0 0 8px; }
+.projector p { margin: 8px 0; }
+.projector small, .projector footer, .projector button { font: inherit; }
+.projector button { color: #eee; background: #242e43; border: 1px solid #6b7891; border-radius: 8px; padding: 4px 12px; cursor: pointer; }
+.projector li { overflow-wrap: anywhere; }
+.screen-stage { min-height: 0; position: relative; display: flex; flex-direction: column; overflow: hidden; }
+.screen-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+.building-label { color: #b8c6dd; }
+.city-stage { flex: 1; min-height: 0; position: relative; }
+.intro-media { position: absolute; inset: 12px 12px 200px; z-index: 2; border: 1px solid #6b7891; border-radius: 16px; overflow: hidden; margin: 0; background: #10131c; animation: media-reveal 400ms ease-out; }
+.intro-media img, .intro-media iframe { width: 100%; height: 100%; object-fit: cover; border: 0; position: absolute; inset: 0; }
+.intro-media figcaption { position: absolute; bottom: 0; left: 0; right: 0; padding: 12px 20px; background: #10131cf2; display: flex; justify-content: space-between; gap: 8px; }
+.tour-still { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; flex-direction: column; background: radial-gradient(ellipse at center, #34405b, #10131c); }
+.tour-still span { font-size: 120px; color: #f2c46d; }
+.intro-approach { position: absolute; top: 24px; left: 24px; padding: 12px 20px; background: #10131cda; border-left: 4px solid #f2c46d; }
+.screen-toast { position: absolute; top: 8px; left: 8px; right: 8px; z-index: 10; background: #5a1020; padding: 16px; border-radius: 12px; box-shadow: 0 6px 24px #0008; }
+.screen-toast button { float: right; }
+.round-overlays { z-index: 3; }
+.round-overlays > section { flex-shrink: 0; }
+.pitch-grid, .challenge-grid { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.pitch-grid p, .challenge-grid p, .challenge-grid strong { overflow-wrap: anywhere; }
+.projector table { table-layout: fixed; font-size: 28px; border-spacing: 4px !important; }
+.projector th { overflow-wrap: anywhere; }
+.projector [aria-label="Cited evidence"] p { margin: 4px 0; }
+.projector [data-testid="city-meter"] { border-color: #56617a; }
+.needs-track { display: block; height: 16px; background: #30384c; border-radius: 8px; overflow: hidden; position: relative; }
+.needs-track span { display: block; height: 100%; background: #f2c46d; transition: width 800ms ease-out; }
+.needs-track meter { position: absolute; inset: 0; opacity: 0; }
+.concept-card { background: #171e2df5; border: 1px solid #f2c46d; border-radius: 16px; padding: 16px; animation: concept-in 500ms ease-out; }
+.concept-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.concept-pair figure { margin: 0; background: #10131c; border-radius: 12px; overflow: hidden; }
+.concept-pair img { width: 100%; height: 170px; object-fit: cover; display: block; }
+.concept-pair figcaption { padding: 8px 12px; }
+.concept-before { height: 170px; padding: 16px; display: grid; align-content: center; background: repeating-linear-gradient(90deg, #171e2d 0px, #171e2d 45px, #30384c 46px, #171e2d 48px); }
+@keyframes media-reveal { from { opacity: 0; transform: scale(1.02); } to { opacity: 1; transform: scale(1); } }
+@keyframes concept-in { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .projector *, .projector *::before { animation-duration: 1ms !important; transition-duration: 1ms !important; } }
