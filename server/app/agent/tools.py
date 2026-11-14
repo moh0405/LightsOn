@@ -16,7 +16,9 @@ PROPERTY_KEYS = {
     'propertyType', 'buildingClass', 'yearBuilt', 'yearRenovated', 'address',
     'latitude', 'longitude', 'available_sqft', 'occupied_sqft',
 }
-HISTORY_KEYS = {'tenant_records', 'current_tenants', 'tenant_industries', 'tenant_exit_reasons'}
+HISTORY_KEYS = {'tenant_records', 'current_tenants', 'tenant_industries', 'tenant_exit_reasons',
+                'former_tenancy_records'} | {f'top_former_industry_{rank}{suffix}' for rank in range(1, 4) for suffix in ('', '_records')}
+DERIVED_KEYS = {'dark_floor_count', 'dark_sqft'}
 
 
 DETECTION_KEYS = {f'vexcel_detection_{label}' for label in
@@ -35,7 +37,7 @@ class BuildingTools:
         self.facts = []
         for fact in self.dossier['facts']:
             key = fact['key']
-            if (key in PROPERTY_KEYS | HISTORY_KEYS | {'matterport_models'}
+            if (key in PROPERTY_KEYS | HISTORY_KEYS | DERIVED_KEYS | {'matterport_models'}
                     or re.fullmatch(r'floor_(?:-?\d+|id_\d+)_(?:size|available|occupied)_sqft', key)
                     or key in {'construction_ConstructionComplete', 'construction_RenovationFinished',
                                'construction_CommonAreaRenovated'}
@@ -56,7 +58,7 @@ class BuildingTools:
         """Read source floor status and areas without inferring missing occupancy."""
         return {'floors': [{k: f.get(k) for k in ('number', 'source_status', 'size_sqft',
             'available_sqft', 'occupied_sqft', 'fact_ids')} for f in self.dossier['floors']],
-            'facts': [f for f in self.facts if f['key'].startswith('floor_')]}
+            'facts': [f for f in self.facts if f['key'].startswith('floor_') or f['key'] in DERIVED_KEYS]}
 
     def kit_get_tenant_history(self) -> dict:
         """Read aggregate tenancy history and decoded industries, never tenant identities."""

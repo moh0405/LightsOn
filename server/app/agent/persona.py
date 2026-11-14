@@ -64,46 +64,129 @@ VOICES = ['proud and warm', 'dry and theatrical', 'anxious and hopeful', 'gruff 
 SOUNDS = ['warm piano', 'low brass', 'bright strings', 'soft marimba']
 
 
-def fact_line(fact: dict) -> str | None:
+# This is an acting brief inspired by completion era, never an architecture claim.
+ERA_VOICES = [
+    (1945, 'old-Houston art-deco pride'),
+    (1969, 'midcentury dry wit'),
+    (1979, 'brutalist gruff affection'),
+    (1999, 'boomtime boardroom swagger'),
+    (9999, 'insecure glass ambition'),
+]
+
+
+def era_voice(dossier: dict) -> str:
+    year = next((f['value'] for f in dossier['facts'] if f['key'] == 'construction_ConstructionComplete'), None)
+    if type(year) not in (int, float):
+        return 'hopeful investor'
+    return next(voice for end, voice in ERA_VOICES if year <= end)
+
+
+def fact_clauses(fact: dict) -> list[str]:
     value, key = fact.get('value'), fact.get('key', '')
-    if value is None or not isinstance(value, (str, int, float, bool)) or not fact.get('say_as'):
-        return None
-    number = f'{value:,.0f}' if isinstance(value, (int, float)) and float(value).is_integer() else str(value)
-    labels = {
-        'buildingName': f'My name is {value}.',
-        'numStoriesAboveGrade': f'My dossier lists {number} stories.',
-        'buildingHeightInFeet': f'My recorded height is {number} feet.',
-        'rentableBuildingAreaSquareFeet': f'My dossier lists {number} rentable square feet.',
-        'grossTypicalFloorSquareFeet': f'My dossier lists {number} square feet on a typical floor.',
-        'parkingRatio': f'My recorded parking ratio is {number}.',
-        'address': f'My dossier places me at {value}.',
-        'propertyType': f'My recorded property type is {value}.',
-        'buildingClass': f'My recorded building class is {value}.',
-        'tenant_records': f'My dossier includes {number} tenancy records.',
-        'current_tenants': f'My dossier lists {number} current tenancy records.',
-        'construction_ConstructionComplete': f'My dossier records construction completed in {value}.',
-        'construction_RenovationFinished': f'My dossier records a renovation finished in {value}.',
-        'construction_CommonAreaRenovated': f'My dossier records common areas renovated in {value}.',
+    if value is None or not fact.get('say_as'):
+        return []
+    n = f'{value:,.0f}' if type(value) in (int, float) and float(value).is_integer() else str(value)
+    if key.startswith('construction_'):
+        n = str(int(value))
+    clauses = {
+        'buildingName': [f'My name is {value}.'],
+        'numStoriesAboveGrade': [f'I rise {n} stories.', f'{n} stories, darling.'],
+        'buildingHeightInFeet': [f'I stand {n} feet tall.'],
+        'rentableBuildingAreaSquareFeet': [f'I have {n} rentable square feet.'],
+        'grossTypicalFloorSquareFeet': [f'My typical floor gives you {n} square feet.'],
+        'parkingRatio': [f'My parking ratio is {n} spaces per thousand square feet.'],
+        'construction_ConstructionComplete': [f'Completed in {n}.', f'I made my entrance in {n}.'],
+        'construction_RenovationFinished': [f'A renovation finished in {n}.'],
+        'construction_CommonAreaRenovated': [f'My common areas were renovated in {n}.'],
+        'dark_floor_count': [f'{n} dark floors, darling.', f'I have {n} dark floors.'],
+        'dark_sqft': [f'{n} square feet across my dark floors await your pitch.'],
+        'tenant_records': [f'My tenancy history has {n} entries.'],
+        'current_tenants': [f'My current tenancy tally is {n} entries.'],
+        'former_tenancy_records': [f'{n} former tenancy entries; I still want a plot twist.'],
     }
-    if key in labels:
-        return labels[key]
+    if key in clauses:
+        return clauses[key]
+    if re.fullmatch(r'top_former_industry_[1-3]', key) and isinstance(value, str):
+        return [f"I've known the {value} crowd."]
     floor = re.fullmatch(r'floor_(-?\d+)_(size|available|occupied)_sqft', key)
     if floor:
         area = {'size': 'total', 'available': 'listed available', 'occupied': 'recorded occupied'}[floor[2]]
-        return f'My dossier lists {number} {area} square feet for floor {floor[1]}.'
-    if fact.get('source') == 'vexcel+vision':
-        # Canonical estimate wording stays valid across the independent Vexcel grammar fix.
-        label = key.removeprefix('vexcel_detection_').replace('_', ' ')
-        if label not in {'car', 'tree', 'parking lot', 'rooftop terrace', 'solar panel'} or not isinstance(value, int) or value <= 0:
-            return None
-        year = re.search(r'on the (\d{4}) flyover', fact['say_as'])
-        when = f'On the {year[1]} flyover' if year else 'In imagery with an unknown capture date'
-        noun = label if value == 1 else label + 's'
-        scope = re.search(r'within about \d+(?:\.\d+)? m of the parcel', fact['say_as'])
-        qualifier = f' {scope[0]}' if scope else ''
-        verb = 'was' if value == 1 else 'were'
-        return f'{when}, it looks like {value} {noun} {verb} detected{qualifier}.'
-    return f"My dossier records {key}: {fact['say_as']}."
+        return [f'Floor {floor[1]} has {n} {area} square feet.']
+    if fact.get('source') == 'vexcel+vision' and type(value) is int and value > 0:
+        return [f"It looks like {fact['say_as']}."]
+    return []
+
+
+def fact_line(fact: dict) -> str | None:
+    clauses = fact_clauses(fact)
+    return clauses[0] if clauses else None
+
+
+# Fiction can be recomposed freely from emotional/investor vocabulary, without
+# physical/history nouns, proper names, numbers or facts smuggled in as feelings.
+FICTION += [
+    'Darling, make your ambition worth my time.',
+    'I invest in nerve, not polite applause.',
+    'Bring me a plot twist and we might have a deal.',
+    'Sweetheart, charm gets my attention; conviction gets my yes.',
+    'My pride is expensive; your imagination had better be priceless.',
+    'I want bustle, not another timid pitch.',
+    'Pitch like you mean it, kid; I am listening.',
+    'I can smell a timid idea; give me a bold deal.',
+    'Your ambition is adorable; now earn my respect.',
+    'The spotlight suits you, sweetheart; save me some applause.',
+]
+FICTION_WORDS = set(re.findall(r"[a-z]+(?:'[a-z]+)?", ' '.join(FICTION).casefold())) | set(
+    'darling sweetheart kid honey ambition ambitious bold bolder boldest nerve conviction deal deals '
+    'invest investor sell sold yes no maybe earn earned respect taste drama theatrical dry warm '
+    'proud hopeful anxious gruff affectionate lonely bitter please promise promises timid '
+    'brave patience stubborn sentimental generous splendid delicious dazzling priceless expensive '
+    'myself yourself ourselves dream dreams dreaming future tomorrow tonight care caring listen '
+    'listening show tell ask asking answer counteroffer bargain bargaining worthy worth because '
+    'with without if then when while all any each every never always still yet so but for as '
+    'into about after before over under around through together again more less enough very '
+    'quite too just really truly certainly surely only own would could should will shall must '
+    "can can't won't don't isn't aren't wasn't weren't i'm i've i'll i'd you're you've you'll "
+    "that's let's it's there's here's who's what where why how this these those them they their "
+    'our us we me myself your yours its he she his her be been being was were does do did done '
+    'to of and or the a an at by on in is it i you have has had get gets got make makes made '
+    'take takes taken bring brings brought want wants wanted need needs needed love loved '
+    'like likes liked feel feels felt see sees seen think thinks thought believe believes believed '
+    'remember miss misses missed hope hopes hoped ready attention count counts counted idea ideas '
+    'plan plans pitch pitches story stories imagination pretend pretends pretending rooting '
+    'time moment money risk rewards reward stakes flourish flourish'.split())
+DENY = re.compile(r'\b(?:vacant|dossier|database|records show|property type|source_field)\b', re.I)
+
+
+def fiction_text(text: str) -> bool:
+    words = re.findall(r"[a-z]+(?:'[a-z]+)?", text.casefold())
+    return (bool(words) and len(text) <= 240 and not re.search(r'\d', text)
+            and not DENY.search(text) and set(words) <= FICTION_WORDS
+            and len(re.findall(r'[.!?](?:\s|$)', text)) <= 2)
+
+
+def validate_beat(beat: dict, facts: dict) -> None:
+    text, ref = beat.get('text'), beat.get('fact_ref')
+    if not isinstance(text, str) or DENY.search(text) or len(text) > 300:
+        raise ValueError('Unsupported spoken prose')
+    if ref is None:
+        if beat.get('fiction') is not True or not fiction_text(text):
+            raise ValueError('Fiction contains a physical or historical claim')
+        return
+    if not isinstance(ref, str) or ref not in facts or beat.get('fiction') is not False:
+        raise ValueError('Unresolved fact_ref or ambiguous fiction marker')
+    fact = facts[ref]
+    for clause in fact_clauses(fact):
+        if not text.startswith(clause):
+            continue
+        remainder = text[len(clause):].strip()
+        # Only quantities/date components in this cited claim may appear.
+        allowed = set(re.findall(r'\d+(?:\.\d+)?', clause.replace(',', '')))
+        spoken = set(re.findall(r'\d+(?:\.\d+)?', text.replace(',', '')))
+        if spoken <= allowed and (not remainder or fiction_text(remainder)):
+            if len(re.findall(r'[.!?](?:\s|$)', text)) <= 2:
+                return
+    raise ValueError('Physical or historical claim differs from referenced fact')
 
 
 EMPTY_LIMITS = 'Fewer than two verified physical quantities are available; ask for details instead.'
@@ -149,7 +232,8 @@ def validate_persona(value: dict, dossier: dict) -> Persona:
             or not set(persona.desire_reason_fact_ids) <= set(support)
             or persona.desire_reason != DESIRE_REASONS[persona.desire_key]):
         raise ValueError('Desire requires relevant supporting facts and a fictional rationale')
-    if persona.voice_style not in VOICES or persona.signature_sound not in SOUNDS or persona.voice_id != '':
+    if (not persona.voice_style.startswith(era_voice(dossier)) or len(persona.voice_style.split()) > 12
+            or persona.signature_sound not in SOUNDS or persona.voice_id != ''):
         raise ValueError('Use a fictional voice and sound; voice_id is empty without a configured voice')
     supported = {line for f in facts.values() if f.get('kind') == 'verified' and (line := fact_line(f))}
     candidates = physical_limits(dossier)
@@ -166,24 +250,17 @@ def validate_persona(value: dict, dossier: dict) -> Persona:
     if not persona.backstory:
         raise ValueError('Backstory is required')
     for beat in persona.backstory:
-        ref = beat.get('fact_ref')
-        if ref is not None:
-            if not isinstance(ref, str) or ref not in facts or beat.get('fiction') is not False:
-                raise ValueError('Unresolved fact_ref or ambiguous fiction marker')
-            if beat.get('text') != fact_line(facts[ref]):
-                raise ValueError('Physical or historical claim differs from referenced fact')
-        elif beat.get('fiction') is not True or beat.get('text') not in FICTION:
-            raise ValueError('Fiction must be an approved emotional line without physical claims')
-    if persona.catchphrase not in FICTION:
+        validate_beat(beat, facts)
+    if not fiction_text(persona.catchphrase):
         raise ValueError('Catchphrase must be fictional')
     if len(persona.neighbor_lines) != 3 or not set(persona.neighbor_lines) <= set(dossier['neighbors']):
         raise ValueError('Exactly three known neighbors are required')
-    if any(line not in FICTION for line in persona.neighbor_lines.values()):
+    if any(not fiction_text(line) for line in persona.neighbor_lines.values()):
         raise ValueError('Neighbor reactions must be fictional')
-    # Intro may be one exact fact line followed by a fictional invitation, or fiction alone.
-    intros = set(FICTION) | {f'{line} {fiction}' for line in supported for fiction in FICTION}
-    if persona.intro_line not in intros:
-        raise ValueError('Intro contains an unsupported claim')
+    # Every factual intro is already a cited, validated beat. Other intros are fiction.
+    if not fiction_text(persona.intro_line) and not any(
+            beat.get('fact_ref') is not None and beat['text'] == persona.intro_line for beat in persona.backstory):
+        raise ValueError('Intro must be fiction or an exactly cited backstory beat')
     return persona
 
 
@@ -193,12 +270,14 @@ def fake_persona(dossier: dict) -> Persona:
     if desire_key is None:
         raise ValueError('No facts support a generated desire')
     return validate_persona(dict(building_id=dossier['id'], name=dossier['name'],
-        voice_style=VOICES[0], voice_id='', mood_baseline='hopeful',
+        voice_style=era_voice(dossier) + ' proud and warm', voice_id='', mood_baseline='hopeful',
         desire_key=desire_key, desire_text=DESIRES[desire_key],
         desire_reason_fact_ids=support[desire_key][:1], desire_reason=DESIRE_REASONS[desire_key],
         hard_limits=physical_limits(dossier)[:2] if len(physical_limits(dossier)) >= 2 else [],
         hard_limits_empty_reason=None if len(physical_limits(dossier)) >= 2 else EMPTY_LIMITS,
-        backstory=[dict(text=FICTION[1], fact_ref=None, fiction=True)],
+        backstory=[dict(text=fact_line(f), fact_ref=f['id'], fiction=False) for f in dossier['facts']
+                   if f['key'] in {'construction_ConstructionComplete', 'dark_floor_count', 'top_former_industry_1'} and fact_line(f)]
+                  + [dict(text=FICTION[1], fact_ref=None, fiction=True)],
         catchphrase=FICTION[0], intro_line=FICTION[0], signature_sound=SOUNDS[0],
         neighbor_lines={pid: FICTION[8+i] for i, pid in enumerate(dossier['neighbors'][:3])}), dossier)
 
@@ -209,6 +288,7 @@ def writer_instructions(dossier: dict) -> str:
     lines = {f['id']: fact_line(f) for f in dossier['facts'] if fact_line(f)}
     return json.dumps(dict(schema=Persona.model_json_schema(), building_id=dossier['id'],
         desire_support=desire_support(dossier), desire_reasons=DESIRE_REASONS,
-        name=dossier['name'], neighbors=dossier['neighbors'], factual_lines=lines,
+        name=dossier['name'], neighbors=dossier['neighbors'], factual_lines=lines, factual_clauses={f['id']: fact_clauses(f) for f in dossier['facts'] if fact_clauses(f)},
+        era_brief=era_voice(dossier), fiction_vocabulary=sorted(FICTION_WORDS),
         physical_constraints=physical_limits(dossier), hard_limits_empty_reason=EMPTY_LIMITS,
-        fictional_lines=FICTION, desire_text_by_key=DESIRES, voice_styles=VOICES, signature_sounds=SOUNDS))
+        fictional_lines=FICTION, desire_text_by_key=DESIRES, voice_style_prefix=era_voice(dossier), signature_sounds=SOUNDS))

@@ -2028,6 +2028,96 @@
       "say_as": "[{'reason': 'MovingOutNewAddressUnknown', 'records': 166}, {'reason': 'Unknown', 'records': 28}, {'reason': 'MoveIntoAnotherProperty', 'records': 22}, {'reason': 'ClosedLocationOrBankrupt', 'records': 19}, {'reason': 'MovingIntoSameBuilding', 'records': 18}, {'reason': 'Renewal', 'records': 17}, {'reason': 'OccupancySplit', 'records': 8}]"
     },
     {
+      "id": "F_233935_dark_floor_count",
+      "key": "dark_floor_count",
+      "value": 5,
+      "unit": "floors",
+      "source": "derived",
+      "source_field": "floors.source_status",
+      "kind": "verified",
+      "say_as": "5 floors"
+    },
+    {
+      "id": "F_233935_dark_sqft",
+      "key": "dark_sqft",
+      "value": 138270.0,
+      "unit": "sqft",
+      "source": "derived",
+      "source_field": "floors.dark.available_sqft",
+      "kind": "verified",
+      "say_as": "138,270.0 sqft"
+    },
+    {
+      "id": "F_233935_former_tenancy_records",
+      "key": "former_tenancy_records",
+      "value": 278,
+      "unit": "records",
+      "source": "derived",
+      "source_field": "tenant_history.records-current",
+      "kind": "verified",
+      "say_as": "278 records"
+    },
+    {
+      "id": "F_233935_top_former_industry_1",
+      "key": "top_former_industry_1",
+      "value": "professional scientific and technical services",
+      "unit": null,
+      "source": "derived",
+      "source_field": "tenant_history.top_former_industries",
+      "kind": "verified",
+      "say_as": "professional scientific and technical services"
+    },
+    {
+      "id": "F_233935_top_former_industry_1_records",
+      "key": "top_former_industry_1_records",
+      "value": 37,
+      "unit": "records",
+      "source": "derived",
+      "source_field": "tenant_history.top_former_industries.records",
+      "kind": "verified",
+      "say_as": "37 records"
+    },
+    {
+      "id": "F_233935_top_former_industry_2",
+      "key": "top_former_industry_2",
+      "value": "manufacturing",
+      "unit": null,
+      "source": "derived",
+      "source_field": "tenant_history.top_former_industries",
+      "kind": "verified",
+      "say_as": "manufacturing"
+    },
+    {
+      "id": "F_233935_top_former_industry_2_records",
+      "key": "top_former_industry_2_records",
+      "value": 24,
+      "unit": "records",
+      "source": "derived",
+      "source_field": "tenant_history.top_former_industries.records",
+      "kind": "verified",
+      "say_as": "24 records"
+    },
+    {
+      "id": "F_233935_top_former_industry_3",
+      "key": "top_former_industry_3",
+      "value": "accommodation and food services",
+      "unit": null,
+      "source": "derived",
+      "source_field": "tenant_history.top_former_industries",
+      "kind": "verified",
+      "say_as": "accommodation and food services"
+    },
+    {
+      "id": "F_233935_top_former_industry_3_records",
+      "key": "top_former_industry_3_records",
+      "value": 20,
+      "unit": "records",
+      "source": "derived",
+      "source_field": "tenant_history.top_former_industries.records",
+      "kind": "verified",
+      "say_as": "20 records"
+    },
+    {
       "id": "F_233935_available_sqft",
       "key": "available_sqft",
       "value": 271907.0,
@@ -2173,6 +2263,23 @@
       {
         "reason": "OccupancySplit",
         "records": 8
+      }
+    ],
+    "top_former_industries": [
+      {
+        "industry": "ProfessionalScientificAndTechnicalServices",
+        "records": 37,
+        "label": "professional scientific and technical services"
+      },
+      {
+        "industry": "Manufacturing",
+        "records": 24,
+        "label": "manufacturing"
+      },
+      {
+        "industry": "AccommodationAndFoodServices",
+        "records": 20,
+        "label": "accommodation and food services"
       }
     ]
   },

@@ -72,6 +72,30 @@ class Steps(BaseCallbackHandler):
         self.on_tool_end(None, run_id=run_id)
 
 
+PERSONA_WRITER_PROMPT = (
+    'Read both facts files. Write /persona.json as the complete Persona schema. '
+    'Act as this building judging pitches like a Shark Tank investor, in first person. '
+    'The era_brief is fictional acting direction, never proof of architecture or past fame. '
+    'Give the character attitude, investor stakes and warmth. Never mention a dossier, database or records show. '
+    'For every factual backstory beat use {text, fact_ref, fiction:false}: start text with one factual_clauses '
+    'entry for that ID, then optionally append a short emotional sentence using fiction_vocabulary. '
+    'These are natural semantic clauses, not copies of source say_as. Every number/date must match that single cited fact. '
+    'No extra physical/history claims or numbers; at most two sentences per beat. Use only researched IDs. '
+    'Include completion-era, dark-floor and former-industry beats when available, at least three factual beats. '
+    'Fiction beats have fact_ref:null, fiction:true and emotional/investor prose using fiction_vocabulary '
+    '(fictional_lines are examples that can be recomposed). Never assert physical attributes in fiction. '
+    'Use at least two distinct physical_constraints as hard_limits, copying those typed objects exactly. '
+    'If fewer than two exist use [] and the supplied hard_limits_empty_reason; otherwise that reason is null. '
+    'Choose a desire with nonempty desire_support; copy its exact desire_text and desire_reason and cite its support IDs. '
+    'voice_style starts with voice_style_prefix, maximum twelve words; voice_id is empty. '
+    'Use source building_id/name and a listed signature_sound; mood_baseline is a fictional emotion. '
+    'intro_line must be exactly one factual backstory beat (its citation supplies provenance) or fiction. '
+    'Catchphrase and exactly three known neighbor reactions use only fiction_vocabulary, with no digits. '
+    'Neighbor reactions are emotional, never claims about neighbors without evidence. '
+    'All factual claims must cite a fact. Output only the assigned JSON.\n'
+)
+
+
 def build_agent(tools: BuildingTools, directory: Path, model=None):
     model = model or CappedBedrockConverse(
         model_id=os.getenv('BEDROCK_SMART_MODEL_ID', 'us.anthropic.claude-sonnet-4-6'),
@@ -93,14 +117,7 @@ def build_agent(tools: BuildingTools, directory: Path, model=None):
              tools=functions[4:], system_prompt=common + 'Call all four spatial tools. Write /facts_spatial.json '
              'as {"fact_ids": [positive source IDs from vexcel_detect]}. No negative detections or inferred measurements.'),
         dict(name='persona_writer', description='Write a grounded fictional building persona from researched facts.',
-             model=model, tools=[], system_prompt=common + 'Read both facts files. Write /persona.json using the schema '
-             'and allowed vocabulary below. Choose at least two distinct physical_constraints as hard_limits; if fewer than two exist use [] and the supplied hard_limits_empty_reason, otherwise null. Factual backstory text must EXACTLY equal a factual_lines '
-             'entry, including punctuation; fact_ref must be the matching ID, fiction:false. Use only researched IDs. '
-             'Fictional backstory has fact_ref:null, fiction:true and text exactly from fictional_lines. '
-             'intro_line is one fictional line OR one verified factual line + a space + one fictional line. '
-             'Choose a desire key with its EXACT desire text and desire_reason; include nonempty desire_reason_fact_ids from its desire_support. Choose voice_style and signature_sound from lists; '
-             'voice_id="". Use the source building identity. Exactly three known neighbor IDs with fictional_lines '
-             'as reactions. Catchphrase is a fictional line. Do not add any words to allowed lines.\n' + instructions),
+             model=model, tools=[], system_prompt=common + PERSONA_WRITER_PROMPT + instructions),
     ]
     return create_deep_agent(model=model, tools=[], system_prompt=common +
         'Your first call must be write_todos to plan the three stages. Delegate to property_scout and spatial_scout (both must finish), '
@@ -214,7 +231,7 @@ def prep_building(property_id: str, force: bool = False, *, provider=None, model
                         log.error('Prep grounding failed after one retry (%s)', type(exc).__name__)
                         raise ValueError('Prep grounding failed after one retry') from None
                     steps.record('validation', 'retry')
-                    prompt = f'Building {property_id}: validation failed: {exc}. Repair the JSON files; delegate to persona_writer. Follow exact source lines and schemas.'
+                    prompt = f'Building {property_id}: validation failed: {exc}. Repair the JSON files; delegate to persona_writer. Follow the supported semantic clauses and schema.'
         from ..voice.tts import render_intro
         result['intro_audio_url'] = render_intro(result['persona'])
         result['prep_status'] = 'ready'

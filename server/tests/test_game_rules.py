@@ -160,7 +160,9 @@ def test_fake_agent_is_deterministic_grounded_and_rewards_counteroffer(dossier):
     assert challenge == fake_agent.challenge(p, dossier)
     facts = {f['id']: f for f in dossier['facts']}
     assert challenge.fact_ids and set(challenge.fact_ids) <= facts.keys()
-    assert all(facts[fid]['say_as'] in challenge.line for fid in challenge.fact_ids)
+    from app.agent.persona import validate_beat
+    for fid in challenge.fact_ids:
+        validate_beat(dict(text=challenge.line.removesuffix(' How does your idea fit?'), fact_ref=fid, fiction=False), facts)
     original = fake_agent.verdict([p], dossier, city)
     assert original == fake_agent.verdict([p], dossier, city)
     revised = fake_agent.verdict([pitch(text=matching[desire_key])], dossier, city)

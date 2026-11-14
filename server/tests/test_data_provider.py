@@ -42,7 +42,7 @@ def test_fact_provenance():
         assert len(ids) == len(set(ids))
         for fact in dossier['facts']:
             assert set(fact) == required
-            assert fact['source'] in {'costar', 'vexcel+vision'}
+            assert fact['source'] in {'costar', 'vexcel+vision', 'derived'}
         assert {fid for floor in dossier['floors'] for fid in floor['fact_ids']} <= set(ids)
         if dossier['id'] in {'233953', '233899'}:
             assert dossier['media']['aerial']['ortho'] == f"/media/{dossier['id']}/ortho.jpg"

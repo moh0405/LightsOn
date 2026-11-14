@@ -2314,6 +2314,96 @@
       "say_as": "[{'reason': 'MovingOutNewAddressUnknown', 'records': 162}, {'reason': 'ClosedLocationOrBankrupt', 'records': 37}, {'reason': 'Renewal', 'records': 20}, {'reason': 'MoveIntoAnotherProperty', 'records': 15}, {'reason': 'MovingIntoSameBuilding', 'records': 12}, {'reason': 'Unknown', 'records': 8}, {'reason': 'OccupancySplit', 'records': 7}, {'reason': 'NoLongerInCustomerMarket', 'records': 4}, {'reason': 'MovingOutShellCompany', 'records': 2}, {'reason': 'MovingIntoHomeOffice', 'records': 1}]"
     },
     {
+      "id": "F_233928_dark_floor_count",
+      "key": "dark_floor_count",
+      "value": 11,
+      "unit": "floors",
+      "source": "derived",
+      "source_field": "floors.source_status",
+      "kind": "verified",
+      "say_as": "11 floors"
+    },
+    {
+      "id": "F_233928_dark_sqft",
+      "key": "dark_sqft",
+      "value": 173656.0,
+      "unit": "sqft",
+      "source": "derived",
+      "source_field": "floors.dark.available_sqft",
+      "kind": "verified",
+      "say_as": "173,656.0 sqft"
+    },
+    {
+      "id": "F_233928_former_tenancy_records",
+      "key": "former_tenancy_records",
+      "value": 268,
+      "unit": "records",
+      "source": "derived",
+      "source_field": "tenant_history.records-current",
+      "kind": "verified",
+      "say_as": "268 records"
+    },
+    {
+      "id": "F_233928_top_former_industry_1",
+      "key": "top_former_industry_1",
+      "value": "professional scientific and technical services",
+      "unit": null,
+      "source": "derived",
+      "source_field": "tenant_history.top_former_industries",
+      "kind": "verified",
+      "say_as": "professional scientific and technical services"
+    },
+    {
+      "id": "F_233928_top_former_industry_1_records",
+      "key": "top_former_industry_1_records",
+      "value": 67,
+      "unit": "records",
+      "source": "derived",
+      "source_field": "tenant_history.top_former_industries.records",
+      "kind": "verified",
+      "say_as": "67 records"
+    },
+    {
+      "id": "F_233928_top_former_industry_2",
+      "key": "top_former_industry_2",
+      "value": "mining quarrying and oil and gas extraction",
+      "unit": null,
+      "source": "derived",
+      "source_field": "tenant_history.top_former_industries",
+      "kind": "verified",
+      "say_as": "mining quarrying and oil and gas extraction"
+    },
+    {
+      "id": "F_233928_top_former_industry_2_records",
+      "key": "top_former_industry_2_records",
+      "value": 18,
+      "unit": "records",
+      "source": "derived",
+      "source_field": "tenant_history.top_former_industries.records",
+      "kind": "verified",
+      "say_as": "18 records"
+    },
+    {
+      "id": "F_233928_top_former_industry_3",
+      "key": "top_former_industry_3",
+      "value": "financial institutions",
+      "unit": null,
+      "source": "derived",
+      "source_field": "tenant_history.top_former_industries",
+      "kind": "verified",
+      "say_as": "financial institutions"
+    },
+    {
+      "id": "F_233928_top_former_industry_3_records",
+      "key": "top_former_industry_3_records",
+      "value": 15,
+      "unit": "records",
+      "source": "derived",
+      "source_field": "tenant_history.top_former_industries.records",
+      "kind": "verified",
+      "say_as": "15 records"
+    },
+    {
       "id": "F_233928_available_sqft",
       "key": "available_sqft",
       "value": 229955.0,
@@ -2478,6 +2568,23 @@
       {
         "reason": "MovingIntoHomeOffice",
         "records": 1
+      }
+    ],
+    "top_former_industries": [
+      {
+        "industry": "ProfessionalScientificAndTechnicalServices",
+        "records": 67,
+        "label": "professional scientific and technical services"
+      },
+      {
+        "industry": "MiningQuarryingAndOilAndGasExtraction",
+        "records": 18,
+        "label": "mining quarrying and oil and gas extraction"
+      },
+      {
+        "industry": "FinancialInstitutions",
+        "records": 15,
+        "label": "financial institutions"
       }
     ]
   },

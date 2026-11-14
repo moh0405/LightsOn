@@ -500,3 +500,32 @@ def test_desire_requires_relevant_researched_support():
     bad = {**persona, 'desire_key': 'be_famous_again', 'desire_text': DESIRES['be_famous_again']}
     with pytest.raises(ValueError):
         validate_persona(bad, dossier)
+
+
+def test_era_voice_and_structured_beats_check_numbers_and_claims():
+    from app.agent.persona import fake_persona, validate_persona
+    dossier = source_dossier()
+    persona = fake_persona(dossier).model_dump()
+    assert persona['voice_style'].startswith('old-Houston art-deco pride')
+    assert 'dossier' not in json.dumps(persona).casefold()
+    year = next(f for f in dossier['facts'] if f['key'] == 'construction_ConstructionComplete')
+    good = {**persona, 'backstory': [dict(text=f"Completed in {year['value']}. Darling, make your ambition worth my time.", fact_ref=year['id'], fiction=False)]}
+    assert validate_persona(good, dossier)
+    for line in [good['backstory'][0]['text'].replace(str(year['value']), str(year['value'] + 1)),
+                 f"Completed in {year['value']}. I have 999 pools.",
+                 f"My pool opened in {year['value']}.",
+                 f"Completed in {year['value']}. My lobby has a pool.",
+                 f"My dossier records construction completed in {year['value']}."]:
+        bad = {**persona, 'backstory': [dict(text=line, fact_ref=year['id'], fiction=False)]}
+        with pytest.raises(ValueError): validate_persona(bad, dossier)
+
+
+def test_derived_facts_match_source_floors_and_tenancy_history():
+    dossier = source_dossier()
+    facts = {f['key']: f for f in dossier['facts']}
+    dark = [floor for floor in dossier['floors'] if floor['source_status'] == 'dark']
+    assert facts['dark_floor_count']['value'] == len(dark) == 8
+    assert facts['dark_sqft']['value'] == sum(floor['available_sqft'] for floor in dark)
+    assert facts['former_tenancy_records']['value'] == dossier['tenant_history']['records'] - dossier['tenant_history']['current']
+    assert facts['top_former_industry_1']['value'] == dossier['tenant_history']['top_former_industries'][0]['label']
+    assert all(next(f for f in dossier['floors'] if f['number'] == n)['available_sqft'] == 31503 for n in (6, 7, 8))
