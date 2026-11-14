@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -86,14 +87,23 @@ def building_persona(property_id: str, provider: DataProvider = Depends(get_prov
 @app.post('/api/buildings/{property_id}/prep')
 async def prepare_building(property_id: str, request: Request, force: bool = False,
                            provider: DataProvider = Depends(get_provider)) -> dict:
-    from .agent.prep_agent import prep_building
+    from .agent.prep_agent import prep_building, read_cached_building
     building(property_id, provider)  # Authorize the exact known building before filesystem access.
+    if not force:
+        result = await asyncio.to_thread(read_cached_building, property_id, provider=provider)
+        if result is None:
+            raise HTTPException(status_code=404, detail='No trusted prep cache; host preparation required')
+        return result
+    expected, supplied = os.getenv('HOST_PIN', ''), request.headers.get('X-Host-Pin', '')
+    matched = secrets.compare_digest(supplied.encode('utf-8'), expected.encode('utf-8'))
+    if not expected or not matched:
+        raise HTTPException(status_code=403, detail='Host PIN required for forced prep')
     loop = asyncio.get_running_loop()
     async def broadcast(event):
         for room in list(request.app.state.manager.rooms.values()):
             await room.broadcast('agent_step', event, to='screen')
     def emit(event):
-        asyncio.run_coroutine_threadsafe(broadcast(event), loop).result(timeout=5)
+        asyncio.run_coroutine_threadsafe(broadcast(event), loop)
     try:
         result = await asyncio.to_thread(prep_building, property_id, force, provider=provider, emit=emit)
         if result.get('prep_status') == 'unavailable':

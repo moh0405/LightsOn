@@ -245,6 +245,7 @@ def test_prep_http_routes_are_cached_and_unknown_ids_do_not_invoke(monkeypatch, 
     from app.agent.persona import fake_persona
     monkeypatch.setenv('STATE_DIR', str(tmp_path))
     monkeypatch.setenv('DATA_MODE', 'fixtures')
+    monkeypatch.setenv('HOST_PIN', 'test-host')
     calls = []
     def prepare(pid, force, **kwargs):
         calls.append((pid, force))
@@ -258,7 +259,7 @@ def test_prep_http_routes_are_cached_and_unknown_ids_do_not_invoke(monkeypatch, 
         room = client.post('/api/rooms').json()['room']
         with client.websocket_connect(f'/ws/{room}?role=screen') as ws:
             assert ws.receive_json()['type'] == 'room_state'
-            assert client.post(f'/api/buildings/{PID}/prep?force=true').status_code == 200
+            assert client.post(f'/api/buildings/{PID}/prep?force=true', headers={'X-Host-Pin': 'test-host'}).status_code == 200
             event = ws.receive_json()
             assert event == dict(type='agent_step', step='persona_writer', tool='write_file',
                                  summary='Persona prepared', duration_ms=1)
@@ -447,3 +448,41 @@ def test_sdk_boundary_records_actual_model_output_and_cache_usage(tmp_path):
     assert sent[0]['inferenceConfig']['maxTokens'] == 32
     assert row['cache_read_tokens'] == 20 and row['cache_write_5m_tokens'] == 30
     assert row['cost_usd'] == pytest.approx((1.1 * (10 + 2 + 37.5) + 5.5 * 2) / 1e6)
+
+
+def test_prep_force_requires_constant_time_host_pin_and_plain_post_never_spends(monkeypatch, tmp_path):
+    from fastapi.testclient import TestClient
+    from app.main import app
+    from app.agent import prep_agent
+    monkeypatch.setenv('DATA_MODE', 'fixtures')
+    monkeypatch.setenv('STATE_DIR', str(tmp_path / 'state'))
+    monkeypatch.setenv('HOST_PIN', 'host-secret')
+    monkeypatch.setattr(prep_agent, 'CACHE', tmp_path / 'cache')
+    calls = []
+    monkeypatch.setattr(prep_agent, 'prep_building', lambda *a, **kw: calls.append(True) or {'prep_status': 'ready'})
+    with TestClient(app) as client:
+        for headers in ({}, {'X-Host-Pin': 'wrong'}):
+            assert client.post(f'/api/buildings/{PID}/prep?force=true', headers=headers).status_code == 403
+        assert calls == []
+        assert client.post(f'/api/buildings/{PID}/prep').status_code == 404
+        assert calls == []
+        assert client.post(f'/api/buildings/{PID}/prep?force=true', headers={'X-Host-Pin': 'host-secret'}).status_code == 200
+        assert calls == [True]
+        monkeypatch.delenv('HOST_PIN')
+        assert client.post(f'/api/buildings/{PID}/prep?force=true', headers={'X-Host-Pin': 'host-secret'}).status_code == 403
+
+
+def test_plain_prep_returns_trusted_cache_without_model(tmp_path, monkeypatch):
+    from app.agent import prep_agent
+    from app.data.provider import provider_for_mode
+    from fastapi.testclient import TestClient
+    from app.main import app
+    monkeypatch.setenv('DATA_MODE', 'fixtures')
+    monkeypatch.setenv('STATE_DIR', str(tmp_path / 'state'))
+    monkeypatch.setattr(prep_agent, 'CACHE', tmp_path / 'cache')
+    expected = prep_agent.prep_building(PID, provider=provider_for_mode('fixtures'),
+        model=scripted_model(source_dossier()), personas=tmp_path / 'personas')
+    monkeypatch.setattr(prep_agent, 'build_agent', lambda *a: pytest.fail('Read-only route built a model'))
+    monkeypatch.setattr(prep_agent, 'prep_building', lambda *a, **kw: pytest.fail('Read-only route prepared'))
+    with TestClient(app) as client:
+        assert client.post(f'/api/buildings/{PID}/prep').json() == expected

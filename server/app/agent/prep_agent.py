@@ -156,6 +156,16 @@ def cached_result(tools: BuildingTools, path: Path) -> dict | None:
         return None
 
 
+def read_cached_building(property_id: str, *, provider=None, cache: Path | None = None) -> dict | None:
+    tools = BuildingTools(property_id, provider)
+    directory = (cache or CACHE) / property_id
+    if not directory.is_dir():
+        return None
+    with (directory / '.prep.lock').open('a') as lock:
+        fcntl.flock(lock, fcntl.LOCK_SH)
+        return cached_result(tools, directory / 'dossier.json')
+
+
 def prep_building(property_id: str, force: bool = False, *, provider=None, model=None,
                   cache: Path | None = None, personas: Path | None = None, emit=None) -> dict:
     provider = provider or get_provider()
