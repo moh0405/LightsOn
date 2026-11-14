@@ -178,12 +178,17 @@ async def test_timer_auto_completion(game):
 async def test_repeated_building_uses_fresh_floors_and_exhaustion(game):
     room, commands, events, _ = game
     a, _ = await setup(game)
+    phone_events = []
+    async def send_phone(event): phone_events.append(event)
+    room.conns.append(Conn(role='play', send=send_phone, player_id=a))
     rounds = 0
     while True:
         await room.advance()
         await command(game, a, 'submit_pitch', text='museum')
         for _ in range(5): await room.advance()
         assert room.phase == 'REVIVED'
+        assert phone_events[-1]['type'] == 'room_state'
+        assert phone_events[-1]['hero_building_ids'] == room.wakeable_ids()
         rounds += 1
         await room.advance()
         try:
@@ -191,11 +196,16 @@ async def test_repeated_building_uses_fresh_floors_and_exhaustion(game):
         except RoomError as error:
             assert error.code == 'no_dark_floors'
             break
+    last_state = [e for e in phone_events if e['type'] == 'room_state'][-1]
+    assert '233953' not in last_state['hero_building_ids']
     assert rounds >= 4
     assert room.city.sqft_reimagined == 150365
     assert room.city.buildings_revived == 1
     assert '233953' not in room.snapshot()['hero_building_ids']
     assert any(bid not in ['233953', '233899'] for bid in room.snapshot()['hero_building_ids'])
+    await room.reset_room()
+    last_state = [e for e in phone_events if e['type'] == 'room_state'][-1]
+    assert '233953' in last_state['hero_building_ids']
 
 
 async def test_stale_power_timer_cannot_skip_revived_and_reset_keeps_city(game, monkeypatch):

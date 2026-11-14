@@ -353,6 +353,7 @@ class Room:
         await self.broadcast('neighborhood_updated', {'needs': dict(self.city.needs), 'most_needed': most_needed(self.city.needs)}, to='screen')
         await self.broadcast('phase_changed', {'round_id': self.round_id, 'phase': self.phase,
             'ends_at': self.ends_at.isoformat() if self.ends_at else None})
+        await self.broadcast('room_state', self.snapshot(), to='play')
         self._arm_timer(seconds)
 
     # ---- timers ------------------------------------------------------
