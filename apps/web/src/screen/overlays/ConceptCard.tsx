@@ -20,7 +20,7 @@ export function ConceptCard() {
   return <section className="concept-card" data-testid="concept-card">
     <h2>A new chapter</h2>
     <div className="concept-pair">
-      <figure>{before?.kind === "aerial" ? <img src={before.src} alt={before.caption ?? "Source aerial"} /> : <div className="concept-before">{before?.caption ?? "Source image unavailable"}</div>}<figcaption>Before · Dark office</figcaption></figure>
+      <figure>{before?.kind === "aerial" ? <img src={before.src} alt={before.caption ?? "Source aerial"} /> : <div className="concept-before">{before?.caption ?? "Source image unavailable"}</div>}<figcaption>Before · Listed available floors</figcaption></figure>
       <figure><img src={`/concepts/${revival.category}.svg`} alt={`${conceptLabels[revival.category]} game illustration`} /><figcaption>After · {conceptLabels[revival.category]}</figcaption></figure>
     </div>
     <p>Game concept, not a real renovation</p>

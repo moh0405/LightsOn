@@ -79,6 +79,8 @@ for (const mode of ["kit", "fixtures"]) test(`media approach, instant light-up, 
     expect(latency).toBeGreaterThanOrEqual(200);
     expect(latency).toBeLessThan(300);
     await expect(page.getByTestId("concept-card")).toContainText("Game concept, not a real renovation");
+    // Wording the dossier supports: revived floors are its listed available floors.
+    await expect(page.getByTestId("concept-card")).toContainText("Before · Listed available floors");
     await expect(page.getByRole("meter", { name: "Entertainment", exact: true })).toHaveAttribute("value", "45");
     await expect(page.getByTestId("city-meter")).toContainText("94,509");
     await page.screenshot({ animations: "disabled", path: info.outputPath(`REVIVED-${mode}.png`) });

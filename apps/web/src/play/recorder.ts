@@ -91,13 +91,19 @@ export function createRecorder(callbacks: Callbacks, environment?: RecorderEnvir
   };
 }
 
-export async function submitAudio(room: string, playerId: string, phase: "PITCH" | "NEGOTIATE", roundId: string | null, audio: Blob): Promise<string> {
+/** True when the phone has a built-in speech recognition (dictation) API. */
+export function dictationSupported(scope: object = globalThis): boolean {
+  return "SpeechRecognition" in scope || "webkitSpeechRecognition" in scope;
+}
+
+export async function submitAudio(room: string, playerId: string, phase: "PITCH" | "NEGOTIATE", roundId: string | null, audio: Blob,
+  dictation = dictationSupported()): Promise<string> {
   const body = new FormData();
   body.set("audio", audio, "pitch"); body.set("player_id", playerId); body.set("phase", phase);
   if (roundId) body.set("round_id", roundId);
   const response = await fetch(`/api/rooms/${encodeURIComponent(room)}/pitch_audio`, { method: "POST", body, signal: AbortSignal.timeout(20_000) });
   if (!response.ok) throw new Error(response.status === 503
-    ? "Server speech unavailable. Try browser dictation or type your pitch."
+    ? (dictation ? "Server speech unavailable. Try browser dictation or type your pitch." : "Server speech unavailable. Type your pitch.")
     : "Voice pitch could not be sent. Type your pitch and try again.");
   const result = await response.json() as { text: string };
   return result.text;

@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
-import { createRecorder, type Recognition } from "./recorder";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { createRecorder, dictationSupported, submitAudio, type Recognition } from "./recorder";
 
 describe("hold to talk fallbacks", () => {
   it("keeps typing available when the microphone is denied", async () => {
@@ -43,5 +43,19 @@ describe("hold to talk fallbacks", () => {
     resolve({ getTracks: () => [track] } as unknown as MediaStream);
     await pending;
     expect(track.stop).toHaveBeenCalled();
+  });
+});
+
+describe("server speech fallback text", () => {
+  afterEach(() => { vi.unstubAllGlobals(); });
+  const unavailable = () => vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 503 })));
+  it("suggests browser dictation only when the phone supports it", async () => {
+    unavailable();
+    await expect(submitAudio("ROOM", "p1", "PITCH", "r1", new Blob(["a"]), false)).rejects.toThrow("Server speech unavailable. Type your pitch.");
+    await expect(submitAudio("ROOM", "p1", "PITCH", "r1", new Blob(["a"]), true)).rejects.toThrow("Try browser dictation or type your pitch.");
+  });
+  it("detects dictation from the browser's speech recognition API", () => {
+    expect(dictationSupported({})).toBe(false);
+    expect(dictationSupported({ webkitSpeechRecognition: class {} })).toBe(true);
   });
 });
