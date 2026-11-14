@@ -6,6 +6,7 @@ import { fetchHealth } from "./api";
 import type { CityState, Counteroffer, Intro, Mood, PitchView, PlayerView, PointerView, Revival, ServerMessage } from "./protocol";
 import type { Phase, Verdict } from "./types";
 import { RoomSocket, type ConnStatus } from "./ws";
+import { appendStep, type AgentStep } from "../screen/trace-model";
 
 // ---- health (Phase 0) ------------------------------------------------
 export interface HealthState {
@@ -38,6 +39,7 @@ export function useHealth(): HealthState {
 
 // ---- game state (fed by the WebSocket) ---------------------------------
 export interface GameState {
+  agentSteps: AgentStep[];
   conn: ConnStatus;
   room: string | null;
   phase: Phase;
@@ -63,6 +65,7 @@ export interface GameState {
 }
 
 export const initialGame: GameState = {
+  agentSteps: [],
   conn: "closed",
   room: null,
   phase: "LOBBY",
@@ -86,6 +89,7 @@ export function reduce(s: GameState, msg: ServerMessage, now = Date.now()): Part
   switch (msg.type) {
     case "room_state":
       return {
+        agentSteps: msg.round_id === s.roundId ? s.agentSteps : [],
         hasState: true,
         room: msg.room,
         phase: msg.phase,
@@ -111,7 +115,7 @@ export function reduce(s: GameState, msg: ServerMessage, now = Date.now()): Part
       return { pointers: { ...s.pointers, [msg.player_id]: { x: msg.x, y: msg.y, color: msg.color, at: now } } };
     case "phase_changed":
       return {
-        ...(msg.round_id ? {} : { intro: null, pitches: {}, counteroffers: {}, verdict: null, charge: 0, revival: null }),
+        ...(msg.round_id ? {} : { intro: null, pitches: {}, counteroffers: {}, verdict: null, charge: 0, revival: null, agentSteps: [] }),
         phase: msg.phase,
         roundId: msg.round_id,
         endsAt: msg.ends_at,
@@ -119,7 +123,8 @@ export function reduce(s: GameState, msg: ServerMessage, now = Date.now()): Part
         pointers: msg.phase === "EXPLORE" ? s.pointers : {},
       };
     case "round_started":
-      return { roundId: msg.round_id, buildingId: msg.building_id, intro: null, pitches: {}, counteroffers: {}, verdict: null, charge: 0, revival: null, lastError: null };
+      return { roundId: msg.round_id, buildingId: msg.building_id, agentSteps: [], intro: null, pitches: {}, counteroffers: {}, verdict: null, charge: 0, revival: null, lastError: null };
+    case "agent_step": return s.roundId ? { agentSteps: appendStep(s.agentSteps, msg) } : {};
     case "building_intro": return { intro: msg, mood: msg.mood };
     case "pitch_received": return { pitches: { ...s.pitches, [msg.player_id]: msg } };
     case "counteroffer": return { mood: msg.mood ?? s.mood, counteroffers: { ...s.counteroffers, [msg.player_id]: msg } };

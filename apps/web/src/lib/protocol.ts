@@ -1,4 +1,5 @@
 import type { Category, Challenge, Phase, Pitch, Verdict } from "./types";
+import type { AgentStep } from "../screen/trace-model";
 
 export interface PlayerView {
   id: string;
@@ -46,6 +47,7 @@ export interface RoomStateMsg {
 
 export type ServerMessage =
   | RoomStateMsg
+  | ({ type: "agent_step" } & AgentStep)
   | ({ type: "building_intro" } & Intro)
   | ({ type: "pitch_received" } & PitchView)
   | ({ type: "counteroffer" } & Counteroffer)

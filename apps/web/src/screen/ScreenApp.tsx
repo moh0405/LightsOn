@@ -7,6 +7,7 @@ import { IntroMedia } from "./IntroMedia";
 import "./screen.css";
 import { ConnBanner, ErrorToast, PhaseBadge, page } from "../lib/ui";
 import { useScreenAudio } from "./music";
+import { TracePanel } from "./overlays/TracePanel";
 
 export function ScreenApp() {
   const audio = useScreenAudio();
@@ -35,6 +36,7 @@ export function ScreenApp() {
   }, []);
 
   return (
+    <><TracePanel />
     <main className="projector" style={{ ...page, display: "grid", gridTemplateColumns: "minmax(0, 1fr) 390px", gap: 16, height: "100vh", boxSizing: "border-box", overflow: "hidden" }}>
       <section className="screen-stage">
         <ConnBanner /><ErrorToast />
@@ -67,6 +69,6 @@ export function ScreenApp() {
         </ul>
         <CityMeter />
       </aside>
-    </main>
+    </main></>
   );
 }
