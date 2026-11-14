@@ -1,4 +1,4 @@
-import * as Tone from "tone";
+import type * as ToneModule from "tone";
 import { firstFloorAt } from "./effects";
 import { useEffect, useRef, useState } from "react";
 import type { Category } from "../lib/types";
@@ -21,17 +21,28 @@ export function layerDb(state: MusicState, category: Category, speaking: boolean
 export const TWO_BARS = 8 * 60 / 96;
 const hash = (text: string) => Array.from(text).reduce((n, char) => (n * 31 + char.charCodeAt(0)) >>> 0, 0);
 
+/** Tone touches AudioContext at import time, so it is only loaded after this passes. */
+export function audioSupported(): boolean {
+  const g = globalThis as typeof globalThis & { webkitAudioContext?: unknown };
+  return typeof g.AudioContext === "function" || typeof g.webkitAudioContext === "function";
+}
+
 /** All notes are generated locally; a single clock keeps eight-bar patterns aligned. */
 export class CityMusic {
   state = emptyMusic();
+  private tone: typeof ToneModule | null = null;
   private speaking = false;
-  private volumes = new Map<Category, Tone.Volume>();
-  private synths: Tone.PolySynth[] = [];
-  private loop: Tone.Loop | null = null;
-  private motif: Tone.PolySynth | null = null;
+  private volumes = new Map<Category, ToneModule.Volume>();
+  private synths: ToneModule.PolySynth[] = [];
+  private loop: ToneModule.Loop | null = null;
+  private motif: ToneModule.PolySynth | null = null;
   private started = false;
   async start() {
     if (this.started) return;
+    if (!audioSupported()) throw new Error("Audio unavailable");
+    // Loaded lazily inside the Start click so a browser without Web Audio
+    // still renders the screen, QR and subtitles.
+    const Tone = this.tone ??= await import("tone");
     await Tone.start();
     Tone.getTransport().bpm.value = 96;
     categories.forEach((category, i) => {
@@ -77,7 +88,8 @@ export class CityMusic {
     const motifs = [["D4", "F4", "A4"], ["A4", "F4", "D4"], ["D5", "C5", "A4"], ["F4", "E4", "D4"]];
     // Tone.now() includes a look-ahead buffer; use the audio clock itself
     // so that buffer does not push the motif past the first visible floor.
-    const now = Tone.immediate() + Math.max(0, atMs - Date.now()) / 1000;
+    if (!this.tone) return;
+    const now = this.tone.immediate() + Math.max(0, atMs - Date.now()) / 1000;
     motifs[hash(style) % motifs.length]!.forEach((note, i) => this.motif?.triggerAttackRelease(note, "16n", now + i * 0.12));
   }
   private sync(seconds: number) {
