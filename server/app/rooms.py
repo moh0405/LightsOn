@@ -307,13 +307,25 @@ class Room:
                 if event['step'] == 'fallback':
                     await self.broadcast('error', {'code': 'agent_fallback',
                         'message': 'The building is using its offline judge for this step.'})
-        agent = live_agent.LiveAgent(emit=trace)
+        published: set[str] = set()
+        async def publish_challenge(c):
+            async with self._lock:
+                if (self.round_id, self._round_seq, self.phase) != token or c.player_id in published:
+                    return
+                published.add(c.player_id)
+                self.challenges.append(c)
+                self._save()
+                await self.broadcast('counteroffer', {**c.model_dump(exclude={'category_guess'}),
+                    'audio_url': None, 'mood': self.mood})
+        agent = live_agent.LiveAgent(emit=trace, on_challenge=publish_challenge)
         self._last_live_agent = agent
         originals, revised = list(self.pitches.values()), list(self.revisions.values())
         memory = f'{self.city.buildings_revived} buildings revived in this game; {self.city.sqft_reimagined} square feet reimagined.'
         try:
             if phase == 'CHALLENGE':
                 result = await agent.challenge(originals, self.dossier, self.city, self.mood, memory)
+                for c in result:
+                    await publish_challenge(c)
             else:
                 result = await agent.verdict_batches(originals, revised, self.dossier, self.city,
                                                       self.challenges, self.mood, memory)
@@ -322,16 +334,6 @@ class Room:
                     return
                 if phase == 'CHALLENGE':
                     self.challenges = result
-                    # Only grounded complete lines reach clients. Existing counteroffer messages
-                    # replace cumulative prefixes, with no new event or untrusted token exposure.
-                    for c in self.challenges:
-                        payload = c.model_dump(exclude={'category_guess'})
-                        words = c.line.split()
-                        for end in range(4, len(words), 4):
-                            await self.broadcast('counteroffer', {**payload, 'line': ' '.join(words[:end]),
-                                'counteroffer': '', 'audio_url': None, 'mood': self.mood}, to='screen')
-                            await asyncio.sleep(.015)
-                        await self.broadcast('counteroffer', {**payload, 'audio_url': None, 'mood': self.mood})
                 else:
                     try:
                         self.verdict = validate_verdict(result, dossier=self.dossier, player_ids=set(self.players),

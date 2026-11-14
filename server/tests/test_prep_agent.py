@@ -849,3 +849,56 @@ def test_finalize_floors_matches_the_committed_floor_artifact(tmp_path):
     prep_agent.finalize_floors(output=out)
     committed = prep_agent.ROOT / 'apps/web/public/floors.geojson'
     assert json.loads(out.read_text()) == json.loads(committed.read_text())
+
+
+def test_spend_reservations_allow_parallel_network_and_reconcile_out_of_order(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+    path = tmp_path / 'parallel.json'
+    barrier = Barrier(2, timeout=.5)
+    def request(n):
+        def invoke():
+            barrier.wait()  # Holding the ledger lock across I/O deadlocks this gate.
+            snapshot = SpendLedger(path).snapshot()
+            assert len(snapshot['calls']) == 2
+            return {'input_tokens': n, 'output_tokens': n}
+        return SpendLedger(path, 3).call(MODEL, 100, 100, invoke, lambda r: r)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        assert len(list(pool.map(request, (10, 20)))) == 2
+    state = SpendLedger(path).snapshot()
+    assert state['input_tokens'] == state['output_tokens'] == 30
+    assert sorted(row['input_tokens'] for row in state['calls']) == [10, 20]
+    assert all(row['status'] == 'complete' for row in state['calls'])
+    assert state['total_usd'] == pytest.approx((3.3 + 16.5) * 30 / 1e6)
+
+
+@pytest.mark.parametrize('streaming', [False, True])
+def test_cache_capability_rejection_retries_unbilled_without_checkpoint(tmp_path, streaming):
+    from botocore.exceptions import ClientError
+    from app.agent.spend import MeteredClient
+    requests = []
+    class Stream:
+        def __iter__(self):
+            yield {'contentBlockDelta': {'contentBlockIndex': 0, 'delta': {'text': 'ok'}}}
+            yield {'metadata': {'usage': {'inputTokens': 10, 'outputTokens': 5}}}
+        def close(self): pass
+    class Client:
+        def converse(self, **request):
+            requests.append(request)
+            if len(requests) == 1:
+                raise ClientError({'Error': {'Code': 'ValidationException', 'Message': 'Prompt cache unavailable for this model'}}, 'Converse')
+            assert request['system'] == [{'text': 'shared'}]
+            return {'usage': {'inputTokens': 10, 'outputTokens': 5}}
+        def converse_stream(self, **request):
+            self.converse(**request)
+            return {'stream': Stream()}
+    metered = MeteredClient(Client(), tmp_path / 'spend.json')
+    request = dict(modelId=MODEL, system=[{'text': 'shared'}, {'cachePoint': {'type': 'default'}}],
+                   messages=[], inferenceConfig={'maxTokens': 10})
+    if streaming:
+        metered.converse_stream(timeout=1, **request)
+    else:
+        metered.converse(**request)
+    assert len(requests) == 2
+    state = SpendLedger(tmp_path / 'spend.json').snapshot()
+    assert len(state['calls']) == 1 and state['calls'][0]['status'] == 'complete'
