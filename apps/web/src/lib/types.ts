@@ -67,3 +67,21 @@ export interface Verdict {
   desire_reveal: string;
   impact: Record<string, unknown> | null;
 }
+
+export interface ProposalScore {
+  player_id: string;
+  data_fit: number;
+  neighborhood_fit: number;
+  creativity: number;
+  charm: number;
+}
+
+export interface VerdictProposal {
+  winner_player_id: string;
+  scores: ProposalScore[];
+  reason_line: string;
+  fact_ids: string[];
+  category: Category;
+  desire_met: boolean;
+  desire_reveal: string;
+}
