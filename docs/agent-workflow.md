@@ -42,8 +42,15 @@ Specs must stand alone. Include:
 1. Goal and the PRD section / exit gate it serves.
 2. Files it may create or edit; files it must not touch (models.py, event/command names, .env, data/).
 3. Branch name, commit prefix, and "open a PR with label agent:codex".
-4. Evidence required: commands run and their output summary, PR URL.
-5. Stop and ask (instead of guessing) if a contract change is needed.
+4. Commit rule: small commits after every working step (`phaseN: ...`), only after that step's tests pass, and `git push -u origin HEAD` after each commit. Never one big commit at the end.
+5. Evidence required: commands run and their output summary, PR URL.
+6. Stop and ask (instead of guessing) if a contract change is needed.
+
+## Post-merge review
+
+After each phase merges, Grok reviews the merged diff (correctness, PRD/AGENTS.md rule violations, invented facts,
+contacts leakage, "vacant"). If Grok's review is shallow or wrong, a fresh Codex worker reviews it again.
+Findings become follow-up PRs, not direct pushes to main.
 
 Dispatch from Claude Code:
 
