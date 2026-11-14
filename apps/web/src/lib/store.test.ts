@@ -1,6 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import { initialGame, reduce, useHealthStore } from "./store";
-import type { RoomStateMsg } from "./protocol";
+import type { Counteroffer, Intro, RoomStateMsg } from "./protocol";
+
+it("protocol mood fields use the seven game moods", () => {
+  type Mood = "offended" | "bitter" | "anxious" | "lonely" | "proud" | "hopeful" | "flattered";
+  expectTypeOf<Counteroffer["mood"]>().toEqualTypeOf<Mood | undefined>();
+  expectTypeOf<RoomStateMsg["mood"]>().toEqualTypeOf<Mood | undefined>();
+  expectTypeOf<Intro["mood"]>().toEqualTypeOf<Mood>();
+});
 
 const state: RoomStateMsg = {
   type: "room_state", room: "ABCD", phase: "EXPLORE", round_id: null, building_id: null, target_floors: [],
@@ -50,7 +57,7 @@ describe("game reducer", () => {
 describe("round events", () => {
   const city = { buildings_revived: 0, sqft_reimagined: 0, song_layers: 0, needs: { housing: 40, food_retail: 30, entertainment: 15, community: 35 }, most_needed: "entertainment" as const };
   it("stores intro, pitches, challenges and authoritative verdicts", () => {
-    const intro = { type: "building_intro" as const, text: "Hello", audio_url: null, mood: "hopeful", analyst_line: null };
+    const intro = { type: "building_intro" as const, text: "Hello", audio_url: null, mood: "hopeful", analyst_line: null } satisfies Intro & { type: "building_intro" };
     expect(reduce(initialGame, intro).intro).toEqual(intro);
     const pitch = { type: "pitch_received" as const, player_id: "p1", text: "A community art space", origin: "web" as const };
     const first = { ...initialGame, ...reduce(initialGame, pitch) };
@@ -114,14 +121,14 @@ it("restores two winners on one building from per-floor ownership, with legacy f
 
 
 it("restores intro subtitles from a PITCH reconnect snapshot", () => {
-  const intro = { text: "Bring me an idea", audio_url: null, mood: "hopeful", analyst_line: "City needs (game simulation)" };
+  const intro = { text: "Bring me an idea", audio_url: null, mood: "hopeful", analyst_line: "City needs (game simulation)" } satisfies Intro;
   expect(reduce(initialGame, { ...state, phase: "PITCH", round_id: "R1", intro }).intro).toEqual(intro);
   expect(reduce(initialGame, { ...state, intro: null }).intro).toBeNull();
 });
 
 
 it("replaces grounded subtitle prefixes and restores authoritative mood", () => {
-  const offer = { type: "counteroffer" as const, player_id: "p1", line: "Let me", counteroffer: "", fact_ids: [], audio_url: null, mood: "offended" };
+  const offer = { type: "counteroffer" as const, player_id: "p1", line: "Let me", counteroffer: "", fact_ids: [], audio_url: null, mood: "offended" } satisfies Counteroffer & { type: "counteroffer" };
   const first = { ...initialGame, ...reduce(initialGame, offer) };
   expect(first.mood).toBe("offended");
   expect(reduce(first, { ...offer, line: "Let me hear your plan." }).counteroffers?.p1?.line).toBe("Let me hear your plan.");

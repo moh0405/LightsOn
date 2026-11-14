@@ -215,6 +215,7 @@ class MeteredClient:
                 stream = result['stream']
                 blocks = {}
                 usage = None
+                stop_reason = None
                 try:
                     for event in stream:
                         if time.monotonic() >= deadline:
@@ -235,15 +236,18 @@ class MeteredClient:
                                 tool['input'] = tool.get('input', '') + delta['toolUse'].get('input', '')
                         if 'metadata' in event:
                             usage = event['metadata'].get('usage')
+                        if 'messageStop' in event:
+                            stop_reason = event['messageStop'].get('stopReason')
                         if any(key.endswith('Exception') for key in event):
                             raise SpendUnavailable('Bedrock stream unavailable')
                     content = []
                     for _, block in sorted(blocks.items()):
-                        if 'toolUse' in block:
-                            block['toolUse']['input'] = json.loads(block['toolUse'].get('input', '{}'))
                         if block:
                             content.append(block)
-                    return {'output': {'message': {'role': 'assistant', 'content': content}}, 'usage': usage}
+                    # Raw tool JSON is validated AFTER accounting. Truncation with
+                    # usage is a schema failure, not an unconfirmed paid request.
+                    return {'output': {'message': {'role': 'assistant', 'content': content}},
+                            'usage': usage, 'stopReason': stop_reason}
                 finally:
                     stream.close()
 

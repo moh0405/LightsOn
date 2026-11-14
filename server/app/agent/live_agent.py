@@ -94,6 +94,8 @@ class Bedrock:
                                                           'inputSchema': {'json': schema.model_json_schema()}}}],
                                    'toolChoice': {'tool': {'name': 'answer'}}})
         response = MeteredClient(client, None).converse_stream(timeout=timeout, **request)
+        if response.get('stopReason') == 'max_tokens':
+            raise ValueError('Structured response reached max_tokens')
         for item in response['output']['message']['content']:
             if item.get('toolUse', {}).get('name') == 'answer':
                 return item['toolUse']['input']
@@ -110,9 +112,9 @@ class LiveAgent:
         self.schema_failures = 0
         self.last_grounded_at: float | None = None
 
-    async def event(self, step, tool, started):
+    async def event(self, step, tool, started, *, cause=None):
         if self.emit:
-            result = self.emit(dict(step=step, tool=tool, summary=f'{step}: {tool}', duration_ms=int((monotonic() - started) * 1000)))
+            result = self.emit(dict(step=step, tool=tool, summary=f'{step}: {tool}' + (f' ({cause})' if cause else ''), duration_ms=int((monotonic() - started) * 1000)))
             if inspect.isawaitable(result):
                 await result
 
@@ -180,7 +182,7 @@ class LiveAgent:
         self.fallback_causes[cause] += 1
         diagnostic('fallback', cause, step=step)
         log.error('Live %s unavailable (%s); using deterministic fallback', step, cause)
-        await self.event('fallback', step, started)
+        await self.event('fallback', step, started, cause=cause)
 
     async def challenge(self, pitches: list[Pitch], dossier: dict, city=None, mood='hopeful', memory='') -> list[Challenge]:
         from ..city import City
@@ -194,7 +196,7 @@ class LiveAgent:
                 output[p.player_id] = Challenge(player_id=p.player_id, line=INJECTION if reason == 'injection' else REFUSAL,
                                                 fact_ids=[], counteroffer='Offer a kind, original idea for this space.', category_guess='wildcard')
         if safe:
-            system = build_prompt(dossier, mood, city or City(), memory)
+            system = build_prompt(dossier, mood, city or City(), memory, pitches=safe)
             content = pitch_data(safe)
             try:
                 for attempt in range(2):
@@ -244,7 +246,7 @@ class LiveAgent:
         try:
             if not safe:
                 raise ValueError('Only screened pitches')
-            system = build_prompt(dossier, mood, city, memory)
+            system = build_prompt(dossier, mood, city, memory, pitches=safe)
             content = pitch_data(safe) + '\nScore every candidate separately, including originals and revisions. Challenges: ' + json.dumps([c.model_dump() for c in challenges])
             for attempt in range(2):
                 proposal = await self.call('verdict', system, content, VerdictProposal, deadline)

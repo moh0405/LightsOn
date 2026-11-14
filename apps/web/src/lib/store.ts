@@ -3,7 +3,7 @@ import { create } from "zustand";
 import { restoreRevivedColors, withRevivedBuilding, type RevivedColors } from "./floor-colors";
 import { setBuildingDataMode } from "./buildings";
 import { fetchHealth } from "./api";
-import type { CityState, Counteroffer, Intro, PitchView, PlayerView, PointerView, Revival, ServerMessage } from "./protocol";
+import type { CityState, Counteroffer, Intro, Mood, PitchView, PlayerView, PointerView, Revival, ServerMessage } from "./protocol";
 import type { Phase, Verdict } from "./types";
 import { RoomSocket, type ConnStatus } from "./ws";
 
@@ -44,7 +44,7 @@ export interface GameState {
   roundId: string | null;
   buildingId: string | null;
   endsAt: string | null;
-  mood: string;
+  mood: Mood;
   dataMode: string;
   dataModeScope: "process";
   heroIds: string[];

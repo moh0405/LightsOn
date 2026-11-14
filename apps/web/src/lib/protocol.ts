@@ -10,13 +10,14 @@ export interface PlayerView {
 export type FloorStates = Record<string, Record<string, { source_status: "dark" | "partial" | "occupied" | "unknown"; game_status: "revived"; color: string }>>;
 export type Need = "housing" | "food_retail" | "entertainment" | "community";
 export type Needs = Record<Need, number>;
+export type Mood = "lonely" | "proud" | "bitter" | "anxious" | "hopeful" | "flattered" | "offended";
 export interface CityState {
   buildings_revived: number; sqft_reimagined: number; needs: Needs;
   most_needed: Need; song_layers: number; song_categories?: Category[];
 }
-export interface Intro { text: string; audio_url: string | null; mood: string; analyst_line: string | null }
+export interface Intro { text: string; audio_url: string | null; mood: Mood; analyst_line: string | null }
 export interface PitchView { player_id: string; text: string; origin: "web" | "voice" | "imessage" }
-export interface Counteroffer { mood?: string; player_id: string; line: string; fact_ids: string[]; counteroffer: string; audio_url: string | null }
+export interface Counteroffer { mood?: Mood; player_id: string; line: string; fact_ids: string[]; counteroffer: string; audio_url: string | null }
 export interface Revival { building_id: string; floors: number[]; color: string; category: Category; sqft: number; auto_completed: boolean }
 
 export interface RoomStateMsg {
@@ -27,7 +28,7 @@ export interface RoomStateMsg {
   building_id: string | null;
   target_floors: number[];
   ends_at: string | null;
-  mood?: string;
+  mood?: Mood;
   data_mode: string;
   data_mode_scope: "process";
   hero_building_ids: string[];

@@ -353,6 +353,40 @@ class Room:
                 self._arm_timer(seconds)
         except asyncio.CancelledError:
             return
+        except Exception as exc:
+            # A failed live task has no phase timer yet. Recover under the same
+            # round guard so an old task can never overwrite a reset/new round.
+            log.error('Live room step failed (%s)', type(exc).__name__)
+            async with self._lock:
+                if (self.round_id, self._round_seq, self.phase) != token:
+                    return
+                await trace(dict(step='fallback', tool='room', summary='Unexpected live failure; offline judge', duration_ms=0))
+                try:
+                    if phase == 'CHALLENGE':
+                        self.challenges = [fake_agent.challenge(p, self.dossier, variant=i)
+                                           for i, p in enumerate(originals)]
+                        for c in self.challenges:
+                            await self.broadcast('counteroffer', {**c.model_dump(exclude={'category_guess'}),
+                                'audio_url': None, 'mood': self.mood})
+                    else:
+                        batches = [(fake_agent.verdict(batch, self.dossier, self.city), batch)
+                                   for batch in (originals, revised) if batch]
+                        self.verdict = validate_verdict(batches, dossier=self.dossier, player_ids=set(self.players),
+                            round_id=round_id, city=self.city, sqft=target_sqft(self.dossier, self.target_floors))
+                        self._score_mood(batches)
+                        await self.broadcast('room_state', self.snapshot())
+                        await self.broadcast('verdict', self.verdict.model_dump())
+                    seconds = self.durations.get(phase)
+                    self.ends_at = utcnow() + timedelta(seconds=seconds) if seconds is not None else None
+                    self._save()
+                    await self.broadcast('phase_changed', {'round_id': round_id, 'phase': phase,
+                        'ends_at': self.ends_at.isoformat() if self.ends_at else None})
+                    self._arm_timer(seconds)
+                except Exception as recovery:
+                    log.error('Offline room recovery failed (%s)', type(recovery).__name__)
+                    await self.broadcast('error', {'code': 'invalid_verdict',
+                        'message': 'The judge could not validate this step. Try another round.'})
+                    await self._set_phase('EXPLORE')
 
     async def advance(self, expected: tuple | None = None) -> None:
         async with self._lock:

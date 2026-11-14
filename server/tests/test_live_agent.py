@@ -2,6 +2,7 @@
 import asyncio
 import copy
 import json
+import re
 from datetime import datetime, timezone
 
 import pytest
@@ -162,7 +163,7 @@ def test_stream_spend_reconciles_and_failure_retains_reservation(tmp_path):
     path = tmp_path / 'spend.json'
     client = Client()
     result = MeteredClient(client, path).converse_stream(timeout=1, modelId=FAST, inferenceConfig={'maxTokens': 100})
-    assert result['output']['message']['content'][0]['toolUse']['input'] == {'ok': True}
+    assert json.loads(result['output']['message']['content'][0]['toolUse']['input']) == {'ok': True}
     before = SpendLedger(path).snapshot()['total_usd']
     failed = Client(True)
     with pytest.raises(SpendUnavailable):
@@ -384,3 +385,81 @@ async def test_batched_challenges_accept_voice_and_hypothetical_counteroffers(do
     result = await agent.challenge(pitches, dossier)
     assert calls == ['challenge', 'claim_check']
     assert agent.fallbacks == 0 and len(result) == 4
+
+
+def test_live_context_focuses_facts_but_keeps_requested_floor_and_persona_refs(game_mode):
+    from app.agent.prompts import persona_for
+    d = provider_for_mode(game_mode).dossier('233899')
+    # Use a real high floor from Wells' dossier, rather than inventing a floor.
+    fact = next(f for f in reversed(d['facts']) if re.fullmatch(r'floor_\d+_available_sqft', f['key'])
+                and f['value'] is not None)
+    floor = fact['key'].split('_')[1]
+    prompt = build_prompt(d, 'hopeful', City(), pitches=[pitch(f'A community studio on floor {floor}')])
+    assert fact['id'] in prompt and fact['say_as'] in prompt
+    assert all(limit['fact_ref'] in prompt for limit in persona_for(d)['hard_limits'])
+    assert len(prompt.encode()) < 16000
+
+
+@pytest.mark.parametrize('text', [
+    'Both of you pitched one idea for Floor 6.',
+    'No one can resist a little drama; could your studio welcome the two of you?',
+])
+def test_conversational_number_words_are_not_physical_claims(dossier, text):
+    assert check_line(text, ['F_233953_floor_6_available_sqft'], dossier) is None
+    assert check_line('I have two stories.', ['F_233953_floor_6_available_sqft'], dossier)
+
+
+@pytest.mark.parametrize('stop_reason', ['tool_use', 'max_tokens'])
+async def test_stream_schema_failure_retries_after_usage_reconciliation(tmp_path, monkeypatch, stop_reason):
+    import boto3
+    from time import monotonic
+    from app.agent.live_agent import Bedrock, Challenges
+    from app.agent.spend import SpendLedger
+    path = tmp_path / 'spend.json'
+    monkeypatch.setenv('BEDROCK_SPEND_LEDGER', str(path))
+    attempts = []
+    class Stream:
+        def __init__(self, first): self.first = first
+        def __iter__(self):
+            yield {'contentBlockStart': {'contentBlockIndex': 0, 'start': {'toolUse': {'name': 'answer', 'toolUseId': 't'}}}}
+            text = '{"challenges":[]}' if not self.first or stop_reason == 'max_tokens' else '{"challenges":['
+            yield {'contentBlockDelta': {'contentBlockIndex': 0, 'delta': {'toolUse': {'input': text}}}}
+            yield {'messageStop': {'stopReason': stop_reason if self.first else 'tool_use'}}
+            yield {'metadata': {'usage': {'inputTokens': 10, 'outputTokens': 5}}}
+        def close(self): pass
+    class Client:
+        def converse_stream(self, **kw):
+            attempts.append(kw)
+            return {'stream': Stream(len(attempts) == 1)}
+    monkeypatch.setattr(boto3, 'client', lambda *a, **kw: Client())
+    agent = LiveAgent(model=Bedrock())
+    result = await agent.call('challenge', 'system', 'pitches', Challenges, monotonic() + 2)
+    assert result.challenges == [] and len(attempts) == 2
+    assert agent.schema_failures == 1
+    assert all(c['status'] == 'complete' for c in SpendLedger(path).snapshot()['calls'])
+
+
+@pytest.mark.parametrize('phase', ['CHALLENGE', 'VERDICT'])
+async def test_unexpected_live_failure_recovers_and_arms_timer(dossier, monkeypatch, tmp_path, phase):
+    from app.rooms import Room, Conn
+    monkeypatch.setenv('AGENT_MODE', 'live')
+    async def broken(*args, **kwargs):
+        raise KeyError('unexpected judge failure')
+    monkeypatch.setattr(LiveAgent, 'challenge' if phase == 'CHALLENGE' else 'verdict_batches', broken)
+    room = Room(code='TEST', hero_ids=['233953'], state_dir=tmp_path,
+                durations={'CHALLENGE': 60, 'VERDICT': 60})
+    events = []
+    async def send(event): events.append(event)
+    room.conns.append(Conn('screen', send))
+    player = room.add_player('Ann')
+    room.round_id, room.building_id, room.dossier = 'TEST-1', '233953', dossier
+    room.pitches[player.id] = pitch(player=player.id)
+    await room.set_phase(phase)
+    try:
+        await asyncio.wait_for(room._agent_task, .5)
+        assert room.phase == phase
+        assert room.challenges if phase == 'CHALLENGE' else room.verdict
+        assert room.ends_at is not None and room._timer is not None
+        assert any(e['type'] == 'error' and e['code'] == 'agent_fallback' for e in events)
+    finally:
+        room.close()

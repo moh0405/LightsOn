@@ -49,9 +49,17 @@ def check_line(line: str, fact_ids: list[str], dossier: dict, impact: dict | Non
     cited = [facts[fid] for fid in fact_ids]
     if any(f['kind'] == 'estimate' for f in cited) and 'looks like' not in line.casefold():
         return 'Estimate must say looks like'
-    # Normalise common spoken numbers and multipliers before checking each mention.
+    # Quantified physical claims use number words; conversational "one idea" or
+    # "two of you" is game dialogue, left to the semantic claim check.
+    def spoken_number(match):
+        after = line[match.end():]
+        before = line[:match.start()]
+        physical = (number_unit(after) is not None
+                    or re.match(r'\s+(?:dark\s+)?(?:floors?|trees?|cars?|entries|spaces?|thousand|million)\b', after, re.I)
+                    or re.search(r'\bfloor\s*$', before, re.I))
+        return str(NUMBER_WORDS[match[0].lower()]) if physical else match[0]
     normalized = re.sub(r'\b(' + '|'.join(NUMBER_WORDS) + r')\b',
-                        lambda m: str(NUMBER_WORDS[m[0].lower()]), line, flags=re.I)
+                        spoken_number, line, flags=re.I)
     normalized = re.sub(r'(\d[\d,]*(?:\.\d+)?)\s+(1000|1000000)\b',
                         lambda m: str(float(m[1].replace(',', '')) * float(m[2])), normalized)
     for match in NUMBER.finditer(normalized):
