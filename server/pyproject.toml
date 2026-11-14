@@ -10,6 +10,7 @@ dependencies = [
   "shapely",
   "pillow",
   "python-dotenv",
+  "segno",
 ]
 
 [dependency-groups]
