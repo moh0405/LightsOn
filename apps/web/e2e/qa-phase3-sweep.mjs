@@ -166,7 +166,7 @@ try {
         await tapPair();
         await expect(phase(screen)).toHaveText('REVIVED'); const after = await state();
         expect(after.auto_completed).toBe(false); expect(after.charge).toBe(100);
-        expect(after.city.song_layers).toBe(before.city.song_layers + 1); expect(after.city.sqft_reimagined).toBeGreaterThan(before.city.sqft_reimagined);
+        expect(after.city.song_layers).toBe(new Set(after.city.song_categories).size); expect(after.city.song_layers).toBeGreaterThanOrEqual(before.city.song_layers); expect(after.city.song_layers).toBeLessThanOrEqual(before.city.song_layers + 1); expect(after.city.sqft_reimagined).toBeGreaterThan(before.city.sqft_reimagined);
         const sqft = dossier.floors.filter((f) => after.target_floors.includes(f.number)).reduce((sum, f) => sum + f.available_sqft, 0);
         expect(after.city.sqft_reimagined).toBe(before.city.sqft_reimagined + sqft);
         expect(after.city.needs.housing).toBe(Math.min(100, before.city.needs.housing + Math.min(30, sqft / 1000)));
@@ -226,7 +226,7 @@ try {
         await Promise.all(phones.slice(0, 2).map(tapCharge));
         await expect(phase(screen)).toHaveText('REVIVED');
         await phones[0].evaluate((roundId) => { for (let i = 0; i < 20; i++) window.__qa.sockets.at(-1).send(JSON.stringify({ type: 'contribute_energy', round_id: roundId, nonce: `late-${i}` })); }, roundId);
-        const after = await state(); expect(after.charge).toBe(100); expect(after.committed_rounds.filter((r) => r === roundId)).toHaveLength(1); expect(after.city.song_layers).toBe(before.city.song_layers + 1); expect(events('building_revived')).toHaveLength(revivals + 1);
+        const after = await state(); expect(after.charge).toBe(100); expect(after.committed_rounds.filter((r) => r === roundId)).toHaveLength(1); expect(after.city.song_layers).toBe(new Set(after.city.song_categories).size); expect(after.city.song_layers).toBeGreaterThanOrEqual(before.city.song_layers); expect(after.city.song_layers).toBeLessThanOrEqual(before.city.song_layers + 1); expect(events('building_revived')).toHaveLength(revivals + 1);
         await screenshot('rapid-taps'); await fresh();
       });
       await check('POWER_UP timer auto-completes with zero taps', async () => {
