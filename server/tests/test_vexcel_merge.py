@@ -106,3 +106,13 @@ def test_fetch_detection_dates_are_bound_to_its_image_not_property(tmp_path, mon
             return {'features': [{'properties': {'label': 'car', 'detections': [{'imageId': 'missing-image'}]}}]}
     fixture = fetch.fetch_building('233953', ['car'], Unknown(), tmp_path / 'media', tmp_path / 'fixtures')
     assert fixture['detections'][0]['capture_date'] is None
+
+
+def test_merge_ignores_property_ortho_date_when_detection_is_undated(builder):
+    merge, _ = builder
+    # The ortho date belongs to a different capture; an undated detection stays undated.
+    dossier = merge({'capture_dates': {'ortho': '2023-08-02T00:00:00'},
+                     'detections': [{'label': 'car', 'count': 31}]})
+    facts = [f for f in dossier['facts'] if f['source'] == 'vexcel+vision']
+    assert facts and all('unknown capture date' in f['say_as'] for f in facts)
+    assert not any('2023-08-02' in f['say_as'] for f in facts)

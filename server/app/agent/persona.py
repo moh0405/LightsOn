@@ -1,9 +1,12 @@
 """Deterministic persona grounding: prose is source text or explicit game fiction."""
 from __future__ import annotations
 
+import logging
 import re
 
 from ..models import Persona
+
+log = logging.getLogger(__name__)
 
 DESIRES = {
     'public_ground_floor': 'A shared ground floor open to everyone.',
@@ -74,6 +77,42 @@ ERA_VOICES = [
 ]
 
 
+# Spoken era flavour: idiom and attitude only, no claims (checked by tests).
+ERA_LINES = {
+    'old-Houston art-deco pride': [
+        'Sugar, I have standards, and they wear pearls.',
+        'Make it swell, make it bold, and do not waste my evening.',
+        'Dollface, a timid pitch is beneath my dignity.',
+        'Put on your best hat, hotshot; I only dance with the bold.',
+    ],
+    'midcentury dry wit': [
+        'I take my pitches like my coffee: strong and to the point.',
+        'How charming. Now make it make sense.',
+        'Cool it, daddy-o; convince me with nerve, not noise.',
+    ],
+    'brutalist gruff affection': [
+        'I am gruff, not heartless; show me something real.',
+        'Skip the frosting, kid. Give me the plan.',
+        'I do not do flattery. I do conviction.',
+    ],
+    'boomtime boardroom swagger': [
+        'Let us talk upside, hotshot; impress me.',
+        'Pitch me like it is a bull market.',
+        'Big ideas only; I have no patience for small potatoes.',
+    ],
+    'insecure glass ambition': [
+        'Am I still exciting? On second thought, do not answer that.',
+        'Everyone is watching; make me look good.',
+        'I need this to trend, darling.',
+    ],
+    'hopeful investor': [
+        'I am ready to believe in something new.',
+        'Surprise me, and I might surprise you back.',
+        'Show me the spark and I will bring the fireworks.',
+    ],
+}
+
+
 def era_voice(dossier: dict) -> str:
     year = next((f['value'] for f in dossier['facts'] if f['key'] == 'construction_ConstructionComplete'), None)
     if type(year) not in (int, float):
@@ -137,42 +176,94 @@ FICTION += [
     'Your ambition is adorable; now earn my respect.',
     'The spotlight suits you, sweetheart; save me some applause.',
 ]
-FICTION_WORDS = set(re.findall(r"[a-z]+(?:'[a-z]+)?", ' '.join(FICTION).casefold())) | set(
-    'darling sweetheart kid honey ambition ambitious bold bolder boldest nerve conviction deal deals '
-    'invest investor sell sold yes no maybe earn earned respect taste drama theatrical dry warm '
-    'proud hopeful anxious gruff affectionate lonely bitter please promise promises timid '
-    'brave patience stubborn sentimental generous splendid delicious dazzling priceless expensive '
-    'myself yourself ourselves dream dreams dreaming future tomorrow tonight care caring listen '
-    'listening show tell ask asking answer counteroffer bargain bargaining worthy worth because '
-    'with without if then when while all any each every never always still yet so but for as '
-    'into about after before over under around through together again more less enough very '
-    'quite too just really truly certainly surely only own would could should will shall must '
-    "can can't won't don't isn't aren't wasn't weren't i'm i've i'll i'd you're you've you'll "
-    "that's let's it's there's here's who's what where why how this these those them they their "
-    'our us we me myself your yours its he she his her be been being was were does do did done '
-    'to of and or the a an at by on in is it i you have has had get gets got make makes made '
-    'take takes taken bring brings brought want wants wanted need needs needed love loved '
-    'like likes liked feel feels felt see sees seen think thinks thought believe believes believed '
-    'remember miss misses missed hope hopes hoped ready attention count counts counted idea ideas '
-    'plan plans pitch pitches story stories imagination pretend pretends pretending rooting '
-    'time moment money risk rewards reward stakes flourish flourish'.split())
+# Fiction is free in-character prose, checked against a denylist of claim
+# patterns instead of a word allowlist: emotion and attitude are game fiction,
+# but numbers, names, history, physical features, architecture and tenancy are
+# claims that need a fact_ref. Each rule returns the reason a line is dropped.
+_W = lambda *words: re.compile(r"\b(?:" + '|'.join(words) + r")\b", re.I)
+CLAIM_PATTERNS = [
+    ('number', re.compile(r'\d')),
+    ('number', _W('two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve',
+                  'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen',
+                  'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety',
+                  'hundreds?', 'thousands?', 'millions?', 'billions?', 'dozens?', 'percent', 'twenties', 'thirties', 'forties',
+                  'fifties', 'sixties', 'seventies', 'eighties', 'nineties')),
+    ('history', _W('was', 'were', "wasn't", "weren't", 'used to', 'had been', 'once', 'back in', 'back when',
+                   'in my day', 'ago', 'since', 'years?', 'decades?', 'centur(?:y|ies)', 'built', 'constructed',
+                   'completed', 'opened', r'renovat\w*', 'restored', 'founded', 'designed', 'erected',
+                   r'histor\w*', 'landmarks?', 'famous', 'heyday',
+                   # Bare past-tense event verbs state history without was/used to.
+                   'hosted', 'housed', 'dined', 'welcomed', 'employed', 'boasted', 'towered', 'stood', 'ruled',
+                   'sheltered', 'launched', 'anchored', 'hosting', 'galas?', 'kings?', 'queens?')),
+    ('physical', _W('floors?', 'stor(?:ey|eys)', 'lobb(?:y|ies)', 'roofs?', 'rooftops?', 'pools?', 'basements?',
+                    'garages?', 'parking', 'elevators?', 'lifts', 'windows?', 'fa[cç]ades?', 'terraces?',
+                    r'balcon\w+', 'gardens?', 'atri(?:um|a)', 'ceilings?', 'walls?', 'brick', 'marble', 'granite',
+                    'limestone', 'steel', 'concrete', 'stone', 'glass', 'domes?', 'spires?', 'towers?', 'columns?',
+                    r'stair\w*', 'hallways?', 'ballrooms?', 'penthouses?', 'plazas?', 'courtyards?', 'feet', 'foot',
+                    'meters?', 'acres?', 'square', r'tall\w*', 'height', 'high-rise', 'skyscrapers?', 'downtown')),
+    ('architecture', _W('deco', 'art-deco', r'brutalis\w*', r'modernis\w*', 'gothic', 'victorian', 'baroque',
+                        r'architect\w*', 'facade')),
+    ('tenancy', _W(r'tenan\w*', r'leas\w*', 'rent', 'rents', 'rented', 'rental', r'occup\w*', r'vacan\w*',
+                   'empty', 'oil', 'gas', r'banks?', r'bankers?', r'lawyers?', 'law firms?', 'energy', 'insurance')),
+]
 DENY = re.compile(r'\b(?:vacant|dossier|database|records show|property type|source_field)\b', re.I)
+SELF = {'I', "I'm", "I've", "I'll", "I'd", 'My'}
+# Sentence openers that are ordinary words, not names. Anything else capitalised is a proper noun.
+OPENERS = {w.casefold() for w in '''A An And Are As At Bold Bring But Can Come Darling Do Does Every Everyone For Give Go Good
+Great Hey Honey How If In Is It Just Kid Let Let's Listen Look More No Not Now Oh Okay Please Pitch Show So Sweetheart
+That That's The Then There These This Those To Tell Try Well What When Why Will Yes You Your Bring Make Save Earn Charm
+Bustle Ambition Pride Imagination Spotlight Honestly Maybe Perhaps Trust Nothing Nobody Some Keep Sugar Dollface Put Cool Skip Big Am On Surprise Hotshot Baby Pal Doll Buddy Champ Half Clever Money Something Anything Everything Everybody Anyone Someone Most Many Time Old New Small Timid Real Big Fortune Nerve Style Taste Class Wit Grit Heart Dreams Dream Ideas Idea Charm Courage Confidence Boldness Swagger Flattery Applause'''.split()}
 
 
-def fiction_text(text: str) -> bool:
-    words = re.findall(r"[a-z]+(?:'[a-z]+)?", text.casefold())
-    return (bool(words) and bool(re.fullmatch(r"[A-Za-z'\s,;:.!?…—–-]+", text))
-            and len(text) <= 240 and not re.search(r'\d', text)
-            and not DENY.search(text) and set(words) <= FICTION_WORDS
-            and len(re.findall(r'[.!?](?:\s|$)', text)) <= 2)
+def fiction_claim(text: str, names: tuple[str, ...] = ()) -> str | None:
+    """Return why this line is not pure fiction, or None if it makes no factual claim."""
+    if not isinstance(text, str) or not text.strip():
+        return 'empty'
+    if DENY.search(text):
+        return 'meta wording'
+    if len(text) > 240 or len(re.findall(r'[.!?](?:\s|$)', text)) > 2:
+        return 'too long'
+    for reason, pattern in CLAIM_PATTERNS[:2]:
+        if pattern.search(text):
+            return reason
+    if not re.fullmatch(r"[A-Za-z'’\s,;:.!?…—–-]+", text):
+        return 'symbols'
+    allowed = {word for name in names for word in re.findall(r"[A-Za-z']+", name)}
+    for sentence in re.split(r'(?<=[.!?])\s+', text.strip()):
+        # Capitalised words are names (tenants, places, companies); the first word is
+        # exempt only when it is the speaker (I/My) or an ordinary sentence opener.
+        for i, word in enumerate(re.findall(r"[A-Za-z'’]+", sentence)):
+            if i == 0 and word.casefold() in OPENERS:
+                continue
+            if word[0].isupper() and word not in SELF and word not in allowed:
+                return 'proper noun'
+    for reason, pattern in CLAIM_PATTERNS[2:]:
+        if pattern.search(text):
+            return reason
+    return None
 
 
-def validate_beat(beat: dict, facts: dict) -> None:
+def fiction_text(text: str, names: tuple[str, ...] = ()) -> bool:
+    return fiction_claim(text, names) is None
+
+
+FICTION_RULES = [
+    'Fiction is emotion, attitude and investor stakes in first person; it makes no factual claim.',
+    'No digits or number words, no years or decades.',
+    'No proper nouns except the building name: no tenant, company, person or place names.',
+    'No history (was, were, used to, once, back in, built, opened, renovated, famous).',
+    'No physical features (floors, lobby, roof, glass, tower, feet, tall) or architecture styles.',
+    'No tenancy or occupancy words (tenant, lease, rent, occupied, empty) and never vacant.',
+    'At most two sentences. Era flavour comes from idiom and slang, never from claims.',
+]
+
+
+def validate_beat(beat: dict, facts: dict, names: tuple[str, ...] = ()) -> None:
     text, ref = beat.get('text'), beat.get('fact_ref')
     if not isinstance(text, str) or DENY.search(text) or len(text) > 300:
         raise ValueError('Unsupported spoken prose')
     if ref is None:
-        if beat.get('fiction') is not True or not fiction_text(text):
+        if beat.get('fiction') is not True or not fiction_text(text, names):
             raise ValueError('Fiction contains a physical or historical claim')
         return
     if not isinstance(ref, str) or ref not in facts or beat.get('fiction') is not False:
@@ -185,7 +276,7 @@ def validate_beat(beat: dict, facts: dict) -> None:
         # Only quantities/date components in this cited claim may appear.
         allowed = set(re.findall(r'\d+(?:\.\d+)?', clause.replace(',', '')))
         spoken = set(re.findall(r'\d+(?:\.\d+)?', text.replace(',', '')))
-        if spoken <= allowed and (not remainder or fiction_text(remainder)):
+        if spoken <= allowed and (not remainder or fiction_text(remainder, names)):
             if len(re.findall(r'[.!?](?:\s|$)', text)) <= 2:
                 return
     raise ValueError('Physical or historical claim differs from referenced fact')
@@ -194,29 +285,92 @@ def validate_beat(beat: dict, facts: dict) -> None:
 EMPTY_LIMITS = 'Fewer than two verified physical quantities are available; ask for details instead.'
 
 
+CONSTRAINTS = ['floor_plate', 'dark_area', 'stories', 'height', 'parking']
+# Only parking may be narrowed: crowd-drawing uses are where extra cars are a real question.
+JUSTIFIED_TARGETS = {'parking': {'entertainment', 'food_retail'}}
+
+
 def physical_limits(dossier: dict) -> list[dict]:
-    """Game pitch bounds only: no inferred engineering, zoning or legal limits."""
+    """Game pitch bounds only: no inferred engineering, zoning or legal limits.
+
+    Every limit is a numeric trigger: it fires only when a pitch states a need above
+    the cited fact's value (see `pitch_needs`). `applies_to=[]` means any category.
+    """
     result = []
     dark = {f['number'] for f in dossier.get('floors', []) if f['source_status'] == 'dark'}
     for fact in dossier['facts']:
         value, key = fact.get('value'), fact['key']
         if fact.get('kind') != 'verified' or type(value) not in (int, float) or value <= 0:
             continue
-        n = f'{value:,.0f}'
+        n, floor_number = f'{value:,.0f}', None
         floor = re.fullmatch(r'floor_(-?\d+)_available_sqft', key)
         if key == 'grossTypicalFloorSquareFeet':
-            constraint, text = 'floor_plate', f'For a typical single-floor pitch, fit within {n} square feet; show me your area budget.'
+            constraint, unit, text = 'floor_plate', 'sqft', f'For a typical single-floor pitch, fit within {n} square feet; show me your area budget.'
         elif floor and int(floor[1]) in dark:
-            constraint, text = 'dark_area', f'For floor {floor[1]}, fit your pitch within {n} listed available square feet; show me what fits.'
+            floor_number = int(floor[1])
+            constraint, unit, text = 'dark_area', 'sqft', f'For floor {floor[1]}, fit your pitch within {n} listed available square feet; show me what fits.'
+        elif key == 'dark_sqft':
+            constraint, unit, text = 'dark_area', 'sqft', f'My dark floors list {n} available square feet in total; fit your plan inside that, darling.'
+        elif key == 'numStoriesAboveGrade':
+            constraint, unit, text = 'stories', 'stories', f'I rise {n} stories; a pitch above that needs a different building, darling.'
         elif key == 'buildingHeightInFeet':
-            constraint, text = 'height', f'My height is {n} feet; a pitch requiring a taller existing building needs a different plan.'
+            constraint, unit, text = 'height', 'ft', f'I stand {n} feet tall; anything taller is a different building, darling.'
         elif key == 'parkingRatio':
-            constraint, text = 'parking', f'My parking ratio is {value}; if your pitch needs more, explain how you will handle it.'
+            constraint, unit, text = 'parking', 'spaces_per_1000_sqft', f'My parking ratio is {value} spaces per 1,000 square feet; tell me where the extra cars go.'
         else:
             continue
-        result.append(dict(fact_ref=fact['id'], constraint=constraint,
-                           rejects_categories=['housing', 'food_retail', 'entertainment', 'community', 'culture', 'health', 'work', 'wildcard'], text=text))
-    return sorted(result, key=lambda limit: ['floor_plate', 'dark_area', 'height', 'parking'].index(limit['constraint']))
+        result.append(dict(fact_ref=fact['id'], constraint=constraint, threshold=float(value), unit=unit,
+                           floor=floor_number, applies_to=[], text=text))
+    return sorted(result, key=lambda limit: CONSTRAINTS.index(limit['constraint']))
+
+
+_NUM = r'(\d[\d,]*(?:\.\d+)?)'
+_SQFT = r'\s*(?:sq\.?\s*ft|square[ -]f(?:ee|oo)t|sqft|sf)\b'
+
+
+def _num(text: str) -> float:
+    return float(text.replace(',', ''))
+
+
+def pitch_needs(text: str) -> dict:
+    """Quantities a pitch explicitly states; nothing is inferred from category or tone."""
+    rest = text
+    ratios = [_num(m[1]) for m in re.finditer(_NUM + r'\s*(?:parking\s+)?(?:spaces?|spots?|stalls?)\s*(?:per|/|for every|every)\s*(?:1,?000|thousand)' + _SQFT, rest, re.I)]
+    rest = re.sub(_NUM + r'\s*(?:parking\s+)?(?:spaces?|spots?|stalls?)\s*(?:per|/|for every|every)\s*(?:1,?000|thousand)' + _SQFT, ' ', rest, flags=re.I)
+    areas = [_num(m[1]) * (1000 if m[2] else 1) for m in re.finditer(_NUM + r'\s*(k)?' + _SQFT, rest, re.I)]
+    rest = re.sub(_NUM + r'\s*k?' + _SQFT, ' ', rest, flags=re.I)
+    spaces = [_num(m[1]) for m in re.finditer(_NUM + r'\s*(?:parking\s+)?(?:spaces|spots|stalls)\b', rest, re.I)]
+    if spaces and areas:
+        ratios += [max(spaces) / (max(areas) / 1000)]
+    named = [int(m[1] or m[2]) for m in re.finditer(r'\bfloor\s+(-?\d+)\b|\b(\d+)(?:st|nd|rd|th)\s+floor\b', rest, re.I)]
+    stories = [int(m[1]) for m in re.finditer(r'\b(\d+)[ -](?:stor(?:y|ey|ies|eys)|floors?)\b', rest, re.I)] + named
+    feet = [_num(m[1]) for m in re.finditer(_NUM + r'[ -]?(?:ft|feet|foot)\b', rest, re.I)]
+    single = bool(re.search(r'\b(?:single[ -]floor|one floor|a floor)\b', text, re.I)) or bool(named)
+    return dict(areas=areas, floors=named, stories=stories, feet=feet, parking=ratios, single_floor=single)
+
+
+def limit_applies(limit: dict, text: str, category: str) -> bool:
+    """True when the pitch states a need beyond this limit's cited value."""
+    if limit.get('applies_to') and category not in limit['applies_to']:
+        return False
+    needs, cap = pitch_needs(text), limit['threshold']
+    constraint = limit['constraint']
+    if constraint == 'floor_plate':
+        return needs['single_floor'] and not needs['floors'] and any(a > cap for a in needs['areas'])
+    if constraint == 'dark_area' and limit.get('floor') is not None:
+        return limit['floor'] in needs['floors'] and any(a > cap for a in needs['areas'])
+    if constraint == 'dark_area':
+        return not needs['single_floor'] and any(a > cap for a in needs['areas'])
+    key = {'stories': 'stories', 'height': 'feet', 'parking': 'parking'}[constraint]
+    return any(value > cap for value in needs[key])
+
+
+def same_limit(limit: dict, candidate: dict) -> bool:
+    """Exact candidate, or a justified category narrowing of it."""
+    targets = limit.get('applies_to') or []
+    return ({**limit, 'applies_to': []} == candidate
+            and (not targets or (len(set(targets)) == len(targets)
+                                 and set(targets) <= JUSTIFIED_TARGETS.get(limit['constraint'], set()))))
 
 
 def validate_persona(value: dict, dossier: dict) -> Persona:
@@ -249,20 +403,21 @@ def validate_persona(value: dict, dossier: dict) -> Persona:
     limits = [limit.model_dump() for limit in persona.hard_limits]
     if len({limit['fact_ref'] for limit in limits}) != len(limits):
         raise ValueError('Physical limits must cite distinct facts')
-    if any(limit not in candidates for limit in limits):
+    if any(not any(same_limit(limit, c) for c in candidates) for limit in limits):
         raise ValueError('Hard limits must be validated physical pitch constraints')
     if not persona.backstory:
         raise ValueError('Backstory is required')
+    names = (dossier['name'],)
     for beat in persona.backstory:
-        validate_beat(beat, facts)
-    if not fiction_text(persona.catchphrase):
+        validate_beat(beat, facts, names)
+    if not fiction_text(persona.catchphrase, names):
         raise ValueError('Catchphrase must be fictional')
     if len(persona.neighbor_lines) != 3 or not set(persona.neighbor_lines) <= set(dossier['neighbors']):
         raise ValueError('Exactly three known neighbors are required')
-    if any(not fiction_text(line) for line in persona.neighbor_lines.values()):
+    if any(not fiction_text(line, names) for line in persona.neighbor_lines.values()):
         raise ValueError('Neighbor reactions must be fictional')
     # Every factual intro is already a cited, validated beat. Other intros are fiction.
-    if not fiction_text(persona.intro_line) and not any(
+    if not fiction_text(persona.intro_line, names) and not any(
             beat.get('fact_ref') is not None and beat['text'] == persona.intro_line for beat in persona.backstory):
         raise ValueError('Intro must be fiction or an exactly cited backstory beat')
     return persona
@@ -281,7 +436,7 @@ def fake_persona(dossier: dict) -> Persona:
         hard_limits_empty_reason=None if len(physical_limits(dossier)) >= 2 else EMPTY_LIMITS,
         backstory=[dict(text=fact_line(f), fact_ref=f['id'], fiction=False) for f in dossier['facts']
                    if f['key'] in {'construction_ConstructionComplete', 'dark_floor_count', 'top_former_industry_1'} and fact_line(f)]
-                  + [dict(text=FICTION[1], fact_ref=None, fiction=True)],
+                  + [dict(text=line, fact_ref=None, fiction=True) for line in [FICTION[1], ERA_LINES[era_voice(dossier)][0]]],
         catchphrase=FICTION[0], intro_line=FICTION[0], signature_sound=SOUNDS[0],
         neighbor_lines={pid: FICTION[8+i] for i, pid in enumerate(dossier['neighbors'][:3])}), dossier)
 
@@ -293,26 +448,32 @@ def writer_instructions(dossier: dict) -> str:
     return json.dumps(dict(schema=Persona.model_json_schema(), building_id=dossier['id'],
         desire_support=desire_support(dossier), desire_reasons=DESIRE_REASONS,
         name=dossier['name'], neighbors=dossier['neighbors'], factual_lines=lines, factual_clauses={f['id']: fact_clauses(f) for f in dossier['facts'] if fact_clauses(f)},
-        era_brief=era_voice(dossier), fiction_vocabulary=sorted(FICTION_WORDS),
+        era_brief=era_voice(dossier), fiction_rules=FICTION_RULES, era_lines=ERA_LINES[era_voice(dossier)],
         physical_constraints=physical_limits(dossier), hard_limits_empty_reason=EMPTY_LIMITS,
         fictional_lines=FICTION, desire_text_by_key=DESIRES, voice_style_prefix=era_voice(dossier), voice_descriptor_words=sorted(STYLE_WORDS), signature_sounds=SOUNDS))
 
 
-def normalize_writer_persona(value: dict, dossier: dict) -> dict:
+def normalize_writer_persona(value: dict, dossier: dict, dropped: list | None = None) -> dict:
     """Extract supported semantic clauses; discarded prose never becomes a fact.
 
     This is not validation relaxation: the resulting candidate still passes the
     strict validator and the researched-ID gate before anything is published.
+    Every line removed here is logged with its reason and appended to `dropped`.
     """
     import copy
+    dropped = [] if dropped is None else dropped
+    def drop(field: str, text: str, reason: str) -> None:
+        dropped.append(dict(field=field, text=text, reason=reason))
+        log.warning('Persona line dropped from %s (%s): %s', field, reason, text)
     result = copy.deepcopy(value)
+    names = (dossier['name'],)
     facts = {fact['id']: fact for fact in dossier['facts']}
     clauses = [(ref, clause) for ref, fact in facts.items() for clause in fact_clauses(fact)]
     beats = []
     for beat in value.get('backstory', []):
         if not isinstance(beat.get('text'), str):
             continue
-        for sentence in re.split(r'(?<=[.!?])\s+', beat['text']):
+        for sentence in re.split(r'(?<=[.!?])\s+', beat['text'].strip()):
             matches = [(ref, clause) for ref, clause in clauses if sentence.startswith(clause)]
             # Keep a valid original citation where possible; otherwise assign the exact supported clause.
             matches.sort(key=lambda pair: pair[0] != beat.get('fact_ref'))
@@ -320,26 +481,36 @@ def normalize_writer_persona(value: dict, dossier: dict) -> dict:
                 ref, clause = matches[0]
                 candidate = dict(text=sentence, fact_ref=ref, fiction=False)
                 try:
-                    validate_beat(candidate, facts)
+                    validate_beat(candidate, facts, names)
                 except ValueError:
+                    remainder = sentence[len(clause):].strip()
+                    drop('backstory', remainder, fiction_claim(remainder, names) or 'differs from cited fact')
                     candidate['text'] = clause
                 beats.append(candidate)
-            elif fiction_text(sentence):
+            elif (reason := fiction_claim(sentence, names)) is None:
                 beats.append(dict(text=sentence, fact_ref=None, fiction=True))
+            else:
+                drop('backstory', sentence, f'uncited {reason} claim')
     factual = [beat for beat in beats if beat['fact_ref'] is not None]
     if len(factual) < 3:
         raise ValueError('Writer supplied fewer than three supportable factual beats')
-    if not fiction_text(result.get('catchphrase', '')):
+    if not fiction_text(result.get('catchphrase', ''), names):
         raise ValueError('Writer catchphrase contains unsupported prose')
     first = factual[0]
     clause = next(clause for clause in fact_clauses(facts[first['fact_ref']]) if first['text'].startswith(clause))
     invitation = re.split(r'(?<=[.!?])\s+', result['catchphrase'])[0]
     intro = dict(text=f"{clause} {invitation}", fact_ref=first['fact_ref'], fiction=False)
-    validate_beat(intro, facts)
+    validate_beat(intro, facts, names)
     result['intro_line'] = intro['text']
     result['backstory'] = [intro] + [beat for beat in beats if beat is not first]
-    neighbors = {pid: line for pid, line in result.get('neighbor_lines', {}).items()
-                 if pid in dossier['neighbors'] and isinstance(line, str) and fiction_text(line)}
+    neighbors = {}
+    for pid, line in result.get('neighbor_lines', {}).items():
+        if pid not in dossier['neighbors'] or not isinstance(line, str):
+            drop('neighbor_lines', str(line), 'unknown neighbor')
+        elif (reason := fiction_claim(line, names)) is not None:
+            drop('neighbor_lines', line, f'uncited {reason} claim')
+        else:
+            neighbors[pid] = line
     for i, pid in enumerate(dossier['neighbors']):
         if len(neighbors) >= 3:
             break

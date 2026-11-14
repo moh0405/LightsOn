@@ -159,3 +159,17 @@ def test_dossier_separates_height_fact_from_rendering(has_height):
     assert dossier['render']['floor_height_m'] == pytest.approx(expected)
     height_fact = next(f for f in dossier['facts'] if f['key'] == 'buildingHeightInFeet')
     assert height_fact['value'] == height
+
+
+def test_years_never_get_thousands_separators():
+    import sqlite3
+    kit = ROOT / 'data/costar'
+    if not (kit / 'index.sqlite').is_file():
+        pytest.skip('Real CoStar index absent')
+    builder = load_script('build_dossier')
+    with sqlite3.connect(kit / 'index.sqlite') as db:
+        dossier = builder.build_dossier(db, '233953', json.loads((kit / 'schemas/enums.json').read_text()))
+    years = [f for f in dossier['facts'] if f['unit'] == 'year']
+    assert years
+    for fact in years:
+        assert fact['say_as'] == str(fact['value']) and ',' not in fact['say_as'], fact

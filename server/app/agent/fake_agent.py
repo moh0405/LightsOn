@@ -66,29 +66,24 @@ def intro(dossier: dict) -> dict:
 
 
 def challenge(pitch: Pitch, dossier: dict) -> Challenge:
+    from .persona import limit_applies, physical_limits
     fact = grounding_fact(dossier)
-    from .persona import physical_limits
     category = classify_use(pitch.text)
-    limits = (dossier.get('persona') or {}).get('hard_limits') or physical_limits(dossier)
-    explicit_floor = re.search(r'floor\s+(-?\d+)\b', pitch.text, re.I)
-    if explicit_floor:
-        ref = f"F_{dossier['id']}_floor_{explicit_floor[1]}_available_sqft"
-        limits = [limit for limit in physical_limits(dossier) if limit['fact_ref'] == ref]
+    counteroffer = f"Show me this in your plan: {desire(dossier)}"
+    # The building's own limits first, then any other validated limit. A limit is used
+    # only when the pitch states a number beyond its cited fact; a category alone proves nothing.
+    own = (dossier.get('persona') or {}).get('hard_limits') or []
+    # A fallback limit is skipped when the persona already narrowed the same fact.
+    limits = own + [l for l in physical_limits(dossier) if l['fact_ref'] not in {o['fact_ref'] for o in own}]
+    facts = {f['id']: f for f in dossier.get('facts', [])}
     for limit in limits:
-        if category not in limit['rejects_categories']:
-            continue
-        cited = next((f for f in dossier['facts'] if f['id'] == limit['fact_ref']), None)
-        # Reject only an explicit numeric mismatch; a category alone proves no infeasibility.
-        areas = re.findall(r'(\d[\d,]*(?:\.\d+)?)\s*(?:sq\s*ft|square[ -]feet|sqft)', pitch.text, re.I)
-        if (cited and limit['constraint'] in {'floor_plate', 'dark_area'}
-                and re.search(r'single[ -]floor|one floor|floor \d+', pitch.text, re.I)
-                and any(float(area.replace(',', '')) > cited['value'] for area in areas)):
-            return Challenge(player_id=pitch.player_id, line=limit['text'], fact_ids=[cited['id']],
-                             counteroffer=f"Show me this in your plan: {desire(dossier)}", category_guess=category)
+        if limit['fact_ref'] in facts and limit_applies(limit, pitch.text, category):
+            return Challenge(player_id=pitch.player_id, line=limit['text'], fact_ids=[limit['fact_ref']],
+                             counteroffer=counteroffer, category_guess=category)
     line = (f"{fact_line(fact) or fact['say_as']} How does your idea fit?"
             if fact else 'Sweetheart, show me your plan; I need details before I make a deal.')
     return Challenge(player_id=pitch.player_id, line=line, fact_ids=[fact['id']] if fact else [],
-                     counteroffer=f"Show me this in your plan: {desire(dossier)}", category_guess=classify_use(pitch.text))
+                     counteroffer=counteroffer, category_guess=category)
 
 
 def verdict(pitches: list[Pitch], dossier: dict, city: City) -> VerdictProposal:

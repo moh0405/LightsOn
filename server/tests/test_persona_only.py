@@ -45,6 +45,7 @@ def test_persona_only_reads_cached_research_and_never_rescouts(tmp_path, monkeyp
     assert writer.calls == 1 and result['prep_status'] == 'ready'
     assert (tmp_path / 'personas' / f'{PID}.json').is_file()
     assert result['persona']['backstory'][1]['fact_ref'].endswith('dark_floor_count')
+    assert json.loads((tmp_path / 'cache' / PID / 'work' / 'persona_dropped.json').read_text()) == {'dropped': []}
 
 
 def test_persona_only_estimate_refuses_above_weekend_threshold(tmp_path):
@@ -81,3 +82,61 @@ def test_writer_normalization_splits_claims_and_drops_unsupported_prose(tmp_path
     assert persona.intro_line == f"I made my entrance in {year['value']}. {value['catchphrase']}"
     # The strict validator still rejects the unnormalized model proposal.
     with pytest.raises(ValueError): validate_persona(value, dossier)
+
+
+# Flourishes the model wrote for Esperson that the old word allowlist deleted.
+IN_CHARACTER = [
+    'That kind of staying power is not an accident, darling.',
+    'I am not afraid of a little reinvention.',
+    'That is a canvas, not a closet.',
+    'Every exit is just the story asking for a better second act.',
+    'I have taste, and I have standards.',
+]
+UNCITED_CLAIMS = [
+    ('I was the tallest address downtown.', 'history'),
+    ('Oil barons used to fill me up.', 'proper noun'),
+    ('Back in the forties I hosted galas.', 'number'),
+    ('Two hundred lawyers worked here.', 'number'),
+    ('Shell and Exxon both loved me, darling.', 'proper noun'),
+    ('My lobby has a pool.', 'physical'),
+    ('My art-deco bones still shine.', 'architecture'),
+    ('Half my tenants left last spring.', 'tenancy'),
+    ('I opened in 1941.', 'number'),
+    ('Exxon adored me, darling.', 'proper noun'),
+    ('Texaco loved me.', 'proper noun'),
+    ('I hosted the grandest galas in town.', 'history'),
+    ('Kings dined in my shadow.', 'proper noun'),
+]
+
+
+def test_in_character_fiction_survives_and_uncited_claims_are_dropped_with_reason(tmp_path, caplog):
+    import logging
+    from app.agent.persona import normalize_writer_persona, fiction_claim
+    dossier = cached_research(tmp_path / 'research')
+    for line in IN_CHARACTER:
+        assert fiction_claim(line) is None, line
+    for line, reason in UNCITED_CLAIMS:
+        assert reason in (fiction_claim(line) or ''), line
+    value = fake_persona(dossier).model_dump()
+    value['backstory'] += [dict(text=line, fact_ref=None, fiction=True) for line in IN_CHARACTER]
+    value['backstory'] += [dict(text=line, fact_ref=None, fiction=True) for line, _ in UNCITED_CLAIMS]
+    first_neighbor = dossier['neighbors'][0]
+    value['neighbor_lines'][first_neighbor] = 'Bold ambition looks splendid on you, darling, truly.'
+    dropped = []
+    with caplog.at_level(logging.INFO, logger='app.agent.persona'):
+        normalized = normalize_writer_persona(value, dossier, dropped=dropped)
+    texts = [beat['text'] for beat in normalized['backstory']]
+    assert all(line in texts for line in IN_CHARACTER)
+    assert not any(line in texts for line, _ in UNCITED_CLAIMS)
+    assert normalized['neighbor_lines'][first_neighbor] == 'Bold ambition looks splendid on you, darling, truly.'
+    assert {d['text'] for d in dropped} == {line for line, _ in UNCITED_CLAIMS}
+    assert all(d['reason'] and d['field'] == 'backstory' for d in dropped)
+    assert sum('dropped' in r.getMessage() for r in caplog.records) == len(UNCITED_CLAIMS)
+
+
+def test_era_lines_are_valid_fiction_for_every_voice():
+    from app.agent.persona import ERA_LINES, ERA_VOICES, fiction_claim
+    assert {voice for _, voice in ERA_VOICES} <= set(ERA_LINES)
+    for voice, lines in ERA_LINES.items():
+        assert len(lines) >= 3
+        assert all(fiction_claim(line) is None for line in lines), voice

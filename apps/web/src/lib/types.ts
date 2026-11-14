@@ -16,8 +16,11 @@ export interface Fact {
 
 export interface HardLimit {
   fact_ref: string;
-  constraint: "floor_plate" | "dark_area" | "height" | "parking";
-  rejects_categories: ("housing" | "food_retail" | "entertainment" | "community" | "culture" | "health" | "work" | "wildcard")[];
+  constraint: "floor_plate" | "dark_area" | "stories" | "height" | "parking";
+  threshold: number;
+  unit: "sqft" | "stories" | "ft" | "spaces_per_1000_sqft";
+  floor: number | null;
+  applies_to: ("housing" | "food_retail" | "entertainment" | "community" | "culture" | "health" | "work" | "wildcard")[];
   text: string;
 }
 

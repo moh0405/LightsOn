@@ -29,7 +29,8 @@ def build_dossier(db: sqlite3.Connection, pid: str, enums: dict) -> dict | None:
         fid = f'F_{pid}_{key}'
         facts.append(dict(id=fid, key=key, value=value, unit=unit, source='costar',
                           source_field=field, kind=kind,
-                          say_as=None if value is None else f'{value:,} {unit or ""}'.strip()
+                          say_as=None if value is None else str(value) if unit == 'year'
+                          else f'{value:,} {unit or ""}'.strip()
                           if isinstance(value, (int, float)) else str(value)))
         return fid
     stories = data.get('numStoriesAboveGrade'); height = data.get('buildingHeightInFeet')

@@ -507,7 +507,7 @@
       "source": "costar",
       "source_field": "commercial-property.constructionEvents.year",
       "kind": "verified",
-      "say_as": "2,001 year"
+      "say_as": "2001"
     },
     {
       "id": "F_519027_construction_ConstructionComplete",
@@ -517,7 +517,7 @@
       "source": "costar",
       "source_field": "commercial-property.constructionEvents.year",
       "kind": "verified",
-      "say_as": "2,003 year"
+      "say_as": "2003"
     },
     {
       "id": "F_519027_construction_RenovationFinished",
@@ -527,7 +527,7 @@
       "source": "costar",
       "source_field": "commercial-property.constructionEvents.year",
       "kind": "verified",
-      "say_as": "2,020 year"
+      "say_as": "2020"
     },
     {
       "id": "F_519027_latitude",

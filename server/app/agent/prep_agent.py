@@ -78,19 +78,21 @@ PERSONA_WRITER_PROMPT = (
     'The era_brief is fictional acting direction, never proof of architecture or past fame. '
     'Give the character attitude, investor stakes and warmth. Never mention a dossier, database or records show. '
     'For every factual backstory beat use {text, fact_ref, fiction:false}: start text with one factual_clauses '
-    'entry for that ID, then optionally append a short emotional sentence using fiction_vocabulary. '
+    'entry for that ID, then optionally append a short in-character sentence that follows fiction_rules. '
     'These are natural semantic clauses, not copies of source say_as. Every number/date must match that single cited fact. '
     'No extra physical/history claims or numbers; at most two sentences per beat. Use only researched IDs. '
     'Include completion-era, dark-floor and former-industry beats when available, at least three factual beats. '
-    'Fiction beats have fact_ref:null, fiction:true and emotional/investor prose using fiction_vocabulary '
-    '(fictional_lines are examples that can be recomposed). Never assert physical attributes in fiction. '
-    'Use at least two distinct physical_constraints as hard_limits, copying those typed objects exactly. '
+    'Fiction beats have fact_ref:null, fiction:true and in-character emotional/investor prose that follows '
+    'fiction_rules; give it era flavour through idiom and slang like era_lines (fictional_lines are more examples). '
+    'Never assert numbers, names, history or physical attributes in fiction. '
+    'Use at least two distinct physical_constraints as hard_limits, copying those typed objects exactly; '
+    'only a parking limit may narrow applies_to, and only to entertainment and/or food_retail. '
     'If fewer than two exist use [] and the supplied hard_limits_empty_reason; otherwise that reason is null. '
     'Choose a desire with nonempty desire_support; copy its exact desire_text and desire_reason and cite its support IDs. '
     'voice_style starts with voice_style_prefix, then only voice_descriptor_words, maximum twelve words; voice_id is empty. '
     'Use source building_id/name and a listed signature_sound; mood_baseline is a fictional emotion. '
     'intro_line must be exactly one factual backstory beat (its citation supplies provenance) or fiction. '
-    'Catchphrase and exactly three known neighbor reactions use only fiction_vocabulary, with no digits. '
+    'Catchphrase and exactly three known neighbor reactions follow fiction_rules. '
     'Neighbor reactions are emotional, never claims about neighbors without evidence. '
     'All factual claims must cite a fact. Output only the assigned JSON.\n'
 )
@@ -197,7 +199,7 @@ def prep_building(property_id: str, force: bool = False, *, provider=None, model
         if result_path.is_file() and not force:
             if (result := cached_result(tools, result_path)) is not None:
                 return result
-        result_path.unlink(missing_ok=True)
+        # The previous trusted dossier stays in place until a new one is fully validated.
         workspace = directory / 'work'
         workspace.mkdir(exist_ok=True)
         steps = Steps(directory / 'agent_steps.json', emit)
@@ -237,8 +239,20 @@ def prep_building(property_id: str, force: bool = False, *, provider=None, model
         result['prep_status'] = 'ready'
         result['source_fingerprint'] = source_fingerprint(tools)
         # Published only after all validation; the model backend can never write here.
-        write_json((personas or PERSONAS) / f'{property_id}.json', result['persona'])
-        write_json(result_path, result)
+        persona_path = (personas or PERSONAS) / f'{property_id}.json'
+        staged = [(persona_path, result['persona']), (result_path, result)]
+        temps = []
+        try:
+            for path, value in staged:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                temp = path.with_name(path.name + '.new')
+                temp.write_text(json.dumps(value, indent=2) + '\n')
+                temps.append((temp, path))
+            for temp, path in temps:
+                temp.replace(path)
+        finally:
+            for temp, _ in temps:
+                temp.unlink(missing_ok=True)
         steps.record('complete', 'validate_persona')
         return result
 
@@ -317,7 +331,9 @@ def regenerate_persona(property_id: str, research: Path, *, provider=None, model
         for filename, selection in selections.items():
             write_json(workspace / filename, selection)
         write_json(workspace / 'persona_proposal.json', value)
-        value = normalize_writer_persona(value, dossier)
+        dropped = []
+        value = normalize_writer_persona(value, dossier, dropped=dropped)
+        write_json(workspace / 'persona_dropped.json', {'dropped': dropped})
         write_json(workspace / 'persona.json', value)
         result = merge_research(tools, workspace)
         from ..voice.tts import render_intro
