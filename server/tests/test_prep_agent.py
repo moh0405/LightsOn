@@ -562,3 +562,12 @@ def test_hour_cache_override_without_optional_breakdown_prices_hour_writes(tmp_p
     row = SpendLedger(path).snapshot()['calls'][0]
     assert row['cache_write_1h_tokens'] == 10
     assert row['cost_usd'] == pytest.approx((3.3 * (5 + 20) + 16.5 * 2) / 1e6)
+
+
+def test_voice_style_cannot_smuggle_physical_claims():
+    from app.agent.persona import fake_persona, validate_persona
+    dossier = source_dossier()
+    persona = fake_persona(dossier).model_dump()
+    for suffix in (' with 999 floors', ' with a rooftop pool'):
+        with pytest.raises(ValueError):
+            validate_persona({**persona, 'voice_style': 'old-Houston art-deco pride' + suffix}, dossier)

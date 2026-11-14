@@ -87,7 +87,7 @@ PERSONA_WRITER_PROMPT = (
     'Use at least two distinct physical_constraints as hard_limits, copying those typed objects exactly. '
     'If fewer than two exist use [] and the supplied hard_limits_empty_reason; otherwise that reason is null. '
     'Choose a desire with nonempty desire_support; copy its exact desire_text and desire_reason and cite its support IDs. '
-    'voice_style starts with voice_style_prefix, maximum twelve words; voice_id is empty. '
+    'voice_style starts with voice_style_prefix, then only voice_descriptor_words, maximum twelve words; voice_id is empty. '
     'Use source building_id/name and a listed signature_sound; mood_baseline is a fictional emotion. '
     'intro_line must be exactly one factual backstory beat (its citation supplies provenance) or fiction. '
     'Catchphrase and exactly three known neighbor reactions use only fiction_vocabulary, with no digits. '

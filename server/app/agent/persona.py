@@ -60,7 +60,7 @@ FICTION = [
     "Now we are talking.",
     "You have my attention. Make it count.",
 ]
-VOICES = ['proud and warm', 'dry and theatrical', 'anxious and hopeful', 'gruff but affectionate']
+STYLE_WORDS = set('proud and warm dry theatrical anxious hopeful gruff but affectionate lonely bitter investor sharp witty drawl confident playful sentimental generous'.split())
 SOUNDS = ['warm piano', 'low brass', 'bright strings', 'soft marimba']
 
 
@@ -161,7 +161,8 @@ DENY = re.compile(r'\b(?:vacant|dossier|database|records show|property type|sour
 
 def fiction_text(text: str) -> bool:
     words = re.findall(r"[a-z]+(?:'[a-z]+)?", text.casefold())
-    return (bool(words) and len(text) <= 240 and not re.search(r'\d', text)
+    return (bool(words) and bool(re.fullmatch(r"[A-Za-z'\s,;:.!?…—–-]+", text))
+            and len(text) <= 240 and not re.search(r'\d', text)
             and not DENY.search(text) and set(words) <= FICTION_WORDS
             and len(re.findall(r'[.!?](?:\s|$)', text)) <= 2)
 
@@ -233,10 +234,12 @@ def validate_persona(value: dict, dossier: dict) -> Persona:
             or not set(persona.desire_reason_fact_ids) <= set(support)
             or persona.desire_reason != DESIRE_REASONS[persona.desire_key]):
         raise ValueError('Desire requires relevant supporting facts and a fictional rationale')
+    suffix = persona.voice_style.removeprefix(era_voice(dossier))
     if (not persona.voice_style.startswith(era_voice(dossier)) or len(persona.voice_style.split()) > 12
+            or not re.fullmatch(r'[A-Za-z ,;–—-]*', suffix)
+            or not set(re.findall(r'[a-z]+', suffix.casefold())) <= STYLE_WORDS
             or persona.signature_sound not in SOUNDS or persona.voice_id != ''):
         raise ValueError('Use a fictional voice and sound; voice_id is empty without a configured voice')
-    supported = {line for f in facts.values() if f.get('kind') == 'verified' and (line := fact_line(f))}
     candidates = physical_limits(dossier)
     if len(candidates) >= 2:
         if len(persona.hard_limits) < 2 or persona.hard_limits_empty_reason is not None:
@@ -292,7 +295,7 @@ def writer_instructions(dossier: dict) -> str:
         name=dossier['name'], neighbors=dossier['neighbors'], factual_lines=lines, factual_clauses={f['id']: fact_clauses(f) for f in dossier['facts'] if fact_clauses(f)},
         era_brief=era_voice(dossier), fiction_vocabulary=sorted(FICTION_WORDS),
         physical_constraints=physical_limits(dossier), hard_limits_empty_reason=EMPTY_LIMITS,
-        fictional_lines=FICTION, desire_text_by_key=DESIRES, voice_style_prefix=era_voice(dossier), signature_sounds=SOUNDS))
+        fictional_lines=FICTION, desire_text_by_key=DESIRES, voice_style_prefix=era_voice(dossier), voice_descriptor_words=sorted(STYLE_WORDS), signature_sounds=SOUNDS))
 
 
 def normalize_writer_persona(value: dict, dossier: dict) -> dict:
