@@ -70,6 +70,10 @@ def challenge(pitch: Pitch, dossier: dict) -> Challenge:
     from .persona import physical_limits
     category = classify_use(pitch.text)
     limits = (dossier.get('persona') or {}).get('hard_limits') or physical_limits(dossier)
+    explicit_floor = re.search(r'floor\s+(-?\d+)\b', pitch.text, re.I)
+    if explicit_floor:
+        ref = f"F_{dossier['id']}_floor_{explicit_floor[1]}_available_sqft"
+        limits = [limit for limit in physical_limits(dossier) if limit['fact_ref'] == ref]
     for limit in limits:
         if category not in limit['rejects_categories']:
             continue

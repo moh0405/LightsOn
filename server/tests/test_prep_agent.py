@@ -529,3 +529,19 @@ def test_derived_facts_match_source_floors_and_tenancy_history():
     assert facts['former_tenancy_records']['value'] == dossier['tenant_history']['records'] - dossier['tenant_history']['current']
     assert facts['top_former_industry_1']['value'] == dossier['tenant_history']['top_former_industries'][0]['label']
     assert all(next(f for f in dossier['floors'] if f['number'] == n)['available_sqft'] == 31503 for n in (6, 7, 8))
+
+
+def test_explicit_floor_pitch_uses_that_floor_area_not_typical_plate():
+    from app.agent.fake_agent import challenge
+    from app.models import Pitch
+    from datetime import datetime, timezone
+    dossier = source_dossier()
+    area = next(f['available_sqft'] for f in dossier['floors'] if f['number'] == 6)
+    pitch = Pitch(player_id='p', text=f'An arena on floor 6 using {int(area)} sq ft', origin='web', at=datetime.now(timezone.utc))
+    reply = challenge(pitch, dossier)
+    assert not reply.line.startswith('For a typical')
+    pitch.text = f'An arena on floor 6 needing {int(area) + 1} sq ft'
+    reply = challenge(pitch, dossier)
+    assert reply.fact_ids == ['F_233953_floor_6_available_sqft']
+    assert reply.line.startswith('For floor 6, fit')
+
