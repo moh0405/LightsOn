@@ -31,3 +31,7 @@
     * 233899: footprint YES (primary structure), ortho YES, 4 obliques (N/S/E/W), detections: 8 cars, 2 trees.
   - Detections merged into dossiers as facts (source: "vexcel+vision", kind: "estimate", capture date in say_as); hero footprints merged with source: "vexcel"; floors.geojson regenerated with footprint_source="vexcel" for heroes.
   - All test suites green: 133 passed (1 skipped opt-in live test) in server pytest, 33 passed in pnpm test, 14 passed in Playwright e2e.
+- 00:1x Phase 4A (Antigravity) PR #10 merged: Vexcel footprints, ortho + 4 obliques, detections for both heroes, disk
+  cache, Matterport adapter (kit ids/captions only). No images or keys committed. Esperson 6-8 still dark 31,503; footprint
+  now from Vexcel. 133 pytest, 33 web pass. Note for review: detection say_as reads "31 car detected" / "no parking lot
+  detected" (grammar; negative detections should not become claims the building states as fact).
