@@ -9,7 +9,7 @@ from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
 from .commands import CommandService
-from .rooms import Conn, RoomError, RoomManager
+from .rooms import DEFAULT_DURATIONS, Conn, RoomError, RoomManager
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(REPO_ROOT / ".env")
@@ -24,7 +24,10 @@ ROLE_ORIGIN = {"screen": "web", "play": "web", "admin": "host"}
 async def lifespan(app: FastAPI):
     state_dir = Path(os.getenv("STATE_DIR") or REPO_ROOT / "server" / "state")
     heroes = [h.strip() for h in (os.getenv("HERO_PROPERTY_IDS") or "233953,233899").split(",") if h.strip()]
-    app.state.manager = RoomManager(heroes, state_dir)
+    scale = float(os.getenv("PHASE_DURATIONS_SCALE", "1.0"))
+    durations = {phase: seconds * scale if seconds is not None else None
+                 for phase, seconds in DEFAULT_DURATIONS.items()}
+    app.state.manager = RoomManager(heroes, state_dir, durations=durations)
     app.state.commands = CommandService(app.state.manager)
     yield
     app.state.manager.close()
