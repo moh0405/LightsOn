@@ -157,7 +157,7 @@ for (const mode of ["kit", "fixtures"]) test(`Phase 3 complete round UI (${mode}
     expect(new Set(nonces).size).toBe(4);
     await screen.screenshot({ path: testInfo.outputPath("REVIVED.png"), fullPage: true });
     await screen.reload();
-    await expect.poll(() => screen.evaluate(() => JSON.stringify(window.__lightsOnMap?.getPaintProperty("floors", "fill-extrusion-color")))) .toContain(color);
+    await expect.poll(() => screen.evaluate(() => JSON.stringify(window.__lightsOnMap?.getLayer("floors") ? window.__lightsOnMap.getPaintProperty("floors", "fill-extrusion-color") : null))) .toContain(color);
     await expect(screen.getByTestId("city-meter")).toContainText("1 buildings revived");
     await expect(screen.getByTestId("energy-meter")).toContainText("100%");
     server.emit({ type: "error", code: "no_pitches", message: "No pitches received. Round skipped." });
@@ -197,7 +197,7 @@ test("different winners retain per-floor colors after screen reload", async ({ b
     await screen.goto(`${baseURL}/screen`);
     for (let visit = 0; visit < 2; visit++) {
       if (visit) await screen.reload();
-      await expect.poll(() => screen.evaluate(() => JSON.stringify(window.__lightsOnMap?.getPaintProperty("floors", "fill-extrusion-color")))).toContain(color);
+      await expect.poll(() => screen.evaluate(() => JSON.stringify(window.__lightsOnMap?.getLayer("floors") ? window.__lightsOnMap.getPaintProperty("floors", "fill-extrusion-color") : null))).toContain(color);
       const expression = await screen.evaluate(() => JSON.stringify(window.__lightsOnMap!.getPaintProperty("floors", "fill-extrusion-color")));
       expect(expression).toContain("#ff55bb");
       expect(expression).not.toContain("interpolate");
