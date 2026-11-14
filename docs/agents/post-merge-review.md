@@ -6,6 +6,11 @@ Reusable spec. The coordinator dispatches it after a phase merges, to Grok first
 orca orchestration worker-start --agent codex --worktree new-child --name <phase>-review --spec "Follow docs/agents/post-merge-review.md for <phase>, diff <from>..<to>. Phase checklist: <items>"
 ```
 
+## Setup (always)
+Symlink the CoStar kit `/Users/momossss/Documents/GitHub/LightsOn/data` and `/Users/momossss/Documents/GitHub/LightsOn/.env`
+into your worktree root before running tests (both gitignored; never commit or print them). Missing-kit failures are
+not acceptable as results.
+
 ## Your job
 Read AGENTS.md, docs/agent-workflow.md and the PRD sections the phase touches. Review `git diff <from>..<to>` on main.
 

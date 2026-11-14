@@ -6,6 +6,11 @@ Reusable task spec. The coordinator dispatches it after every phase merge and be
 orca orchestration worker-start --agent codex --worktree new-child --name qa-sweep-<phase> --spec-file docs/agents/qa-sweep.md
 ```
 
+## Setup (always)
+Symlink the CoStar kit `/Users/momossss/Documents/GitHub/LightsOn/data` and `/Users/momossss/Documents/GitHub/LightsOn/.env`
+into your worktree root before running tests (both gitignored; never commit or print them). Missing-kit failures are
+not acceptable as results.
+
 ## Your job
 You are the QA agent for Lights On. You do not build features. You run the whole app headless the way players and
 the host would, find what is broken, and report. Read AGENTS.md and docs/agent-workflow.md first.
