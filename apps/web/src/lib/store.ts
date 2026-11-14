@@ -44,6 +44,7 @@ export interface GameState {
   roundId: string | null;
   buildingId: string | null;
   endsAt: string | null;
+  mood: string;
   dataMode: string;
   dataModeScope: "process";
   heroIds: string[];
@@ -68,6 +69,7 @@ export const initialGame: GameState = {
   roundId: null,
   buildingId: null,
   endsAt: null,
+  mood: "hopeful",
   dataMode: "kit",
   dataModeScope: "process",
   heroIds: [],
@@ -90,6 +92,7 @@ export function reduce(s: GameState, msg: ServerMessage, now = Date.now()): Part
         roundId: msg.round_id,
         buildingId: msg.building_id,
         endsAt: msg.ends_at,
+        mood: msg.mood ?? msg.intro?.mood ?? "hopeful",
         dataMode: msg.data_mode,
         dataModeScope: msg.data_mode_scope,
         heroIds: msg.hero_building_ids,
@@ -117,9 +120,9 @@ export function reduce(s: GameState, msg: ServerMessage, now = Date.now()): Part
       };
     case "round_started":
       return { roundId: msg.round_id, buildingId: msg.building_id, intro: null, pitches: {}, counteroffers: {}, verdict: null, charge: 0, revival: null, lastError: null };
-    case "building_intro": return { intro: msg };
+    case "building_intro": return { intro: msg, mood: msg.mood };
     case "pitch_received": return { pitches: { ...s.pitches, [msg.player_id]: msg } };
-    case "counteroffer": return { counteroffers: { ...s.counteroffers, [msg.player_id]: msg } };
+    case "counteroffer": return { mood: msg.mood ?? s.mood, counteroffers: { ...s.counteroffers, [msg.player_id]: msg } };
     case "verdict": return { verdict: msg };
     case "energy_updated": return { charge: msg.charge };
     case "building_revived": {

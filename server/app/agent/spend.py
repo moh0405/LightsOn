@@ -189,3 +189,55 @@ class MeteredClient:
             ledger.cap = min(ledger.cap, self.cap)
         return ledger.call(model, bound, output, lambda: self.client.converse(**request),
                            usage, input_multiplier=cache_rate)
+
+    def converse_stream(self, *, timeout: float, on_delta=None, **request):
+        """Consume a bounded stream inside the same durable reservation as converse.
+
+        Deltas are private until the live agent validates the complete line. A broken
+        stream retains its full reservation; usage is required to reconcile it.
+        """
+        import time
+        client = self.client
+        deadline = time.monotonic() + timeout
+
+        class StreamRequest:
+            def converse(self, **payload):
+                if time.monotonic() >= deadline:
+                    raise TimeoutError('Bedrock stream expired before request')
+                result = client.converse_stream(**payload)
+                stream = result['stream']
+                blocks = {}
+                usage = None
+                try:
+                    for event in stream:
+                        if time.monotonic() >= deadline:
+                            raise TimeoutError('Bedrock stream deadline')
+                        if 'contentBlockStart' in event:
+                            item = event['contentBlockStart']
+                            blocks[item['contentBlockIndex']] = dict(item['start'])
+                        if 'contentBlockDelta' in event:
+                            item = event['contentBlockDelta']
+                            block = blocks.setdefault(item['contentBlockIndex'], {})
+                            delta = item['delta']
+                            if 'text' in delta:
+                                block['text'] = block.get('text', '') + delta['text']
+                                if on_delta:
+                                    on_delta(delta['text'])
+                            if 'toolUse' in delta:
+                                tool = block.setdefault('toolUse', {})
+                                tool['input'] = tool.get('input', '') + delta['toolUse'].get('input', '')
+                        if 'metadata' in event:
+                            usage = event['metadata'].get('usage')
+                        if any(key.endswith('Exception') for key in event):
+                            raise SpendUnavailable('Bedrock stream unavailable')
+                    content = []
+                    for _, block in sorted(blocks.items()):
+                        if 'toolUse' in block:
+                            block['toolUse']['input'] = json.loads(block['toolUse'].get('input', '{}'))
+                        if block:
+                            content.append(block)
+                    return {'output': {'message': {'role': 'assistant', 'content': content}}, 'usage': usage}
+                finally:
+                    stream.close()
+
+        return MeteredClient(StreamRequest(), self.path, self.cap).converse(**request)

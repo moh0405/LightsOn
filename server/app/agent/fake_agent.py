@@ -66,10 +66,23 @@ def intro(dossier: dict) -> dict:
 
 
 def challenge(pitch: Pitch, dossier: dict) -> Challenge:
+    from .live_agent import safety_reason, INJECTION, REFUSAL
+    screened = safety_reason(pitch.text)
+    if screened:
+        return Challenge(player_id=pitch.player_id, line=INJECTION if screened == 'injection' else REFUSAL,
+            fact_ids=[], counteroffer='Offer a kind, original idea for this space.', category_guess='wildcard')
     from .persona import limit_applies, physical_limits
     fact = grounding_fact(dossier)
     category = classify_use(pitch.text)
-    counteroffer = f"Show me this in your plan: {desire(dossier)}"
+    hint = {
+        'public_ground_floor': 'Could your idea welcome everyone?',
+        'people_living_here': 'Could your plan make room for everyday company?',
+        'night_life': 'What would keep your idea buzzing after sunset?',
+        'feed_the_block': 'Could your plan bring the block together over food?',
+        'make_things': 'Could your idea let people create something?',
+        'be_famous_again': 'How would your idea get people talking?',
+    }.get((dossier.get('persona') or {}).get('desire_key'), 'How would your idea welcome everyone?')
+    counteroffer = hint
     # The building's own limits first, then any other validated limit. A limit is used
     # only when the pitch states a number beyond its cited fact; a category alone proves nothing.
     own = (dossier.get('persona') or {}).get('hard_limits') or []
@@ -94,6 +107,15 @@ def verdict(pitches: list[Pitch], dossier: dict, city: City) -> VerdictProposal:
         neighborhood_fit=5 + 2 * desire_met(p.text, dossier),
         creativity=min(9, 3 + len(set(p.text.casefold().split())) // 3),
         charm=5 + int(len(p.text.split()) >= 6)) for p in pitches]
+    from .live_agent import safety_reason
+    from .persona import physical_limits, limit_applies
+    own = (dossier.get('persona') or {}).get('hard_limits') or []
+    limits = own + [limit for limit in physical_limits(dossier) if limit['fact_ref'] not in {item['fact_ref'] for item in own}]
+    for p, score in zip(pitches, scores):
+        if any(limit_applies(limit, p.text, classify_use(p.text)) for limit in limits):
+            score.data_fit = 2
+        if safety_reason(p.text):
+            score.data_fit = score.neighborhood_fit = score.creativity = score.charm = 0
     winner = max(zip(pitches, scores), key=lambda pair: (
         sum((pair[1].data_fit, pair[1].neighborhood_fit, pair[1].creativity, pair[1].charm)),
         pair[1].creativity, -pair[0].at.timestamp()))[0]

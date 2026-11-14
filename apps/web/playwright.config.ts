@@ -29,7 +29,7 @@ export default defineConfig({
       cwd: "../../server",
       url: `${apiURL}/api/health`,
       reuseExistingServer: false,
-      env: { STATE_DIR: stateDir, HOST_PIN: "1234", PHASE_DURATIONS_SCALE: "0.1", PUBLIC_BASE_URL: "", DATA_MODE: "kit" },
+      env: { AGENT_MODE: "fake", STATE_DIR: stateDir, HOST_PIN: "1234", PHASE_DURATIONS_SCALE: "0.1", PUBLIC_BASE_URL: "", DATA_MODE: "kit" },
     },
     {
       command: `pnpm dev --host 127.0.0.1 --port ${webPort} --strictPort`,

@@ -16,7 +16,7 @@ export interface CityState {
 }
 export interface Intro { text: string; audio_url: string | null; mood: string; analyst_line: string | null }
 export interface PitchView { player_id: string; text: string; origin: "web" | "voice" | "imessage" }
-export interface Counteroffer { player_id: string; line: string; fact_ids: string[]; counteroffer: string; audio_url: string | null }
+export interface Counteroffer { mood?: string; player_id: string; line: string; fact_ids: string[]; counteroffer: string; audio_url: string | null }
 export interface Revival { building_id: string; floors: number[]; color: string; category: Category; sqft: number; auto_completed: boolean }
 
 export interface RoomStateMsg {
@@ -27,6 +27,7 @@ export interface RoomStateMsg {
   building_id: string | null;
   target_floors: number[];
   ends_at: string | null;
+  mood?: string;
   data_mode: string;
   data_mode_scope: "process";
   hero_building_ids: string[];

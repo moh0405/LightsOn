@@ -118,3 +118,12 @@ it("restores intro subtitles from a PITCH reconnect snapshot", () => {
   expect(reduce(initialGame, { ...state, phase: "PITCH", round_id: "R1", intro }).intro).toEqual(intro);
   expect(reduce(initialGame, { ...state, intro: null }).intro).toBeNull();
 });
+
+
+it("replaces grounded subtitle prefixes and restores authoritative mood", () => {
+  const offer = { type: "counteroffer" as const, player_id: "p1", line: "Let me", counteroffer: "", fact_ids: [], audio_url: null, mood: "offended" };
+  const first = { ...initialGame, ...reduce(initialGame, offer) };
+  expect(first.mood).toBe("offended");
+  expect(reduce(first, { ...offer, line: "Let me hear your plan." }).counteroffers?.p1?.line).toBe("Let me hear your plan.");
+  expect(reduce(first, { ...state, mood: "flattered" }).mood).toBe("flattered");
+});
