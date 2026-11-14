@@ -17,8 +17,9 @@ CLIs on this machine (checked 2026-11-13): `codex`, `agy` (Antigravity 1.5.8, lo
 (logged in), `gemini` 0.68.0 (installed, needs Gemini auth before use).
 
 Antigravity models (checked 2026-11-14, all answer): `claude-opus-4-6-thinking`, `claude-sonnet-4-6`,
-`gpt-oss-120b-medium`, `gemini-3.8-flash-{high,medium,low}`. Antigravity with `claude-opus-4-6-thinking` is the strong
-reviewer when Codex is rate-limited (`--agent antigravity --model claude-opus-4-6-thinking`). GPT-OSS 120B and Gemini Flash
+`gpt-oss-120b-medium`, `gemini-3.8-flash-{high,medium,low}`. Antigravity with `claude-opus-4-6-thinking` was the strong
+reviewer when Codex is rate-limited, but its Opus and GPT-OSS quota ran out on 2026-11-14 (resets in ~7 days); Sonnet 4.6
+and Gemini Flash still work. Until then the Codex fallback reviewer is a fresh Claude Opus 5.5 worker (`--agent antigravity --model claude-opus-4-6-thinking`). GPT-OSS 120B and Gemini Flash
 are not used for final reviews.
 
 Headless one-shots: `grok -p "<prompt>"`, `gemini -p "<prompt>"`, `agy --print "<prompt>"`.
