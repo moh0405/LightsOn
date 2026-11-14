@@ -70,7 +70,7 @@ describe("round events", () => {
     expect(after.city).toMatchObject({ buildings_revived: 1, sqft_reimagined: 94509, song_layers: 1 });
     expect(reduce(after, event)).toEqual({});
     const next = reduce(after, { ...event, floors: [17, 18], color: "#ff55bb", sqft: 33060 }, 456);
-    expect(next.revivedColors?.["233953"]).toEqual({ floors: [6, 7, 8, 17, 18], color: "#ff55bb" });
+    expect(next.revivedColors?.["233953"]).toEqual({ floors: [6, 7, 8, 17, 18], color: "#ff55bb", floorColors: { "6": "#00ffff", "7": "#00ffff", "8": "#00ffff", "17": "#ff55bb", "18": "#ff55bb" } });
     expect(next.city).toMatchObject({ buildings_revived: 1, sqft_reimagined: 127569, song_layers: 2 });
     const snapshot = reduce(after, { ...state, revived: after.revivedColors, city: after.city!, charge: 100,
       pitches: [{ player_id: "p1", text: "An art space", origin: "web", at: "2026-11-13T22:00:00Z" }],
@@ -92,4 +92,20 @@ describe("round events", () => {
     expect(reset.charge).toBe(0);
     expect(reset.lastError?.code).toBe("no_pitches");
   });
+});
+
+
+it("restores two winners on one building from per-floor ownership, with legacy fallback", () => {
+  const revived = { "233953": { floors: [6, 7, 8, 17, 18], color: "#ff55bb" } };
+  const floor_states = { "233953": {
+    "6": { source_status: "dark" as const, game_status: "revived" as const, color: "#00ffff" },
+    "7": { source_status: "dark" as const, game_status: "revived" as const, color: "#00ffff" },
+    "8": { source_status: "dark" as const, game_status: "revived" as const, color: "#00ffff" },
+    "17": { source_status: "dark" as const, game_status: "revived" as const, color: "#ff55bb" },
+    "18": { source_status: "dark" as const, game_status: "revived" as const, color: "#ff55bb" },
+  } };
+  const restored = reduce(initialGame, { ...state, revived, floor_states });
+  expect(restored.revivedColors?.["233953"]?.floorColors).toEqual({ "6": "#00ffff", "7": "#00ffff", "8": "#00ffff", "17": "#ff55bb", "18": "#ff55bb" });
+  expect(reduce(initialGame, { ...state, revived }).revivedColors).toEqual(revived);
+  expect(floor_states["233953"]["6"].source_status).toBe("dark");
 });

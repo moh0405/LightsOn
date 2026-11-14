@@ -83,6 +83,11 @@ for (const mode of ["kit", "fixtures"] as const) {
       });
       await ann.getByRole("button", { name: /^Wake building / }).first().tap();
       await expect(phase(screen)).toHaveText("PITCH");
+      for (const [index, phone] of phones.entries()) {
+        await phone.getByLabel("Your pitch").fill(["A public games space", "A community art space", "A neighborhood café"][index]!);
+        await phone.getByRole("button", { name: "Submit pitch", exact: true }).tap();
+        await expect(phone.getByRole("status")).toContainText("Pitch sent");
+      }
       const playerId = await ann.evaluate((key) => localStorage.getItem(key), `lo.player.${room}`);
       expect(playerId).toBeTruthy();
       await ann.reload();
@@ -95,6 +100,12 @@ for (const mode of ["kit", "fixtures"] as const) {
       expect(await screen.evaluate(() => (window as Window & { observedPhases?: string[] }).observedPhases)).toEqual([
         "EXPLORE", "INTRO", "PITCH", "CHALLENGE", "NEGOTIATE", "VERDICT", "POWER_UP", "REVIVED", "EXPLORE",
       ]);
+      for (const phone of phones) await expect(phase(phone)).toHaveText("EXPLORE");
+      // No pitches means no invented deal: skip back to the city and explain why.
+      await ann.getByRole("button", { name: /^Wake building / }).first().tap();
+      await expect(phase(screen)).toHaveText("PITCH");
+      await expect(phase(screen)).toHaveText("EXPLORE", { timeout: 20_000 });
+      await expect(screen.getByRole("alert")).toContainText(/No pitches/i);
       for (const phone of phones) await expect(phase(phone)).toHaveText("EXPLORE");
       expect(errors, "screen console and runtime errors during the complete round").toEqual([]);
     } finally {

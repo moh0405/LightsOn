@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { create } from "zustand";
-import { withRevivedBuilding, type RevivedColors } from "./floor-colors";
+import { restoreRevivedColors, withRevivedBuilding, type RevivedColors } from "./floor-colors";
 import { setBuildingDataMode } from "./buildings";
 import { fetchHealth } from "./api";
 import type { CityState, Counteroffer, Intro, PitchView, PlayerView, PointerView, Revival, ServerMessage } from "./protocol";
@@ -95,7 +95,7 @@ export function reduce(s: GameState, msg: ServerMessage, now = Date.now()): Part
         heroIds: msg.hero_building_ids,
         players: Object.fromEntries(msg.players.map((p) => [p.id, p])),
         pointers: {},
-        revivedColors: msg.revived ?? {}, city: msg.city ?? null,
+        revivedColors: restoreRevivedColors(msg.revived ?? {}, msg.floor_states), city: msg.city ?? null,
         intro: null,
         pitches: Object.fromEntries([...(msg.pitches ?? []), ...(msg.revisions ?? [])].map((p) => [p.player_id, p])),
         counteroffers: Object.fromEntries((msg.challenges ?? []).map((c) => [c.player_id, { ...c, audio_url: null }])),
@@ -125,10 +125,9 @@ export function reduce(s: GameState, msg: ServerMessage, now = Date.now()): Part
     case "building_revived": {
       const previous = s.revivedColors[msg.building_id];
       if (previous && msg.floors.every((floor) => previous.floors.includes(floor))) return {};
-      const floors = [...new Set([...(previous?.floors ?? []), ...msg.floors])].sort((a, b) => a - b);
       return {
         charge: 100, revival: { ...msg, at: now },
-        revivedColors: withRevivedBuilding(s.revivedColors, msg.building_id, floors, msg.color),
+        revivedColors: withRevivedBuilding(s.revivedColors, msg.building_id, msg.floors, msg.color),
         city: s.city ? { ...s.city, buildings_revived: s.city.buildings_revived + (previous ? 0 : 1),
           sqft_reimagined: s.city.sqft_reimagined + msg.sqft, song_layers: s.city.song_layers + 1 } : null,
       };

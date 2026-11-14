@@ -7,6 +7,7 @@ export interface PlayerView {
   connected: boolean;
 }
 
+export type FloorStates = Record<string, Record<string, { source_status: "dark" | "partial" | "occupied" | "unknown"; game_status: "revived"; color: string }>>;
 export type Need = "housing" | "food_retail" | "entertainment" | "community";
 export type Needs = Record<Need, number>;
 export interface CityState {
@@ -37,6 +38,7 @@ export interface RoomStateMsg {
   verdict?: Verdict | null;
   charge?: number;
   revived?: Record<string, { floors: number[]; color: string }>;
+  floor_states?: FloorStates;
 }
 
 export type ServerMessage =

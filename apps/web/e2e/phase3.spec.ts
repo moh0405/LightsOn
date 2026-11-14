@@ -1,6 +1,6 @@
 import { devices, expect, test, type BrowserContext, type WebSocketRoute } from "@playwright/test";
 import { readFileSync } from "node:fs";
-import type { CityState, PlayerView, RoomStateMsg, ServerMessage } from "../src/lib/protocol";
+import type { CityState, FloorStates, PlayerView, RoomStateMsg, ServerMessage } from "../src/lib/protocol";
 import type { Phase } from "../src/lib/types";
 import { mockSkyline } from "./skyline-data";
 
@@ -17,6 +17,7 @@ class RoundServer {
   charge = 0;
   revivedAt = 0;
   revived: RoomStateMsg["revived"] = {};
+  floorStates: FloorStates = {};
   city: CityState = { buildings_revived: 0, sqft_reimagined: 0, song_layers: 0, needs: { housing: 40, food_retail: 30, entertainment: 15, community: 35 }, most_needed: "entertainment" };
   constructor(readonly mode: string) {}
   emit(message: ServerMessage) { for (const ws of this.sockets) ws.send(JSON.stringify(message)); }
@@ -31,7 +32,7 @@ class RoundServer {
     await context.routeWebSocket("**/ws/TEST?*", (ws) => {
       this.sockets.add(ws);
       let playerId = new URL(ws.url()).searchParams.get("player_id");
-      ws.send(JSON.stringify({ type: "room_state", room: "TEST", phase: this.phase, round_id: this.phase === "LOBBY" ? null : "R1", building_id: "233953", target_floors: [6, 7, 8], ends_at: null, data_mode: this.mode, data_mode_scope: "process", hero_building_ids: ["233953"], players: this.players, city: this.city, revived: this.revived, charge: this.charge } satisfies RoomStateMsg));
+      ws.send(JSON.stringify({ type: "room_state", room: "TEST", phase: this.phase, round_id: this.phase === "LOBBY" ? null : "R1", building_id: "233953", target_floors: [6, 7, 8], ends_at: null, data_mode: this.mode, data_mode_scope: "process", hero_building_ids: ["233953"], players: this.players, city: this.city, revived: this.revived, floor_states: this.floorStates, charge: this.charge } satisfies RoomStateMsg));
       ws.onClose(() => this.sockets.delete(ws));
       ws.onMessage((raw) => {
         const cmd = JSON.parse(String(raw)) as Record<string, unknown>;
@@ -180,5 +181,26 @@ test("housing impact is explicitly a game estimate and unavailable evidence stay
     await expect(screen.getByTestId("score-card")).toContainText("83 homes");
     await expect(screen.getByTestId("score-card")).toContainText("rough game estimate, not a feasibility claim");
     await expect(screen.getByLabel("Cited evidence")).toContainText("Source text unavailable");
+  } finally { await context.close(); }
+});
+
+
+test("different winners retain per-floor colors after screen reload", async ({ browser, baseURL }) => {
+  const context = await browser.newContext();
+  const server = new RoundServer("fixtures");
+  server.phase = "REVIVED";
+  server.revived = { "233953": { floors: [6, 7, 8, 17, 18], color: "#ff55bb" } };
+  server.floorStates = { "233953": Object.fromEntries([6, 7, 8, 17, 18].map((floor) => [String(floor), { source_status: "dark" as const, game_status: "revived" as const, color: floor < 17 ? color : "#ff55bb" }])) };
+  try {
+    await server.route(context);
+    const screen = await context.newPage();
+    await screen.goto(`${baseURL}/screen`);
+    for (let visit = 0; visit < 2; visit++) {
+      if (visit) await screen.reload();
+      await expect.poll(() => screen.evaluate(() => JSON.stringify(window.__lightsOnMap?.getPaintProperty("floors", "fill-extrusion-color")))).toContain(color);
+      const expression = await screen.evaluate(() => JSON.stringify(window.__lightsOnMap!.getPaintProperty("floors", "fill-extrusion-color")));
+      expect(expression).toContain("#ff55bb");
+      expect(expression).not.toContain("interpolate");
+    }
   } finally { await context.close(); }
 });

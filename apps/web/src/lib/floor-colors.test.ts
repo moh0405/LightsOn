@@ -46,3 +46,12 @@ it("starts newly revived floors immediately when a building has earlier lit floo
   expect(expression).toContain('["literal",0.4]');
   expect(expression.match(/interpolate/g)).toHaveLength(2);
 });
+
+it("keeps earlier winners on their floors through another revival", () => {
+  const first = withRevivedBuilding({}, "233953", [6, 7, 8], "#00ccff");
+  const second = withRevivedBuilding(first, "233953", [17, 18], "#ff55bb");
+  expect(resolveFloorColor("dark", "dark", "233953", 6, second)).toBe("#00ccff");
+  expect(resolveFloorColor("dark", "dark", "233953", 17, second)).toBe("#ff55bb");
+  expect(JSON.stringify(floorColorExpression(second))).toContain("#00ccff");
+  expect(JSON.stringify(floorColorExpression(second))).toContain("#ff55bb");
+});
