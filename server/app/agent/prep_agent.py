@@ -98,7 +98,7 @@ def build_agent(tools: BuildingTools, directory: Path, model=None):
              'entry, including punctuation; fact_ref must be the matching ID, fiction:false. Use only researched IDs. '
              'Fictional backstory has fact_ref:null, fiction:true and text exactly from fictional_lines. '
              'intro_line is one fictional line OR one verified factual line + a space + one fictional line. '
-             'Choose a desire key with its EXACT desire text. Choose voice_style and signature_sound from lists; '
+             'Choose a desire key with its EXACT desire text and desire_reason; include nonempty desire_reason_fact_ids from its desire_support. Choose voice_style and signature_sound from lists; '
              'voice_id="". Use the source building identity. Exactly three known neighbor IDs with fictional_lines '
              'as reactions. Catchphrase is a fictional line. Do not add any words to allowed lines.\n' + instructions),
     ]
@@ -127,6 +127,8 @@ def merge_research(tools: BuildingTools, directory: Path) -> dict:
     for beat in validated.backstory:
         if beat.get('fact_ref') is not None and beat['fact_ref'] not in researched:
             raise ValueError('Persona cites a fact not researched by a scout')
+    if not set(validated.desire_reason_fact_ids) <= researched:
+        raise ValueError('Desire must cite researched facts')
     if any(limit.fact_ref not in researched for limit in validated.hard_limits):
         raise ValueError('Physical constraints must cite researched facts')
     dossier['persona'] = validated.model_dump()

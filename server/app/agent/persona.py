@@ -13,6 +13,36 @@ DESIRES = {
     'make_things': 'Studios, makers and labs.',
     'be_famous_again': 'To be a place people dream of visiting.',
 }
+DESIRE_REASONS = {
+    'public_ground_floor': 'A fictional wish for shared access, inspired by measured ground-floor space.',
+    'people_living_here': 'A fictional wish for company, inspired by dark space awaiting a new game use.',
+    'night_life': 'A fictional wish to shine at night, inspired by dark space awaiting a new game use.',
+    'feed_the_block': 'A fictional wish to welcome the block, inspired by measured ground-floor space.',
+    'make_things': 'A fictional wish for creative work, inspired by measured typical-floor space.',
+    'be_famous_again': 'A fictional wish for attention, inspired by measured height; no past fame is claimed.',
+}
+
+
+def desire_support(dossier: dict) -> dict[str, list[str]]:
+    support = {key: [] for key in DESIRES}
+    dark_ids = {ref for floor in dossier.get('floors', []) if floor['source_status'] == 'dark' for ref in floor['fact_ids']}
+    for fact in dossier['facts']:
+        value, key, ref = fact.get('value'), fact['key'], fact['id']
+        if fact.get('kind') != 'verified' or type(value) not in (int, float) or value <= 0:
+            continue
+        if key in {'floor_1_size_sqft', 'floor_1_available_sqft'}:
+            for desire in ('public_ground_floor', 'feed_the_block'):
+                support[desire].append(ref)
+        if key in {'dark_floor_count', 'dark_sqft'} or (ref in dark_ids and key.endswith('_available_sqft')):
+            for desire in ('people_living_here', 'night_life'):
+                support[desire].append(ref)
+        if key == 'grossTypicalFloorSquareFeet':
+            support['make_things'].append(ref)
+        if key in {'buildingHeightInFeet', 'numStoriesAboveGrade'}:
+            support['be_famous_again'].append(ref)
+    return support
+
+
 FICTION = [
     "Bring me an idea. Let's make a deal.",
     "I have pride to spare and a little hope left.",
@@ -114,6 +144,11 @@ def validate_persona(value: dict, dossier: dict) -> Persona:
         raise ValueError('Forbidden floor-status wording')
     if persona.desire_key not in DESIRES or persona.desire_text != DESIRES[persona.desire_key]:
         raise ValueError('Desire must use a fixed key and fictional text')
+    support = desire_support(dossier)[persona.desire_key]
+    if (not persona.desire_reason_fact_ids or len(set(persona.desire_reason_fact_ids)) != len(persona.desire_reason_fact_ids)
+            or not set(persona.desire_reason_fact_ids) <= set(support)
+            or persona.desire_reason != DESIRE_REASONS[persona.desire_key]):
+        raise ValueError('Desire requires relevant supporting facts and a fictional rationale')
     if persona.voice_style not in VOICES or persona.signature_sound not in SOUNDS or persona.voice_id != '':
         raise ValueError('Use a fictional voice and sound; voice_id is empty without a configured voice')
     supported = {line for f in facts.values() if f.get('kind') == 'verified' and (line := fact_line(f))}
@@ -153,9 +188,14 @@ def validate_persona(value: dict, dossier: dict) -> Persona:
 
 
 def fake_persona(dossier: dict) -> Persona:
+    support = desire_support(dossier)
+    desire_key = next((key for key, refs in support.items() if refs), None)
+    if desire_key is None:
+        raise ValueError('No facts support a generated desire')
     return validate_persona(dict(building_id=dossier['id'], name=dossier['name'],
         voice_style=VOICES[0], voice_id='', mood_baseline='hopeful',
-        desire_key='public_ground_floor', desire_text=DESIRES['public_ground_floor'],
+        desire_key=desire_key, desire_text=DESIRES[desire_key],
+        desire_reason_fact_ids=support[desire_key][:1], desire_reason=DESIRE_REASONS[desire_key],
         hard_limits=physical_limits(dossier)[:2] if len(physical_limits(dossier)) >= 2 else [],
         hard_limits_empty_reason=None if len(physical_limits(dossier)) >= 2 else EMPTY_LIMITS,
         backstory=[dict(text=FICTION[1], fact_ref=None, fiction=True)],
@@ -168,6 +208,7 @@ def writer_instructions(dossier: dict) -> str:
     # All factual candidates already have IDs and deterministic wording.
     lines = {f['id']: fact_line(f) for f in dossier['facts'] if fact_line(f)}
     return json.dumps(dict(schema=Persona.model_json_schema(), building_id=dossier['id'],
+        desire_support=desire_support(dossier), desire_reasons=DESIRE_REASONS,
         name=dossier['name'], neighbors=dossier['neighbors'], factual_lines=lines,
         physical_constraints=physical_limits(dossier), hard_limits_empty_reason=EMPTY_LIMITS,
         fictional_lines=FICTION, desire_text_by_key=DESIRES, voice_styles=VOICES, signature_sounds=SOUNDS))

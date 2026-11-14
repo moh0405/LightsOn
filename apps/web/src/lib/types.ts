@@ -29,6 +29,8 @@ export interface Persona {
   mood_baseline: "lonely" | "proud" | "bitter" | "anxious" | "hopeful";
   desire_key: string;
   desire_text: string;
+  desire_reason_fact_ids: string[];
+  desire_reason: string;
   hard_limits: HardLimit[];
   hard_limits_empty_reason: string | null;
   backstory: Record<string, unknown>[];

@@ -4,8 +4,8 @@
   "voice_style": "proud and warm",
   "voice_id": "",
   "mood_baseline": "proud",
-  "desire_key": "be_famous_again",
-  "desire_text": "To be a place people dream of visiting.",
+  "desire_key": "public_ground_floor",
+  "desire_text": "A shared ground floor open to everyone.",
   "hard_limits": [
     {
       "fact_ref": "F_233953_grossTypicalFloorSquareFeet",
@@ -143,5 +143,9 @@
     "233918": "That is the kind of ambition I like.",
     "233905": "I suppose I can share the attention."
   },
-  "hard_limits_empty_reason": null
+  "hard_limits_empty_reason": null,
+  "desire_reason": "A fictional wish for shared access, inspired by measured ground-floor space.",
+  "desire_reason_fact_ids": [
+    "F_233953_floor_1_size_sqft"
+  ]
 }

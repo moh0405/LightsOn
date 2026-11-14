@@ -393,7 +393,7 @@ def test_physical_limits_reject_identity_require_two_and_challenge_oversize():
     reply = challenge(pitch, dossier)
     assert 'fit' in reply.line.lower()
     assert persona['hard_limits'][0]['fact_ref'] in reply.fact_ids
-    unknown = {**dossier, 'facts': [], 'floors': []}
+    unknown = {**dossier, 'facts': [f for f in dossier['facts'] if f['key'] == 'floor_1_size_sqft'], 'floors': []}
     empty = fake_persona(unknown).model_dump()
     assert empty['hard_limits'] == [] and empty['hard_limits_empty_reason']
 
@@ -486,3 +486,17 @@ def test_plain_prep_returns_trusted_cache_without_model(tmp_path, monkeypatch):
     monkeypatch.setattr(prep_agent, 'prep_building', lambda *a, **kw: pytest.fail('Read-only route prepared'))
     with TestClient(app) as client:
         assert client.post(f'/api/buildings/{PID}/prep').json() == expected
+
+
+def test_desire_requires_relevant_researched_support():
+    from app.agent.persona import fake_persona, validate_persona, DESIRES
+    dossier = source_dossier()
+    persona = fake_persona(dossier).model_dump()
+    assert persona['desire_reason_fact_ids'] and persona['desire_reason']
+    for refs in [[], ['missing'], [next(f['id'] for f in dossier['facts'] if f['key'] == 'buildingName')]]:
+        bad = {**persona, 'desire_reason_fact_ids': refs}
+        with pytest.raises(ValueError):
+            validate_persona(bad, dossier)
+    bad = {**persona, 'desire_key': 'be_famous_again', 'desire_text': DESIRES['be_famous_again']}
+    with pytest.raises(ValueError):
+        validate_persona(bad, dossier)

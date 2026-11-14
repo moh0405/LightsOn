@@ -36,6 +36,8 @@ class Persona(BaseModel):
     mood_baseline: Literal["lonely", "proud", "bitter", "anxious", "hopeful"]
     desire_key: str
     desire_text: str
+    desire_reason_fact_ids: list[str]
+    desire_reason: str
     hard_limits: list[HardLimit]
     hard_limits_empty_reason: str | None
     backstory: list[dict]  # {text, fact_ref | None, fiction: bool}
