@@ -21,3 +21,4 @@ apps/web/dist/
 
 # local Claude Code settings
 .claude/settings.local.json
+apps/web/e2e/artifacts/
