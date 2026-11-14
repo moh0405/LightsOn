@@ -5,9 +5,9 @@ FloorStatus = Literal['dark', 'partial', 'occupied', 'unknown']
 
 
 def floor_status(available: float, occupied: float, size: float | None, name: str) -> FloorStatus:
-    if name in {'Unknown', 'UnknownFloor'}:
+    if name is None or name in {'Unknown', 'UnknownFloor'}:
         return 'unknown'
-    if available > 0 and size is not None and available >= .9 * size and occupied == 0:
+    if size is not None and available >= .9 * size and occupied == 0:
         return 'dark'
     if available > 0:
         return 'partial'

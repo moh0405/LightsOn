@@ -55,13 +55,9 @@ def build_dossier(db: sqlite3.Connection, pid: str, enums: dict) -> dict | None:
                            available_sqft=a, occupied_sqft=o, source_status=status,
                            game_status='dark' if status == 'dark' else 'lit', fact_ids=fact_ids))
     floors.sort(key=lambda f: (f['number'] is None, f['number'] or 0, f['floor_id']))
-    records, current = db.execute('SELECT count(*),coalesce(sum(current),0) FROM tenancies WHERE property_id=?', (pid,)).fetchone()
-    industries = [dict(industry=r[0], records=r[1]) for r in db.execute('''SELECT c.industry,count(*) FROM tenancies t
-        JOIN companies c ON c.id=t.tenant_id WHERE t.property_id=? AND c.industry != 'Unknown'
-        GROUP BY c.industry ORDER BY count(*) DESC,c.industry''', (pid,))]
-    reasons = [dict(reason=r[0], records=r[1]) for r in db.execute('''SELECT exit_reason,count(*) FROM tenancies
-        WHERE property_id=? AND current=0 GROUP BY exit_reason ORDER BY count(*) DESC,exit_reason''', (pid,))]
-    history = dict(records=records, current=current, top_industries=industries, top_exit_reasons=reasons)
+    history = json.loads(db.execute('SELECT data FROM tenant_history WHERE property_id=?', (pid,)).fetchone()[0])
+    records, current = history['records'], history['current']
+    industries, reasons = history['top_industries'], history['top_exit_reasons']
     fact('tenant_records', records, 'location-occupancy.propertyId', 'records')
     fact('current_tenants', current, 'location-occupancy.toDate', 'records')
     fact('tenant_industries', industries, 'company-detail.profile.industryType')

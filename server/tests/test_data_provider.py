@@ -51,3 +51,11 @@ def test_invalid_mode(monkeypatch):
     monkeypatch.setenv('DATA_MODE', 'invalid')
     with pytest.raises(ValueError, match='Unsupported DATA_MODE'):
         get_provider()
+
+
+def test_fixtures_do_not_need_kit(tmp_path, monkeypatch):
+    monkeypatch.setenv('DATA_MODE', 'fixtures')
+    monkeypatch.setenv('COSTAR_DATA_DIR', str(tmp_path / 'missing-kit'))
+    provider = get_provider()
+    assert len(provider.buildings()) == 7
+    assert provider.dossier('233953')['data_mode'] == 'fixtures'

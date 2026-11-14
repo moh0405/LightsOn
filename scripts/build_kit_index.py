@@ -22,7 +22,7 @@ def build_index(kit: Path) -> Path:
     started = time.monotonic()
     enums = json.loads((kit / 'schemas/enums.json').read_text())
     def decode(enum, value):
-        return enums[enum].get(str(value), 'Unknown')
+        return None if value is None else enums[enum][str(value)]
     target = kit / 'index.sqlite'
     temporary = kit / 'index.build.sqlite'
     temporary.unlink(missing_ok=True)
@@ -36,6 +36,7 @@ def build_index(kit: Path) -> Path:
                            current INTEGER, exit_reason TEXT);
     CREATE TABLE occupied(property_id INTEGER, floor_id INTEGER, area REAL);
     CREATE TABLE companies(id INTEGER PRIMARY KEY, industry TEXT, business_status TEXT);
+    CREATE TABLE tenant_history(property_id INTEGER PRIMARY KEY, data TEXT NOT NULL);
     CREATE TABLE matterport(property_id INTEGER, model_id TEXT, PRIMARY KEY(property_id,model_id));
     CREATE INDEX available_floor ON available(property_id,floor_id);
     CREATE INDEX occupied_floor ON occupied(property_id,floor_id);
@@ -94,6 +95,15 @@ def build_index(kit: Path) -> Path:
             pid = int(row['PropertyId'])
             if pid in office_ids and row['MatterportModelId']:
                 db.execute('INSERT OR IGNORE INTO matterport VALUES (?,?)', (pid, row['MatterportModelId']))
+    for pid in sorted(office_ids):
+        count, current = db.execute('SELECT count(*),coalesce(sum(current),0) FROM tenancies WHERE property_id=?', (pid,)).fetchone()
+        industries = [dict(industry=r[0], records=r[1]) for r in db.execute("""SELECT c.industry,count(*) FROM tenancies t
+            JOIN companies c ON c.id=t.tenant_id WHERE t.property_id=? AND c.industry != 'Unknown'
+            GROUP BY c.industry ORDER BY count(*) DESC,c.industry""", (pid,))]
+        reasons = [dict(reason=r[0], records=r[1]) for r in db.execute("""SELECT exit_reason,count(*) FROM tenancies
+            WHERE property_id=? AND current=0 GROUP BY exit_reason ORDER BY count(*) DESC,exit_reason""", (pid,))]
+        db.execute('INSERT INTO tenant_history VALUES (?,?)', (pid, json.dumps(dict(
+            records=count, current=current, top_industries=industries, top_exit_reasons=reasons))))
     db.commit(); db.close()
     os.replace(temporary, target)
     print(f'Indexed {len(office_ids)} office properties in {time.monotonic() - started:.2f}s: {target}')
