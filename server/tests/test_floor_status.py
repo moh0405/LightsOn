@@ -44,3 +44,25 @@ def test_esperson_real_kit(tmp_path):
             assert size == available == 31503
             assert occupied == 0
             assert floor_status(available, occupied, size, name) == 'dark'
+
+
+@pytest.mark.parametrize('available,occupied,expected', [(31503, None, 'partial'), (0, None, 'occupied'), (31503, 0, 'partial'), (0, 0, 'occupied')])
+def test_current_tenancy_prevents_dark_even_without_area(available, occupied, expected):
+    assert floor_status(available, occupied, 31503, 'SixthFloor', has_current_tenancy=True) == expected
+
+
+def test_one_allen_center_current_tenancy_is_not_dark():
+    kit = ROOT / 'data/costar'
+    if not (kit / 'index.sqlite').is_file():
+        pytest.skip('Real CoStar index absent')
+    import json
+    spec = importlib.util.spec_from_file_location('build_dossier', ROOT / 'scripts/build_dossier.py')
+    module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+    with sqlite3.connect(kit / 'index.sqlite') as db:
+        dossier = module.build_dossier(db, '233935', json.loads((kit / 'schemas/enums.json').read_text()))
+        floor = next(f for f in dossier['floors'] if f['floor_id'] == 611792)
+        assert floor['number'] == 13
+        assert floor['occupied_sqft'] is None
+        assert floor['source_status'] == 'partial'
+        fact = next(f for f in dossier['facts'] if f['id'] in floor['fact_ids'] and f['key'].endswith('_occupied_sqft'))
+        assert fact['value'] is None

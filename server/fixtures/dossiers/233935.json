@@ -179,7 +179,7 @@
       "name": "TwelfthFloor",
       "size_sqft": 27277.0,
       "available_sqft": 20552.0,
-      "occupied_sqft": 6946.0,
+      "occupied_sqft": null,
       "source_status": "partial",
       "game_status": null,
       "fact_ids": [
@@ -194,9 +194,9 @@
       "name": "ThirteenthFloor",
       "size_sqft": 27498.0,
       "available_sqft": 27500.0,
-      "occupied_sqft": 0,
-      "source_status": "dark",
-      "game_status": "dark",
+      "occupied_sqft": null,
+      "source_status": "partial",
+      "game_status": null,
       "fact_ids": [
         "F_233935_floor_13_size_sqft",
         "F_233935_floor_13_available_sqft",
@@ -858,12 +858,12 @@
     {
       "id": "F_233935_floor_12_occupied_sqft",
       "key": "floor_12_occupied_sqft",
-      "value": 6946.0,
+      "value": null,
       "unit": "sqft",
       "source": "costar",
       "source_field": "location-occupancy.spaces.squareFeetOccupied",
       "kind": "verified",
-      "say_as": "6,946.0 sqft"
+      "say_as": null
     },
     {
       "id": "F_233935_floor_14_size_sqft",
@@ -1338,12 +1338,12 @@
     {
       "id": "F_233935_floor_13_occupied_sqft",
       "key": "floor_13_occupied_sqft",
-      "value": 0,
+      "value": null,
       "unit": "sqft",
       "source": "costar",
       "source_field": "location-occupancy.spaces.squareFeetOccupied",
       "kind": "verified",
-      "say_as": "0 sqft"
+      "say_as": null
     },
     {
       "id": "F_233935_floor_17_size_sqft",
@@ -2036,12 +2036,12 @@
     {
       "id": "F_233935_occupied_sqft",
       "key": "occupied_sqft",
-      "value": 608349.0,
+      "value": null,
       "unit": "sqft",
       "source": "costar",
       "source_field": "location-occupancy.spaces.squareFeetOccupied",
       "kind": "verified",
-      "say_as": "608,349.0 sqft"
+      "say_as": null
     },
     {
       "id": "F_233935_matterport_models",

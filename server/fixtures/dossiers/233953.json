@@ -59,7 +59,7 @@
       "name": "FourthFloor",
       "size_sqft": 29926.0,
       "available_sqft": 23063.0,
-      "occupied_sqft": 20484.0,
+      "occupied_sqft": null,
       "source_status": "partial",
       "game_status": null,
       "fact_ids": [
@@ -329,8 +329,8 @@
       "name": "TwentySecondFloor",
       "size_sqft": 4708.0,
       "available_sqft": 0,
-      "occupied_sqft": 0,
-      "source_status": "unknown",
+      "occupied_sqft": null,
+      "source_status": "occupied",
       "game_status": null,
       "fact_ids": [
         "F_233953_floor_22_size_sqft",
@@ -1048,12 +1048,12 @@
     {
       "id": "F_233953_floor_4_occupied_sqft",
       "key": "floor_4_occupied_sqft",
-      "value": 20484.0,
+      "value": null,
       "unit": "sqft",
       "source": "costar",
       "source_field": "location-occupancy.spaces.squareFeetOccupied",
       "kind": "verified",
-      "say_as": "20,484.0 sqft"
+      "say_as": null
     },
     {
       "id": "F_233953_floor_13_size_sqft",
@@ -1288,12 +1288,12 @@
     {
       "id": "F_233953_floor_22_occupied_sqft",
       "key": "floor_22_occupied_sqft",
-      "value": 0,
+      "value": null,
       "unit": "sqft",
       "source": "costar",
       "source_field": "location-occupancy.spaces.squareFeetOccupied",
       "kind": "verified",
-      "say_as": "0 sqft"
+      "say_as": null
     },
     {
       "id": "F_233953_floor_25_size_sqft",
@@ -1608,12 +1608,12 @@
     {
       "id": "F_233953_occupied_sqft",
       "key": "occupied_sqft",
-      "value": 195624.0,
+      "value": null,
       "unit": "sqft",
       "source": "costar",
       "source_field": "location-occupancy.spaces.squareFeetOccupied",
       "kind": "verified",
-      "say_as": "195,624.0 sqft"
+      "say_as": null
     },
     {
       "id": "F_233953_matterport_models",

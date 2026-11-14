@@ -43,8 +43,12 @@ def build_dossier(db: sqlite3.Connection, pid: str, enums: dict) -> dict | None:
     numbers = floor_numbers(enums); floors = []
     for floor_id, name, size in db.execute('SELECT floor_id,name,size FROM floors WHERE property_id=? ORDER BY floor_id', (pid,)):
         a = db.execute('SELECT coalesce(sum(area),0) FROM available WHERE property_id=? AND floor_id=?', (pid, floor_id)).fetchone()[0]
-        o = db.execute('SELECT coalesce(sum(area),0) FROM occupied WHERE property_id=? AND floor_id=?', (pid, floor_id)).fetchone()[0]
-        status = floor_status(a, o, size, name); number = numbers.get(name)
+        current, known, total = db.execute(
+            'SELECT count(*),count(area),sum(area) FROM occupied WHERE property_id=? AND floor_id=?',
+            (pid, floor_id)).fetchone()
+        # An unknown tenancy area must never become evidence of no occupancy.
+        o = None if known < current else (total or 0)
+        status = floor_status(a, o, size, name, has_current_tenancy=current > 0); number = numbers.get(name)
         prefix = f'floor_{number}' if number is not None else f'floor_id_{floor_id}'
         available_fields = [r[0] for r in db.execute('SELECT DISTINCT source_field FROM available WHERE property_id=? AND floor_id=? ORDER BY source_field', (pid, floor_id))]
         available_source = 'commercial-listing-summary.forLeaseSummary.spaces.' + '|'.join(available_fields or ['squareFeetMax|squareFeetMin'])
@@ -65,7 +69,8 @@ def build_dossier(db: sqlite3.Connection, pid: str, enums: dict) -> dict | None:
     # Include unmatched-floor space in building totals, never in an arbitrary floor.
     for table, key, field in [('available', 'available_sqft', 'commercial-listing-summary.forLeaseSummary.spaces.squareFeetMax|squareFeetMin'),
                               ('occupied', 'occupied_sqft', 'location-occupancy.spaces.squareFeetOccupied')]:
-        total = db.execute(f'SELECT coalesce(sum(area),0) FROM {table} WHERE property_id=?', (pid,)).fetchone()[0]
+        count, known, area = db.execute(f'SELECT count(*),count(area),sum(area) FROM {table} WHERE property_id=?', (pid,)).fetchone()
+        total = None if table == 'occupied' and known < count else (area or 0)
         fact(key, total, field, 'sqft')
     models = [dict(model_id=r[0], caption=None) for r in db.execute('SELECT model_id FROM matterport WHERE property_id=? ORDER BY model_id', (pid,))]
     fact('matterport_models', [m['model_id'] for m in models], 'commercial-properties.csv.MatterportModelId')

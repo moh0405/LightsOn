@@ -4,14 +4,17 @@ from typing import Literal
 FloorStatus = Literal['dark', 'partial', 'occupied', 'unknown']
 
 
-def floor_status(available: float, occupied: float, size: float | None, name: str) -> FloorStatus:
+def floor_status(available: float, occupied: float | None, size: float | None, name: str,
+                 *, has_current_tenancy: bool = False) -> FloorStatus:
     if name is None or name in {'Unknown', 'UnknownFloor'}:
         return 'unknown'
+    if has_current_tenancy:
+        return 'partial' if available > 0 else 'occupied'
     if size is not None and available >= .9 * size and occupied == 0:
         return 'dark'
     if available > 0:
         return 'partial'
-    if occupied > 0:
+    if occupied is not None and occupied > 0:
         return 'occupied'
     return 'unknown'
 

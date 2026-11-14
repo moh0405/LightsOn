@@ -704,7 +704,7 @@
       "name": "FortySeventhFloor",
       "size_sqft": 10000.0,
       "available_sqft": 3573.0,
-      "occupied_sqft": 5000.0,
+      "occupied_sqft": null,
       "source_status": "partial",
       "game_status": null,
       "fact_ids": [
@@ -2388,12 +2388,12 @@
     {
       "id": "F_233905_floor_47_occupied_sqft",
       "key": "floor_47_occupied_sqft",
-      "value": 5000.0,
+      "value": null,
       "unit": "sqft",
       "source": "costar",
       "source_field": "location-occupancy.spaces.squareFeetOccupied",
       "kind": "verified",
-      "say_as": "5,000.0 sqft"
+      "say_as": null
     },
     {
       "id": "F_233905_floor_49_size_sqft",
@@ -3120,12 +3120,12 @@
     {
       "id": "F_233905_occupied_sqft",
       "key": "occupied_sqft",
-      "value": 877590.0,
+      "value": null,
       "unit": "sqft",
       "source": "costar",
       "source_field": "location-occupancy.spaces.squareFeetOccupied",
       "kind": "verified",
-      "say_as": "877,590.0 sqft"
+      "say_as": null
     },
     {
       "id": "F_233905_matterport_models",
