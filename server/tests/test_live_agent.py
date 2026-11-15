@@ -1009,6 +1009,7 @@ def test_challenge_quotes_own_quantity(dossier, line):
 
 @pytest.mark.parametrize('line', [
     'Your 40,001 is too big.', 'Your 40,000 feet is too tall.',
+    'Your 40,000 cars is too many.', 'Your 40,000 square meters is too big.',
     'My typical floor gives you 40,000 square feet.', 'I have 40,000 square feet.',
 ])
 def test_pitch_quantity_cannot_support_building_claim(dossier, line):

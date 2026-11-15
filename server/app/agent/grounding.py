@@ -143,9 +143,14 @@ def repair_citations(line: str, fact_ids: list[str], dossier: dict, quoted: list
     return refs
 
 
-def pitch_quantity(value: float, unit: str | None, pitched: set[tuple[float, str | None]], before: str) -> bool:
+def pitch_quantity(value: float, unit: str | None, pitched: set[tuple[float, str | None]], before: str, after: str) -> bool:
     # A missing unit may borrow the player's unit; an explicit wrong unit may not.
     if not any(value == v and u is not None and (unit is None or unit == u) for v, u in pitched):
+        return False
+    # An unrecognized explicit unit (cars, meters, etc.) is not an omitted unit.
+    if unit is None and not re.match(
+            r"(?:\s*$|\s*[,.;:!?—–)]|\s+(?:is|are|was|were|would|could|should|will|won.t|can.t|seems?|looks?|sounds?|feels?)\b)",
+            after, re.I):
         return False
     clause = re.split(r'[.!?;:\u2014\u2013]', before)[-1]
     # Quoting a player never establishes building dimensions or inventory.
@@ -218,7 +223,7 @@ def check_line(line: str, fact_ids: list[str], dossier: dict, impact: dict | Non
                 supported = True
             if value == 1000 and fact['key'] == 'parkingRatio' and re.search(r'per\s*$', normalized[:match.start()], re.I):
                 supported = True
-        if pitch_quantity(value, unit, pitched, normalized[:match.start()]):
+        if pitch_quantity(value, unit, pitched, normalized[:match.start()], normalized[match.end():]):
             supported = True
         if game_number(normalized, match.start(), match.end(), value, unit):
             supported = True
