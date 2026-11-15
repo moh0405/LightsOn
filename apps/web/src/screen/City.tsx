@@ -10,6 +10,7 @@ import { useGame } from "../lib/store";
 import { HoverCard } from "./overlays/HoverCard";
 import { Sparks } from "./Sparks";
 import { FLASH_MS, firstFloorAt, INTRO_DIVE_MS, lightUpDuration } from "./effects";
+import { footprint, occluders, planCamera, ROUND_PITCH, targetHeight } from "./camera";
 
 declare global { interface Window { __lightsOnMap?: CityMap } }
 const CENTER: [number, number] = [-95.3650891, 29.7588018];
@@ -28,6 +29,7 @@ export function City() {
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [hovers, setHovers] = useState<Hover[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const geo = useRef<{ city?: FeatureCollection; floors?: FeatureCollection }>({});
   const factError = useCallback(() => setError("Building facts are unavailable. You can still aim and wake a building."), []);
 
   useEffect(() => {
@@ -62,15 +64,21 @@ export function City() {
       ]).then(([city, floors]) => {
         if (!active) return;
         if (city.status === "fulfilled") {
+          city.value.features.forEach((f, i) => { f.properties = { ...f.properties, _i: i }; });
+          geo.current.city = city.value;
           map.addSource("city", { type: "geojson", data: city.value });
           map.addLayer({ id: "context", type: "fill-extrusion", source: "city", paint: { "fill-extrusion-color": "#252e40", "fill-extrusion-height": ["get", "height_m"], "fill-extrusion-opacity": 0.65 } });
         }
         if (floors.status === "fulfilled") {
+          geo.current.floors = floors.value;
           map.addSource("floors", { type: "geojson", data: floors.value });
           map.addLayer({ id: "floors", type: "fill-extrusion", source: "floors", paint: {
             "fill-extrusion-base": ["get", "base_m"], "fill-extrusion-height": ["get", "height_m"], "fill-extrusion-color": FLOOR_COLOR,
           } });
         }
+        // Context towers between the round camera and the hero are drawn after the floors as glass,
+        // so the light-up stays visible (filters are set per hero below).
+        if (city.status === "fulfilled") map.addLayer({ id: "context-faded", type: "fill-extrusion", source: "city", filter: ["in", ["get", "_i"], ["literal", []]], paint: { "fill-extrusion-color": "#3a4560", "fill-extrusion-height": ["get", "height_m"], "fill-extrusion-opacity": 0.12 } });
         if (city.status === "rejected" || floors.status === "rejected") setError("Skyline data is unavailable. Use the Wake buttons on your phone.");
         setReady(true);
       });
@@ -93,10 +101,23 @@ export function City() {
   useEffect(() => {
     const map = mapRef.current;
     if (!ready || !map) return;
+    const fade = (indexes: number[]) => {
+      if (!map.getLayer("context") || !map.getLayer("context-faded")) return;
+      map.setFilter("context", indexes.length ? ["!", ["in", ["get", "_i"], ["literal", indexes]]] : null);
+      map.setFilter("context-faded", ["in", ["get", "_i"], ["literal", indexes]]);
+    };
     if (buildingId) {
       const building = buildings.find((b) => String(b.id) === buildingId);
-      if (building?.lng != null && building.lat != null) map.flyTo({ center: [building.lng, building.lat], zoom: 17.5, pitch: 60, duration: INTRO_DIVE_MS, essential: true });
+      if (building?.lng != null && building.lat != null) {
+        const { city, floors } = geo.current;
+        const shape = floors ? footprint(floors, buildingId) : null;
+        const center = shape?.center ?? [building.lng, building.lat];
+        const plan = city ? planCamera(occluders(city, center[0], center[1]), floors ? targetHeight(floors, buildingId) : 0, ROUND_PITCH, shape?.radius ?? 0) : { bearing: 0, faded: [] };
+        fade(plan.faded);
+        map.flyTo({ center, zoom: 17.5, pitch: ROUND_PITCH, bearing: plan.bearing, duration: INTRO_DIVE_MS, essential: true });
+      }
     } else if (phase === "EXPLORE" || phase === "LOBBY") {
+      fade([]);
       map.flyTo({ center: CENTER, zoom: 15.5, pitch: 60, duration: INTRO_DIVE_MS, essential: true });
     }
   }, [buildingId, buildings, ready, phase === "EXPLORE" || phase === "LOBBY"]);
@@ -161,7 +182,7 @@ export function City() {
   useEffect(() => {
     const map = mapRef.current;
     if (!revival || !ready || !map) return;
-    const timer = setTimeout(() => map.easeTo({ zoom: 16.5, pitch: 60, duration: 1800 }), lightUpDuration(revival.floors));
+    const timer = setTimeout(() => map.easeTo({ zoom: 17, pitch: ROUND_PITCH, duration: 1800 }), lightUpDuration(revival.floors));
     return () => clearTimeout(timer);
   }, [revival, ready]);
 
