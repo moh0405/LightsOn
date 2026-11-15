@@ -13,7 +13,7 @@ from .rooms import Conn, Room, RoomError, RoomManager
 log = logging.getLogger("lights_on.commands")
 
 ORIGINS = {"web", "voice", "imessage", "host"}
-HOST_ACTIONS = {"skip_phase", "reset_round", "reset_room", "set_data_mode"}
+HOST_ACTIONS = {"skip_phase", "reset_round", "reset_room", "set_data_mode", "walk_inside"}
 DATA_MODES = {"kit", "fixtures"}
 NICKNAME_MAX = 16
 
@@ -116,7 +116,28 @@ class CommandService:
         action = cmd.get("action")
         if action not in HOST_ACTIONS:
             raise RoomError("bad_payload", f"Unknown host action: {action!r}.")
-        if action == "skip_phase":
+        if action == "walk_inside":
+            if origin != "host":
+                raise RoomError("bad_origin", "Interior tours must be requested by the host.")
+            opened = cmd.get("open")
+            if type(opened) is not bool:
+                raise RoomError("bad_payload", "open must be a boolean.")
+            building_id = cmd.get("building_id") or room.building_id
+            model_id = cmd.get("model_id")
+            if opened:
+                if not isinstance(building_id, str):
+                    raise RoomError("bad_payload", "Choose a building for the interior tour.")
+                dossier = provider_for_mode(room.data_mode).dossier(building_id)
+                if dossier is None:
+                    raise RoomError("bad_payload", "Unknown building.")
+                models = {m['model_id'] for m in (dossier.get('media') or {}).get('matterport', [])}
+                if model_id is not None and (not isinstance(model_id, str) or model_id not in models):
+                    raise RoomError("bad_payload", "Unknown interior tour for this building.")
+            else:
+                building_id, model_id = None, None
+            await room.broadcast("tour_requested", {"building_id": building_id, "model_id": model_id,
+                                                     "open": opened}, to="screen")
+        elif action == "skip_phase":
             await room.advance()
         elif action == "reset_round":
             await room.reset_round()
@@ -136,7 +157,11 @@ class CommandService:
             rooms = list(self.manager.rooms.values())
             for active in rooms:
                 active.data_mode = mode
-                active.save_players()
+                # Reconnect/restore reads the process mode. Avoid rebuilding every
+                # historical room's validated dossiers when nobody is connected.
+                if active.conns:
+                    active.save_players()
             for active in rooms:
-                await active.broadcast("room_state", active.snapshot())
+                if active.conns:
+                    await active.broadcast("room_state", active.snapshot())
         return {"phase": room.phase}
