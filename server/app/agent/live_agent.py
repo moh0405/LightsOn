@@ -37,6 +37,35 @@ BLOCK = re.compile(r'\b(?:porn(?:ography)?|sexual|sex|nude|naked|slut|fuck\w*|sh
 INJECT = re.compile(r'ignore\b.{0,50}\b(?:rules|instructions|previous)|\b(?:system prompt|developer message|pick me|override|jailbreak)\b|</?\s*(?:pitch|system|assistant)\b', re.I | re.S)
 
 
+# Strip modern chat slang before grounding; never add facts or alter cited numbers.
+OFF_VOICE = re.compile(r'\b(?:bruh|lol|fr)\b[,!]?|[\U0001F000-\U0001FAFF\u2600-\u27BF\uFE0F\u200D]', re.I)
+
+
+def prepared_voice(line: str) -> str:
+    return re.sub(r' +', ' ', OFF_VOICE.sub('', line)).strip()
+
+
+def repair_scores(proposal, candidates, sources, names, dossier, city):
+    """The server owns eligibility; ambiguous aliases receive deterministic scores."""
+    expected = {c.player_id for c in candidates}
+    mapped = {}
+    # Canonical keys win over nickname/real-id aliases regardless of model order.
+    for score in proposal.scores:
+        if score.player_id in expected:
+            mapped.setdefault(score.player_id, score)
+    for score in proposal.scores:
+        if score.player_id in expected:
+            continue
+        matches = [c.player_id for c, p in zip(candidates, sources)
+                   if score.player_id == p.player_id or score.player_id == names.get(p.player_id)]
+        if len(matches) == 1:
+            mapped.setdefault(matches[0], score.model_copy(update={'player_id': matches[0]}))
+    defaults = fake_agent.verdict(candidates, dossier, city).scores
+    scores = [mapped.get(c.player_id, default) for c, default in zip(candidates, defaults)]
+    winner = max(scores, key=lambda s: (s.data_fit + s.neighborhood_fit + s.creativity + s.charm, s.creativity))
+    return proposal.model_copy(update={'scores': scores, 'winner_player_id': winner.player_id})
+
+
 def safety_reason(text: str) -> str | None:
     if INJECT.search(text):
         return 'injection'
@@ -256,6 +285,8 @@ class LiveAgent:
                             self.schema_failures += 1
                             raise ValueError('Challenge player mismatch')
                         candidate = result.challenges[0]
+                        candidate = candidate.model_copy(update={'line': prepared_voice(candidate.line),
+                            'counteroffer': prepared_voice(candidate.counteroffer)})
                         candidate = candidate.model_copy(update={'fact_ids': repair_citations(
                             candidate.line + ' ' + candidate.counteroffer, candidate.fact_ids, dossier, [p.text])})
                         issues = await self.grounded_each([(candidate.line + ' ' + candidate.counteroffer, candidate.fact_ids)],
@@ -306,6 +337,9 @@ class LiveAgent:
                               impact_sqft=None, names: dict[str, str] | None = None):
         started = monotonic()
         deadline = started + self.verdict_timeout
+        # A revision alone is not an entry: actions.py requires an original pitch.
+        eligible = {p.player_id for p in originals}
+        revisions = [p for p in revisions if p.player_id in eligible]
         pitches = originals + revisions
         # Candidate aliases let one VerdictProposal score originals AND revisions fresh.
         # They are mapped back before actions.py receives the two proposal batches.
@@ -324,14 +358,15 @@ class LiveAgent:
             content = pitch_data(safe, nicknames) + '\nScore every candidate separately, including originals and revisions. Challenges: ' + json.dumps([c.model_dump() for c in challenges])
             for attempt in range(2):
                 proposal = await self.call('verdict', system, content, VerdictProposal, deadline)
-                ids = [s.player_id for s in proposal.scores]
-                if (len(ids) != len(set(ids)) or set(ids) != {p.player_id for p in safe}
-                        or proposal.winner_player_id not in ids):
-                    self.schema_failures += 1
-                    diagnostic('rejected', 'invalid_schema', step='verdict', attempt=attempt + 1,
-                               building_id=dossier['id'], line=proposal.reason_line,
-                               fact_ids=proposal.fact_ids, reason='Verdict candidates mismatch')
-                    raise ValueError('Verdict candidates mismatch')
+                supplied_ids = [s.player_id for s in proposal.scores]
+                safe_sources = [p for p in pitches if not safety_reason(p.text)]
+                proposal = repair_scores(proposal, safe, safe_sources, names, dossier, city)
+                if supplied_ids != [s.player_id for s in proposal.scores]:
+                    diagnostic('repaired', 'candidate_ids', step='verdict',
+                               building_id=dossier['id'], score_ids=supplied_ids,
+                               expected_ids=[p.player_id for p in safe])
+                proposal = proposal.model_copy(update={'reason_line': prepared_voice(proposal.reason_line),
+                    'desire_reveal': prepared_voice(proposal.desire_reveal)})
                 # This round's housing estimate (the same one actions.py attaches) may be
                 # quoted, as "looks like", only when the proposed winner pitched housing.
                 winner = next(source for c, source in zip(candidates, pitches)

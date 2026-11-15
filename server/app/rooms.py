@@ -362,7 +362,8 @@ class Room:
                     'audio_url': None, 'mood': self.mood})
         agent = live_agent.LiveAgent(emit=trace, on_challenge=publish_challenge)
         self._last_live_agent = agent
-        originals, revised = list(self.pitches.values()), list(self.revisions.values())
+        originals = list(self.pitches.values())
+        revised = [p for p in self.revisions.values() if p.player_id in self.pitches]
         memory = f'{self.city.buildings_revived} buildings revived in this game; {self.city.sqft_reimagined} square feet reimagined.'
         try:
             if phase == 'CHALLENGE':
