@@ -86,7 +86,6 @@ async def test_fake_bedrock_full_round_publishes_intro_challenges_recorded_verdi
     import json
     from app.agent.live_agent import Bedrock
     from app.rooms import Room, Conn
-    from app.agent.persona import fact_line
 
     monkeypatch.setenv('AGENT_MODE', 'live')
     monkeypatch.setenv('DEMO_MODE', '1')
@@ -98,10 +97,17 @@ async def test_fake_bedrock_full_round_publishes_intro_challenges_recorded_verdi
                                for row in json.loads(content)]}
         if step == 'challenge':
             player = re.search(r'player="([^"]+)"', content)[1]
-            line = f"{fact_line(fact)} Darling, give this idea a little substance."
+            # Exact model dialogue from the single paid confirmation; claim responses
+            # are deliberately supported here to test publication independently.
+            gym = '>gym</pitch>' in content
+            line = ('My typical floor gives you 22,189 square feet—a gym needs purpose, footprint, and a pitch.'
+                    if gym else "8 dark floors, darling—but a studio needs light. Where's your daytime draw?")
+            offer = ("Show me your member count and equipment layout; I'll light up the right floor for you."
+                     if gym else "Show me how evening classes fill those dark hours, and we'll talk about what the neighbors actually need.")
+            ref = 'F_233953_grossTypicalFloorSquareFeet' if gym else 'F_233953_dark_floor_count'
             replies[player] = line
-            return {'challenges': [dict(player_id=player, line=line, fact_ids=[fact['id']],
-                counteroffer='Kid, propose a footprint and a welcome for your neighbors.', category_guess='wildcard')]}
+            return {'challenges': [dict(player_id=player, line=line, fact_ids=[ref],
+                counteroffer=offer, category_guess='wildcard')]}
         proposal = fake_agent.verdict([pitch('gym', 'Ann')], dossier, City()).model_dump()
         proposal.update(reason_line=RECORDED, fact_ids=[fact['id']])
         return proposal
