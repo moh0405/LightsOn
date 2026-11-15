@@ -95,13 +95,14 @@ test("hero's lit floors are visible after the dive", async ({ browser, baseURL }
     const hidden = await screen.evaluate((hero) => {
       const map = window.__lightsOnMap!;
       const filter = ["!", ["all", ["==", ["get", "building_id"], hero], ["==", ["get", "source_status"], "dark"]]];
-      map.setFilter("floors", filter as never);
+      // The facade bands and glow shell are drawn over the floor volume; hide all three.
+      for (const layer of ["floors", "windows", "floor-halos"]) map.setFilter(layer, filter as never);
       return map.getFilter("floors") !== null;
     }, HERO);
     expect(hidden).toBe(true);
     await settle();
     const without = await field.screenshot();
-    await screen.evaluate(() => window.__lightsOnMap!.setFilter("floors", null));
+    await screen.evaluate(() => { for (const layer of ["floors", "windows", "floor-halos"]) window.__lightsOnMap!.setFilter(layer, null); });
     const visible = await changedPixels(browser, lit, without);
     console.log(`visible lit-floor pixels: ${visible}`);
     // Before the fix a context tower left a sliver of the lit floors on screen.

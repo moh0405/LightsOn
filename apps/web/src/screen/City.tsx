@@ -9,25 +9,27 @@ import { getData, prefetchDossiers, type Building } from "../lib/buildings";
 import { useGame } from "../lib/store";
 import { HoverCard } from "./overlays/HoverCard";
 import { Sparks } from "./Sparks";
+import { SkylineAccents } from "./SkylineAccents";
 import { FLASH_MS, firstFloorAt, INTRO_DIVE_MS, lightUpDuration } from "./effects";
 import { fadedOccluders, frameCamera, frameVolume, occluders, planCamera, ROUND_PITCH } from "./camera";
+import { facadeBands, floorHalos, groundGrid, roofEdges, smoothFlight, stickyHit, type Hit } from "./skyline";
 
 declare global { interface Window { __lightsOnMap?: CityMap; __lightsOnFrameBuilding?: (id: string) => void } }
 const CENTER: [number, number] = [-95.3650891, 29.7588018];
 const FLOOR_COLOR = floorColorExpression({});
-interface Hover { player: string; building: string; color: string }
+interface Hover { player: string; building: string; color: string; floor: number | null }
 
 export function City({ onHover }: { onHover?: (id: string | null) => void }) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<CityMap | null>(null);
   const { pointers, players, phase, buildingId, revivedColors, revival, dataMode, hasState } = useGame();
-  const current = useRef({ pointers, phase });
-  current.current = { pointers, phase };
+  const current = useRef({ pointers, phase, hovers: [] as Hover[] });
   const [ready, setReady] = useState(false);
   const [flashPoint, setFlashPoint] = useState<{ x: number; y: number } | null>(null);
   const [factsReady, setFactsReady] = useState(false);
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [hovers, setHovers] = useState<Hover[]>([]);
+  current.current = { pointers, phase, hovers };
   const [error, setError] = useState<string | null>(null);
   const geo = useRef<{ city?: FeatureCollection; floors?: FeatureCollection }>({});
   const reframe = useRef<(duration?: number) => void>(() => {});
@@ -55,7 +57,10 @@ export function City({ onHover }: { onHover?: (id: string | null) => void }) {
     try {
       map = new CityMap({ container: container.current!, center: CENTER, zoom: 15.5, pitch: 60,
         attributionControl: false, interactive: false,
-        style: { version: 8, sources: {}, layers: [{ id: "night", type: "background", paint: { "background-color": "#10131c" } }] },
+        pixelRatio: Math.min(window.devicePixelRatio, 1.5),
+        style: { version: 8, light: { anchor: "viewport", color: "#f6f8ff", position: [1.5, 205, 58], intensity: 0.45 },
+          sky: { "sky-color": "#070d1c", "horizon-color": "#354363", "fog-color": "#17243a", "sky-horizon-blend": 0.75, "horizon-fog-blend": 0.65 },
+          sources: {}, layers: [{ id: "night", type: "background", paint: { "background-color": "#101b2b" } }] },
       });
     } catch { setError("Skyline unavailable. Use the Wake buttons on your phone."); return; }
     mapRef.current = map;
@@ -69,8 +74,13 @@ export function City({ onHover }: { onHover?: (id: string | null) => void }) {
         if (city.status === "fulfilled") {
           city.value.features.forEach((f, i) => { f.properties = { ...f.properties, _i: i }; });
           geo.current.city = city.value;
+          map.addSource("ground-grid", { type: "geojson", data: groundGrid(city.value) });
+          map.addLayer({ id: "ground-grid", type: "line", source: "ground-grid", paint: { "line-color": "#536984", "line-width": 1, "line-opacity": 0.18 } });
           map.addSource("city", { type: "geojson", data: city.value });
-          map.addLayer({ id: "context", type: "fill-extrusion", source: "city", paint: { "fill-extrusion-color": "#252e40", "fill-extrusion-height": ["get", "height_m"], "fill-extrusion-opacity": 0.65 } });
+          map.addLayer({ id: "ground-edges", type: "line", source: "city", paint: { "line-color": "#34435c", "line-width": 1, "line-opacity": 0.45 } });
+          map.addLayer({ id: "context", type: "fill-extrusion", source: "city", paint: { "fill-extrusion-color": "#29394e", "fill-extrusion-height": ["get", "height_m"], "fill-extrusion-opacity": 1, "fill-extrusion-vertical-gradient": true } });
+          map.addSource("roof-edges", { type: "geojson", data: roofEdges(city.value) });
+          map.addLayer({ id: "roof-edges", type: "fill-extrusion", source: "roof-edges", paint: { "fill-extrusion-color": "#52647e", "fill-extrusion-base": ["get", "base_m"], "fill-extrusion-height": ["get", "height_m"], "fill-extrusion-opacity": 0.55 } });
         }
         if (floors.status === "fulfilled") {
           geo.current.floors = floors.value;
@@ -81,28 +91,42 @@ export function City({ onHover }: { onHover?: (id: string | null) => void }) {
           map.addLayer({ id: "floors-faded", type: "fill-extrusion", source: "floors", filter: ["in", ["get", "building_id"], ["literal", []]], paint: {
             "fill-extrusion-base": ["get", "base_m"], "fill-extrusion-height": ["get", "height_m"], "fill-extrusion-color": FLOOR_COLOR, "fill-extrusion-opacity": 0.12,
           } });
+          map.addSource("halos", { type: "geojson", data: floorHalos(floors.value) });
+          map.addLayer({ id: "floor-halos", type: "fill-extrusion", source: "halos", paint: {
+            "fill-extrusion-base": ["get", "base_m"], "fill-extrusion-height": ["get", "height_m"],
+            "fill-extrusion-color": FLOOR_COLOR, "fill-extrusion-opacity": 0.2, "fill-extrusion-vertical-gradient": false,
+          } });
+          map.addSource("windows", { type: "geojson", data: facadeBands(floors.value) });
+          map.addLayer({ id: "windows", type: "fill-extrusion", source: "windows", paint: {
+            "fill-extrusion-base": ["get", "base_m"], "fill-extrusion-height": ["get", "height_m"],
+            "fill-extrusion-color": FLOOR_COLOR, "fill-extrusion-vertical-gradient": false,
+          } });
         }
         // Context towers between the round camera and the hero are drawn after the floors as glass,
         // so the light-up stays visible (filters are set per hero below).
         if (city.status === "fulfilled") map.addLayer({ id: "context-faded", type: "fill-extrusion", source: "city", filter: ["in", ["get", "_i"], ["literal", []]], paint: { "fill-extrusion-color": "#3a4560", "fill-extrusion-height": ["get", "height_m"], "fill-extrusion-opacity": 0.12 } });
         if (city.status === "rejected" || floors.status === "rejected") setError("Skyline data is unavailable. Use the Wake buttons on your phone.");
-        overview.current = frameVolume([geo.current.city, geo.current.floors].filter((g): g is FeatureCollection => !!g));
+        // Attract frames the wakeable towers so they fill the projector; the context city runs off the edges.
+        overview.current = frameVolume(geo.current.floors ? [geo.current.floors] : geo.current.city ? [geo.current.city] : []);
         setReady(true);
       });
     });
     const resize = new ResizeObserver(() => { map.resize(); reframe.current(0); });
     resize.observe(container.current!);
     let last = performance.now();
-    const orbit = setInterval(() => {
+    let orbit = 0;
+    const rotate = () => {
       const now = performance.now();
-      if (["EXPLORE", "LOBBY"].includes(current.current.phase) && !testFrame.current && !map.isMoving() && overview.current) {
+      if (["EXPLORE", "LOBBY"].includes(current.current.phase) && !current.current.hovers.length && !testFrame.current && !map.isMoving() && overview.current && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
         const canvas = map.getCanvas();
         map.jumpTo(frameCamera(overview.current, canvas.clientWidth, canvas.clientHeight, map.getBearing() + (now - last) * 0.0015, ROUND_PITCH, map.getVerticalFieldOfView()));
       }
       last = now;
-    }, 100);
+      orbit = requestAnimationFrame(rotate);
+    };
+    orbit = requestAnimationFrame(rotate);
     return () => {
-      active = false; resize.disconnect(); clearInterval(orbit); mapRef.current = null;
+      active = false; resize.disconnect(); cancelAnimationFrame(orbit); mapRef.current = null;
       if (window.__lightsOnMap === map) delete window.__lightsOnMap;
       map.remove();
     };
@@ -115,9 +139,12 @@ export function City({ onHover }: { onHover?: (id: string | null) => void }) {
       if (!map.getLayer("context") || !map.getLayer("context-faded")) return;
       map.setFilter("context", indexes.length ? ["!", ["in", ["get", "_i"], ["literal", indexes]]] : null);
       map.setFilter("context-faded", ["in", ["get", "_i"], ["literal", indexes]]);
+      if (map.getLayer("roof-edges")) map.setFilter("roof-edges", indexes.length ? ["!", ["in", ["get", "_i"], ["literal", indexes]]] : null);
       if (map.getLayer("floors-faded")) {
         map.setFilter("floors", floorIds.length ? ["!", ["in", ["get", "building_id"], ["literal", floorIds]]] : null);
         map.setFilter("floors-faded", ["in", ["get", "building_id"], ["literal", floorIds]]);
+        map.setFilter("windows", floorIds.length ? ["!", ["in", ["get", "building_id"], ["literal", floorIds]]] : null);
+          if (map.getLayer("floor-halos")) map.setFilter("floor-halos", floorIds.length ? ["!", ["in", ["get", "building_id"], ["literal", floorIds]]] : null);
       }
     };
     const dive = (id: string, duration = INTRO_DIVE_MS, settle = false) => {
@@ -134,7 +161,7 @@ export function City({ onHover }: { onHover?: (id: string | null) => void }) {
       const canvas = map.getCanvas();
       const camera = frameCamera(volume, canvas.clientWidth, canvas.clientHeight, plan.bearing, ROUND_PITCH, map.getVerticalFieldOfView(), Math.min(220, canvas.clientHeight * 0.34));
       if (settle) map.easeTo({ ...camera, zoom: camera.zoom - 0.15, duration, essential: true });
-      else map.flyTo({ ...camera, duration, essential: true });
+      else map.flyTo({ ...camera, duration, easing: smoothFlight, essential: true });
     };
     const update = (duration = INTRO_DIVE_MS) => {
       if (buildingId) dive(buildingId, duration);
@@ -156,30 +183,50 @@ export function City({ onHover }: { onHover?: (id: string | null) => void }) {
     const map = mapRef.current;
     if (!ready || !map?.getLayer("floors")) return;
     const outlined = new Map<string, string>();
+    const hits = new Map<string, Hit>();
+    let lastQuery = -Infinity;
     const update = () => {
+      const now = performance.now();
+      if (now - lastQuery < 40) return;
+      lastQuery = now;
       const next: Hover[] = [];
       for (const [player, p] of Object.entries(current.current.pointers)) {
         // The visible beam is 22 px wide. A small hit area keeps its edge
         // responsive while the attract camera orbits and touch rounds pixels.
         const x = p.x * map.getCanvas().clientWidth, y = p.y * map.getCanvas().clientHeight;
         const feature = map.queryRenderedFeatures([[x - 6, y - 6], [x + 6, y + 6]], { layers: ["floors"] })[0];
-        const building = feature?.properties?.building_id as string | undefined;
+        const id = feature?.properties?.building_id;
+        const hit = ["LOBBY", "EXPLORE"].includes(current.current.phase) ? stickyHit(hits.get(player) ?? null, id ? { building: String(id), floor: typeof feature.properties?.floor_number === "number" ? feature.properties.floor_number : null } : null, now) : null;
+        if (hit) hits.set(player, hit); else hits.delete(player);
+        const building = hit?.building;
         const layer = `hover-${player}`;
-        if (!map.getLayer(layer)) map.addLayer({ id: layer, type: "line", source: "floors", filter: ["==", ["get", "building_id"], ""], paint: { "line-color": p.color, "line-width": 3, "line-offset": -3 } });
-        if (outlined.get(layer) !== (building ?? "")) {
-          map.setFilter(layer, ["==", ["get", "building_id"], building ?? ""]);
-          outlined.set(layer, building ?? "");
+        if (!map.getLayer(layer)) {
+          map.addLayer({ id: layer, type: "line", source: "floors", filter: ["==", ["get", "building_id"], ""], paint: { "line-color": p.color, "line-width": 2, "line-blur": 0.5 } });
+          map.addLayer({ id: `${layer}-glow`, type: "fill-extrusion", source: "floors", filter: ["==", ["get", "building_id"], ""], paint: { "fill-extrusion-base": ["get", "base_m"], "fill-extrusion-height": ["get", "height_m"], "fill-extrusion-color": p.color, "fill-extrusion-opacity": 0.18, "fill-extrusion-translate": [0, -5], "fill-extrusion-translate-anchor": "viewport" } });
+          map.addLayer({ id: `${layer}-floor`, type: "fill-extrusion", source: "windows", filter: ["==", ["get", "building_id"], ""], paint: { "fill-extrusion-base": ["get", "base_m"], "fill-extrusion-height": ["get", "height_m"], "fill-extrusion-color": p.color, "fill-extrusion-opacity": 0.85, "fill-extrusion-vertical-gradient": false } });
         }
-        if (building) next.push({ player, building: String(building), color: p.color });
+        const key = `${building ?? ""}/${hit?.floor ?? ""}`;
+        if (outlined.get(layer) !== key) {
+          map.setFilter(layer, ["==", ["get", "building_id"], building ?? ""]);
+          map.setFilter(`${layer}-glow`, ["==", ["get", "building_id"], building ?? ""]);
+          map.setFilter(`${layer}-floor`, ["all", ["==", ["get", "building_id"], building ?? ""], ["==", ["get", "floor_number"], hit?.floor ?? -1]]);
+          outlined.set(layer, key);
+        }
+        if (building) next.push({ player, building, color: p.color, floor: hit?.floor ?? null });
       }
-      for (const layer of map.getStyle().layers ?? []) {
-        if (layer.id.startsWith("hover-") && !current.current.pointers[layer.id.slice(6)]) map.removeLayer(layer.id);
+      for (const player of hits.keys()) if (!current.current.pointers[player]) hits.delete(player);
+      for (const layer of outlined.keys()) {
+        if (!current.current.pointers[layer.slice(6)]) {
+          for (const id of [layer, `${layer}-glow`, `${layer}-floor`]) if (map.getLayer(id)) map.removeLayer(id);
+          outlined.delete(layer);
+        }
       }
       setHovers((previous) => JSON.stringify(previous) === JSON.stringify(next) ? previous : next);
     };
-    update(); map.on("render", update);
-    return () => { map.off("render", update); };
-  }, [ready, pointers]);
+    update();
+    const timer = setInterval(update, 40);
+    return () => { clearInterval(timer); };
+  }, [ready]);
 
   useEffect(() => { onHover?.(hovers[0]?.building ?? null); }, [hovers, onHover]);
 
@@ -188,13 +235,15 @@ export function City({ onHover }: { onHover?: (id: string | null) => void }) {
     if (!ready || !map?.getLayer("floors")) return;
     map.setPaintProperty("floors", "fill-extrusion-color-transition", { duration: 0 });
     map.setPaintProperty("floors-faded", "fill-extrusion-color-transition", { duration: 0 });
+    map.setPaintProperty("windows", "fill-extrusion-color-transition", { duration: 0 });
+    map.setPaintProperty("floor-halos", "fill-extrusion-color-transition", { duration: 0 });
     let frame = 0;
     const paint = () => {
       // Paint and scheduling must share one clock read so the final frame
       // cannot be dropped when the deadline is crossed during setPaintProperty.
       const now = Date.now();
-      map.setPaintProperty("floors", "fill-extrusion-color", floorColorExpression(revivedColors, revival ? { ...revival, at: firstFloorAt(revival.at) } : undefined, now));
-      map.setPaintProperty("floors-faded", "fill-extrusion-color", floorColorExpression(revivedColors, revival ? { ...revival, at: firstFloorAt(revival.at) } : undefined, now));
+      const color = floorColorExpression(revivedColors, revival ? { ...revival, at: firstFloorAt(revival.at) } : undefined, now);
+      for (const layer of ["floors", "floors-faded", "windows", "floor-halos"]) map.setPaintProperty(layer, "fill-extrusion-color", color);
       if (revival && now - revival.at < lightUpDuration(revival.floors)) frame = requestAnimationFrame(paint);
     };
     paint();
@@ -220,12 +269,19 @@ export function City({ onHover }: { onHover?: (id: string | null) => void }) {
       {revival && flashPoint && <div key={revival.at} data-testid="revival-flash" data-soft={revival.auto_completed} aria-hidden="true" style={{ position: "absolute", top: flashPoint.y, left: flashPoint.x - 32, width: 64, height: 24, zIndex: 1, background: revival.auto_completed ? "#ffffff40" : "white", filter: "blur(18px)", animation: `city-flash ${FLASH_MS}ms forwards`, pointerEvents: "none" }} />}
       <style>{`@keyframes city-flash { from { opacity: 0.9 } to { opacity: 0 } }`}</style>
       <div ref={container} style={{ position: "absolute", inset: 0 }} />
+      <div className="city-atmosphere" aria-hidden="true" />
+      {ready && mapRef.current && geo.current.floors && <SkylineAccents map={mapRef.current} floors={geo.current.floors} selections={hovers} />}
+      {["LOBBY", "EXPLORE"].includes(phase) && <div className="skyline-guide">
+        <span className="skyline-eyebrow">DOWNTOWN HOUSTON</span>
+        <p>Aim your beam. Wake a building.</p>
+        <div className="skyline-legend"><span><i style={{ background: "#1a1d2b" }} />Dark</span><span><i style={{ background: "#4a4636" }} />Partial</span><span><i style={{ background: "#f2c46d" }} />Occupied</span><span><i style={{ background: "#3a3f52" }} />Unknown</span></div>
+      </div>}
       <Sparks target={flashPoint} />
       {Object.entries(pointers).map(([id, p]) => <div key={id} data-testid="dot" style={{ pointerEvents: "none", position: "absolute", left: `${p.x * 100}%`, top: `${p.y * 100}%`, width: 22, height: 22, marginLeft: -11, marginTop: -11, borderRadius: "50%", background: p.color, boxShadow: `0 0 16px 6px ${p.color}`, transition: "left 60ms linear, top 60ms linear" }}>
         <span style={{ position: "absolute", top: 26, fontSize: 28 }}>{players[id]?.nickname}</span>
       </div>)}
-      <div style={{ position: "absolute", left: 16, top: 16, display: "grid", gap: 8, pointerEvents: "none" }}>
-        {hovers.map((h) => <HoverCard key={`${dataMode}-${h.player}-${h.building}`} id={h.building} color={h.color} onError={factError} />)}
+      <div style={{ position: "absolute", left: 16, top: 16, display: "flex", flexWrap: "wrap", alignItems: "start", gap: 8, pointerEvents: "none", right: 16 }}>
+        {hovers.map((h) => <HoverCard key={`${dataMode}-${h.player}-${h.building}`} id={h.building} floor={h.floor} color={h.color} onError={factError} />)}
       </div>
     </div>
   </>;

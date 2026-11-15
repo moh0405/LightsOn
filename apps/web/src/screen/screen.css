@@ -17,6 +17,17 @@
 .screen-stage { min-height: 0; position: relative; display: flex; flex-direction: column; overflow: hidden; }
 .screen-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
 .building-label { color: #b8c6dd; }
+.city-field { isolation: isolate; border: 1px solid #34445b; }
+.city-atmosphere { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, #070d1c70, transparent 32%, transparent 72%, #070d1c65), radial-gradient(ellipse at 50% 36%, #819fc214, transparent 65%); }
+.skyline-guide { position: absolute; left: 28px; bottom: 24px; pointer-events: none; text-shadow: 0 2px 12px #000; }
+.skyline-eyebrow { font-size: 28px; letter-spacing: 4px; color: #a4b9d5; }
+.skyline-guide p { font-size: 36px; font-weight: 600; letter-spacing: -1px; }
+.skyline-legend { display: flex; gap: 22px; color: #c2cddd; font-size: 28px; }
+.skyline-legend span { display: flex; gap: 8px; align-items: center; }
+.skyline-legend i { width: 14px; height: 14px; display: inline-block; border: 1px solid #8493ab; border-radius: 3px; }
+.wake-affordance { margin-top: 12px; padding-top: 12px; border-top: 1px solid; font-weight: 600; }
+.hover-card { animation: hover-reveal 160ms ease-out; width: min(520px, 100%); }
+@keyframes hover-reveal { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 .screen-heading button { align-self: center; }
 .screen-status { display: flex; align-items: baseline; gap: 24px; }
 .screen-status p { margin: 4px 0; }
