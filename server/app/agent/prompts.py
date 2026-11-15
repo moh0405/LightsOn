@@ -18,7 +18,13 @@ def safe_facts(dossier: dict) -> list[dict]:
 
 
 def persona_for(dossier: dict) -> dict:
-    return dossier.get('persona') or fake_persona(dossier).model_dump()
+    if dossier.get('persona'):
+        return dossier['persona']
+    from .persona_gen import generate_persona
+    try:
+        return generate_persona(dossier).model_dump()
+    except ValueError:
+        return fake_persona(dossier).model_dump()
 
 
 def pitch_data(pitches, names: dict[str, str] | None = None) -> str:

@@ -81,3 +81,14 @@ def test_unknown_building_still_gets_a_distinct_generated_fallback():
     from app.agent.prompts import persona_for
     d = dossier('233905')
     assert persona_for(d)['intro_line'] == persona('233905')['intro_line']
+
+
+def test_every_era_line_is_pure_fiction():
+    from app.agent.persona import fiction_claim
+    from app.agent.persona_gen import CLASS_LINES, ERAS, HOOKS
+    for era, kit in ERAS.items():
+        assert len(kit['tails']) == len(kit['catchphrases']) == len(HOOKS)
+        assert len(set(kit['catchphrases'])) == len(HOOKS)
+        for line in kit['tails'] + kit['catchphrases'] + kit['neighbors']:
+            assert fiction_claim(line) is None, (era, line)
+    assert all(fiction_claim(line) is None for line in CLASS_LINES.values())
