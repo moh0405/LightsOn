@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import type { CityState, FloorStates, PlayerView, RoomStateMsg, ServerMessage } from "../src/lib/protocol";
 import type { Phase } from "../src/lib/types";
 import { mockSkyline } from "./skyline-data";
+import { wholeNumbers } from "../src/lib/buildings";
 
 // Building facts come directly from the committed, verified dossier.
 const dossier: { facts: { id: string; say_as: string | null }[] } = JSON.parse(readFileSync(new URL("../../../server/fixtures/dossiers/233953.json", import.meta.url), "utf8"));
@@ -107,6 +108,7 @@ for (const mode of ["kit", "fixtures"]) test(`Phase 3 complete round UI (${mode}
     server.go("CHALLENGE");
     for (const player of server.players) server.emit({ type: "counteroffer", player_id: player.id, line: cited.say_as!, fact_ids: [cited.id], counteroffer: player.id === "p1" ? "Will you keep it open to everyone?" : "Can neighbors make art together?", audio_url: null });
     await expect(screen.getByRole("region", { name: "Building counteroffers" })).toContainText(cited.say_as!);
+    await expect(screen.getByLabel("Cited evidence").first()).not.toContainText("F_233953");
     await screen.screenshot({ path: testInfo.outputPath("CHALLENGE.png"), fullPage: true });
     server.go("NEGOTIATE");
     await expect(phones[0]!.getByRole("blockquote")).toContainText("Will you keep it open to everyone?");
@@ -120,7 +122,9 @@ for (const mode of ["kit", "fixtures"]) test(`Phase 3 complete round UI (${mode}
     expect(server.commands.filter((c) => c.type === "revise_pitch")).toHaveLength(1);
     server.go("VERDICT");
     server.emit({ type: "verdict", round_id: "R1", winner_player_id: "p1", scores: server.players.map((p, i) => ({ player_id: p.id, data_fit: 7, neighborhood_fit: 8 - i, creativity: 8 - i, charm: 7, needs_bonus: i ? 0 : 2, total: i ? 28 : 30 })), reason_line: "I'm in. Bring everyone together.", fact_ids: [cited.id], category: "entertainment", desire_met: true, desire_reveal: "I wanted a place for everyone.", impact: null });
-    await expect(screen.getByTestId("score-card")).toContainText(cited.say_as!);
+    await expect(screen.getByTestId("score-card")).toContainText(`CoStar · Floor 6 size: ${wholeNumbers(cited.say_as!)}`);
+    await expect(screen.getByTestId("score-card")).not.toContainText("F_233953");
+    await expect(screen.getByTestId("score-card")).not.toContainText(/\d\.0\b/);
     await expect(phones[0]!.getByRole("heading", { name: "You won the deal!" })).toBeVisible();
     await expect(phones[1]!.getByText("Your score:")).toContainText("28/40");
     await screen.screenshot({ path: testInfo.outputPath("VERDICT.png"), fullPage: true });
