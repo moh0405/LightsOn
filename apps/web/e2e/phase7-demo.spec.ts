@@ -35,3 +35,28 @@ test("wake list hides unprepared heroes; admin shows the demo preset state", asy
     await Promise.all([desktop.close(), mobile.close()]);
   }
 });
+
+for (const mode of ["kit", "fixtures"] as const) test(`admin shows broadcast and unmatched error toasts (${mode})`, async ({ browser, baseURL }) => {
+  const context = await browser.newContext();
+  try {
+    let emit: ((event: object) => void) | undefined;
+    await context.routeWebSocket(/\/ws\/.*role=admin/, socket => {
+      const server = socket.connectToServer();
+      server.onMessage(message => socket.send(message));
+      emit = event => socket.send(JSON.stringify(event));
+    });
+    const screen = await context.newPage();
+    await screen.goto(`${baseURL}/screen`);
+    await expect(screen.getByTestId("qr")).toBeVisible();
+    const admin = await context.newPage();
+    await admin.goto(`${baseURL}/admin`);
+    await admin.getByLabel("Host PIN").fill("1234");
+    await admin.getByRole("button", { name: `Data: ${mode}`, exact: true }).click();
+    await expect(admin.getByText(new RegExp(`data mode: ${mode}`))).toBeVisible();
+    // Exercise the real server's no-pitches broadcast by skipping through the empty round.
+    for (let i = 0; i < 4; i++) await admin.getByRole("button", { name: "Skip phase", exact: true }).click();
+    await expect(admin.getByRole("alert")).toContainText("No pitches");
+    emit!({ type: "error", code: "invalid_command", message: "Unmatched command rejected", nonce: "unmatched" });
+    await expect(admin.getByRole("alert")).toContainText("Unmatched command rejected");
+  } finally { await context.close(); }
+});

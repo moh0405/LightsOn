@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { fetchHealth } from "../lib/api";
 import { CommandError } from "../lib/ws";
 import { safeGet, safeSet, useGame, useRoomSocket } from "../lib/store";
-import { ConnBanner, PhaseBadge, button, input, page } from "../lib/ui";
+import { ConnBanner, ErrorToast, PhaseBadge, button, input, page } from "../lib/ui";
 
 const ACTIONS: { action: string; label: string }[] = [
   { action: "skip_phase", label: "Skip phase" },
@@ -46,7 +46,7 @@ export function AdminApp() {
 
   return (
     <main style={page}>
-      <ConnBanner />
+      <ConnBanner /><ErrorToast />
       <h1>Lights On: admin</h1>
       <p data-testid="demo-preset" style={{ fontWeight: 600, color: demoMode ? "#7bd88f" : undefined }}>{demoPresetText(demoMode)}</p>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>

@@ -32,7 +32,14 @@ test("recorded trace toggles, replays and fits a 1920x1080 screen", async ({ bro
     await panel.getByRole("button", { name: "Show all", exact: true }).click();
     await expect(panel.getByTestId("recorded-trace-step")).toHaveCount(total);
     expect(await panel.evaluate((element) => element.scrollWidth <= element.clientWidth && element.scrollHeight <= element.clientHeight)).toBe(true);
-    await page.screenshot({ path: "e2e/screenshots/phase7/recorded-trace-1920x1080.png" });
+    const undersized = await panel.locator("*").evaluateAll((elements) => elements.filter((element) => {
+      if (!element.getClientRects().length) return false;
+      const hasText = [...element.childNodes].some(node => node.nodeType === Node.TEXT_NODE && node.textContent?.trim());
+      return hasText && parseFloat(getComputedStyle(element).fontSize) < (/^H[1-6]$/.test(element.tagName) ? 28 : 22);
+    }).map(element => ({ text: element.textContent, size: getComputedStyle(element).fontSize })));
+    expect(undersized).toEqual([]);
+    expect(await panel.evaluate(element => [...element.querySelectorAll("*")].every(child => child.scrollWidth <= child.clientWidth + 1))).toBe(true);
+    await page.screenshot({ path: "e2e/screenshots/final/trace-1920x1080.png" });
     await page.keyboard.press("T");
     await expect(panel).toHaveCount(0);
     await page.getByRole("button", { name: "Agent trace · T", exact: true }).click();
