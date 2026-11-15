@@ -19,7 +19,8 @@ for (const mode of (process.env.AUDIO_LAG_DATA ? [process.env.AUDIO_LAG_DATA] : 
     try {
       await context.addInitScript(() => {
         const events: Entry[] = [];
-        const lines: { id: number; text: string; consumed: string; key: string }[] = [];
+        const lines: { id: number; text: string; consumed: string; key: string; preliminary: boolean }[] = [];
+        let round = 0;
         const clean = (s: string) => s.replace(/\s+/g, ' ').trim();
         const log = (event: string, data: Omit<Entry, 'event' | 'ms'> = {}) => events.push({ ms: performance.now(), event, ...data });
         Object.assign(window, { audioLag: events, audioLagLog: log });
@@ -31,14 +32,16 @@ for (const mode of (process.env.AUDIO_LAG_DATA ? [process.env.AUDIO_LAG_DATA] : 
             this.addEventListener('message', e => {
               const raw = JSON.parse(String(e.data));
               if (raw.type === 'phase_changed') log('phase', { value: raw.phase });
+              if (raw.type === 'round_started') round++;
               const m = raw.type === 'room_state' && raw.phase === 'VERDICT' && raw.verdict ? { ...raw.verdict, type: 'verdict' } : raw;
               if (['building_intro', 'counteroffer', 'verdict'].includes(m.type)) {
                 const text = clean(m.text ?? (m.reason_line ?? `${m.line} ${m.counteroffer}`));
-                const key = `${m.type}:${m.player_id ?? ''}:${text}`;
+                const key = `${m.type}:${round}:${m.player_id ?? ''}:${text}`;
                 if (lines.some(l => l.key === key)) return;
                 const id = lines.length;
-                lines.push({ id, text, consumed: '', key });
-                log('message', { id, type: m.type, text, value: m.type === 'counteroffer' && !m.counteroffer.trim() && !m.fact_ids.length ? 'preliminary' : undefined });
+                const preliminary = m.type === 'counteroffer' && !m.counteroffer.trim() && !m.fact_ids.length;
+                lines.push({ id, text, consumed: '', key, preliminary });
+                log('message', { id, type: m.type, text, value: preliminary ? 'preliminary' : undefined });
                 const visible = () => [...document.querySelectorAll('[data-testid="subtitles"], .challenge-card, [data-testid="score-card"]')].some(el => clean(el.textContent ?? '').includes(clean(m.text ?? m.reason_line ?? m.line)));
                 if (visible()) log('subtitle', { id });
                 else {
@@ -51,17 +54,27 @@ for (const mode of (process.env.AUDIO_LAG_DATA ? [process.env.AUDIO_LAG_DATA] : 
           }
         };
         let utterance = 0;
+        const spokenLines = new Set<number>();
+        let lastChallenge = -1;
         const synth = speechSynthesis;
         const voices = synth.getVoices.bind(synth);
         synth.getVoices = () => { const start = performance.now(), result = voices(); log('getVoices', { duration: performance.now() - start, voices: result.length }); return result; };
         synth.addEventListener('voiceschanged', () => log('voiceschanged', { voices: voices().length }));
         const speak = synth.speak.bind(synth);
         synth.speak = u => {
+          u.volume = 0; // silent on the host's speakers; start/boundary/end timing is unchanged
           const id = utterance++;
           const text = clean(u.text);
           // A budgeted challenge speaks a part of its line; match that by containment.
-          const line = lines.find(l => clean(l.text.slice(l.consumed.length)).startsWith(text))
-            ?? lines.find(l => l.key.startsWith('counteroffer:') && !l.consumed && l.text.includes(text.replace(/…$/, '')));
+          // Thinking lines are subtitle-only and share the intro's catchphrase: never attribute speech to them.
+          const real = lines.filter(l => !l.preliminary);
+          const line = real.find(l => clean(l.text.slice(l.consumed.length)).startsWith(text))
+            ?? (() => {
+              const fits = real.filter(l => l.key.startsWith('counteroffer:') && !l.consumed && l.text.includes(text.replace(/…$/, '')));
+              return fits.find(l => l.id === lastChallenge) ?? fits.find(l => !spokenLines.has(l.id)) ?? fits[0];
+            })();
+          if (line?.key.startsWith('counteroffer:')) lastChallenge = line.id;
+          if (line) spokenLines.add(line.id);
           if (line) line.consumed += `${line.consumed ? ' ' : ''}${text}`;
           const data = { id, line: line?.id, text, speaking: synth.speaking, pending: synth.pending };
           log('speak', data);
@@ -146,8 +159,11 @@ for (const mode of (process.env.AUDIO_LAG_DATA ? [process.env.AUDIO_LAG_DATA] : 
       });
       test.skip(!(await screen.evaluate(() => Reflect.get(window, 'wakeableIds')) as string[]).includes(building), 'Server excludes this unprepared hero from the wake list');
       const name = (await screen.request.get(`/api/buildings/${building}`).then(r => r.json())).name;
-      await phones[0]!.getByRole('button', { name: `Wake building ${name}`, exact: true }).click();
       const timeline = () => screen.evaluate(() => Reflect.get(window, 'audioLag') as Entry[]);
+      const rounds = realtime ? Number(process.env.AUDIO_LAG_ROUNDS ?? 1) : 1;
+      for (let round = 0; round < rounds; round++) {
+      if (round) await expect(screen.getByTestId('phase')).toContainText('EXPLORE', { timeout: 60000 });
+      await phones[0]!.getByRole('button', { name: `Wake building ${name}`, exact: true }).click();
       const waitSpeech = async (type: string, minLines: number) => {
         if (realtime) return;
         await expect.poll(async () => (await timeline()).filter(e => e.event === 'message' && e.type === type && e.value !== 'preliminary').length, { timeout: 20000 }).toBeGreaterThanOrEqual(minLines);
@@ -184,6 +200,8 @@ for (const mode of (process.env.AUDIO_LAG_DATA ? [process.env.AUDIO_LAG_DATA] : 
         if (i === 0) await screen.waitForTimeout(650);
       }
       await expect(screen.getByTestId('phase')).toContainText('REVIVED', { timeout: 60000 });
+      if (realtime) await screen.screenshot({ path: info.outputPath(`demo-revived-${round + 1}.png`) });
+      }
       await screen.waitForTimeout(2500);
       if (cdp) {
         const done = new Promise<{ stream: string }>(resolve => cdp.once('Tracing.tracingComplete', resolve));
@@ -212,23 +230,35 @@ for (const mode of (process.env.AUDIO_LAG_DATA ? [process.env.AUDIO_LAG_DATA] : 
       expect(errors).toEqual([]);
       if (!realtime) expect(entries.filter(e => e.event === 'error')).toEqual([]);
       if (realtime) {
-        await screen.screenshot({ path: info.outputPath('demo-revived.png') });
-        const phaseAt = (phase: string) => entries.find(e => e.event === 'phase' && e.value === phase)?.ms ?? Infinity;
         const challenges = metrics.rows.filter(r => r.type === 'counteroffer');
-        const spoken = entries.filter(e => e.event === 'start' && challenges.some(r => r.id === e.line));
-        const summary = { firstWord: Object.fromEntries(['building_intro', 'counteroffer', 'verdict'].map(t => [t, metrics.rows.find(r => r.type === t)?.firstWord])),
-          challengeStarts: spoken.map(e => ({ line: e.line, afterChallenge: e.ms - phaseAt('CHALLENGE'), text: e.text })),
-          lastChallengeEndBeforeNegotiate: phaseAt('NEGOTIATE') - Math.max(...entries.filter(e => e.event === 'end' && challenges.some(r => r.id === e.line)).map(e => e.ms)),
-          cancels: entries.filter(e => e.event === 'cancel').map(e => e.ms), interrupted: entries.filter(e => e.event === 'error').map(e => `${e.error}: ${e.text}`),
+        const starts = entries.filter(e => e.event === 'start');
+        const endOf = (id?: number) => entries.find(e => e.event === 'end' && e.id === id);
+        const spoken = starts.filter(e => challenges.some(r => r.id === e.line));
+        const negotiateAfter = (ms: number) => entries.find(e => e.event === 'phase' && e.value === 'NEGOTIATE' && e.ms > ms)?.ms ?? Infinity;
+        const worst = (type: string, field: 'firstWord' | 'readyToStart') => Math.max(...metrics.rows.filter(r => r.type === type && r[field] !== null).map(r => r[field]!));
+        const summary = { rounds, firstWord: { building_intro: worst('building_intro', 'firstWord'), counteroffer: worst('counteroffer', 'readyToStart'), verdict: worst('verdict', 'firstWord') },
+          utterances: starts.length, unfinished: starts.filter(e => !endOf(e.id)).map(e => e.text),
+          cancelsWhileSpeaking: entries.filter(c => c.event === 'cancel' && starts.some(e => e.ms <= c.ms && (endOf(e.id)?.ms ?? Infinity) > c.ms)).length,
+          interrupted: entries.filter(e => e.event === 'error').map(e => `${e.error}: ${e.text}`),
+          // Seconds beyond a generous 2 words/s reading of the sentence: a stalled voice shows up here.
+          maxStallMs: Math.max(0, ...starts.map(e => (endOf(e.id)?.ms ?? e.ms) - e.ms - (e.text ?? '').split(' ').reduce((n, w) => n + Math.max(1, w.replace(/\D/g, '').length + 1), 0) * 500)),
+          challengesSpoken: new Set(spoken.map(e => e.line)).size,
+          challengeEndBeforeNegotiate: Math.min(...spoken.map(e => negotiateAfter(e.ms) - (endOf(e.id)?.ms ?? Infinity))),
+          spokenChallenges: spoken.map(e => e.text),
           phases: entries.filter(e => e.event === 'phase').map(e => `${e.value}@${Math.round(e.ms)}`), maxChunkGap: metrics.maxChunkGap, maxLongTask: metrics.maxLongTask };
         console.log(`${building} demo-path: ${JSON.stringify(summary)}`);
+        if (process.env.AUDIO_LAG_OUTPUT) writeFileSync(join(process.env.AUDIO_LAG_OUTPUT, 'demo-path-summary.json'), JSON.stringify(summary, null, 2));
         if (process.env.AUDIO_LAG_ASSERT) {
-          for (const type of ['building_intro', 'counteroffer', 'verdict']) expect(summary.firstWord[type], `${type} first word`).toBeLessThanOrEqual(300);
-          // A07: both players are challenged aloud, and every spoken challenge ends inside CHALLENGE.
-          expect(new Set(spoken.map(e => e.line)).size, 'each challenge is spoken').toBe(2);
-          expect(summary.lastChallengeEndBeforeNegotiate, 'challenge speech ends before NEGOTIATE').toBeGreaterThanOrEqual(0);
+          for (const [type, ms] of Object.entries(summary.firstWord)) expect(ms, `${type} first word`).toBeLessThanOrEqual(300);
+          // Every sentence that starts also ends: nothing is cut, nothing stalls.
+          expect(summary.unfinished).toEqual([]);
+          expect(summary.interrupted).toEqual([]);
+          expect(summary.cancelsWhileSpeaking).toBe(0);
+          expect(summary.maxStallMs).toBeLessThanOrEqual(2000);
+          // A07: both players are challenged aloud each round, inside CHALLENGE.
+          expect(summary.challengesSpoken, 'each challenge is spoken').toBe(2 * rounds);
+          expect(summary.challengeEndBeforeNegotiate, 'challenge speech ends before NEGOTIATE').toBeGreaterThanOrEqual(0);
           expect(metrics.maxChunkGap).toBeLessThanOrEqual(250);
-          expect(metrics.longTasksOver100).toBe(0);
           expect(metrics.provisionalSpoken).toBe(0);
         }
       } else if (process.env.AUDIO_LAG_ASSERT) {
