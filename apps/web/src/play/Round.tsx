@@ -44,7 +44,7 @@ export function Pitch({ sock, revision = false, playerId }: { sock: SocketRef; r
       }).catch((err: unknown) => setError(err instanceof Error ? err.message : "Could not send. Try again.")).finally(() => setBusy(false));
     }}>
       <label htmlFor="pitch-text">{revision ? "Your revision" : "Your pitch"}</label>
-      <button type="button" style={{ ...button, touchAction: "none", background: listening ? "#39455a" : undefined }}
+      <button type="button" style={{ ...button, touchAction: "none", background: listening ? "#39455a" : button.background }}
         disabled={sent || busy || conn !== "open"} aria-pressed={listening}
         onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); setError(null); void recorder.current?.start(); }}
         onPointerUp={() => recorder.current?.stop()} onPointerCancel={() => recorder.current?.stop()}
