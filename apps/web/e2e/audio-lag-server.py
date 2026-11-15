@@ -67,6 +67,15 @@ if os.environ.get('AUDIO_LAG_AGENT') == 'recorded':
 else:
     os.environ['AGENT_MODE'] = 'fake'
     live_agent.Bedrock.__call__ = forbidden
+    if os.environ.get('AUDIO_LAG_LONG_VERDICT'):
+        # A 46-word, fact-free reason line: far longer than the VERDICT window can speak.
+        LONG_REASON = ('I listened to every pitch tonight, weighed who would walk through my doors after dark, '
+                       'who would stay, and who would only pass by, and after all of that back and forth '
+                       'one idea kept returning to me, so that is the one I am choosing.')
+        short_verdict = fake_agent.verdict
+        def long_verdict(*args, **kwargs):
+            return short_verdict(*args, **kwargs).model_copy(update={'reason_line': LONG_REASON})
+        fake_agent.verdict = long_verdict
 
 import uvicorn
 uvicorn.run('app.main:app', host='127.0.0.1', port=int(os.environ.get('LO_E2E_API_PORT', '21501')))

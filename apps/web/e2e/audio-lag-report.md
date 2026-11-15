@@ -115,3 +115,15 @@ pnpm --dir apps/web e2e --config audio-lag.playwright.config.ts
 ```
 
 Use AUDIO_LAG_AGENT=recorded for Esperson's recorded live dialogue, AUDIO_LAG_DATA=fixtures for fixture mode, AUDIO_LAG_MUSIC_STRESS=1 for all eight Tone layers, and AUDIO_LAG_TRACE=1 for a Chromium CPU trace. Omit AUDIO_LAG_ASSERT to retain measurements when diagnosing a failing threshold. JSON timelines/CPU traces are attached to Playwright results and optionally written to AUDIO_LAG_OUTPUT, outside version control. This run's raw artifacts are under /tmp/lights-on-audio-lag-{before,after,trace,hardware,after-recorded}; the directory named hardware was a default-GL diagnostic and still reported SwiftShader.
+
+## Verdict speech budget (Nov 15)
+
+The spoken verdict is now budgeted to end inside VERDICT: winner, then whole reason sentences, then the desire reveal only if all of it fits; the score card keeps the full text. Natural timers, fake agent, `DEMO_MODE=1`, silent headless Chromium, Esperson:
+
+| Run | Spoken verdict | Ended before POWER_UP | Speaking at POWER_UP |
+|---|---|---:|---|
+| Before, 46-word reason line | whole reason line | no: 3.4 s into POWER_UP | yes |
+| After, 46-word reason line | "Ann wins." + opening clause, ellipsis | 3.8 s | no |
+| After, default fake verdict | winner + reason + desire reveal | 5.0 s | no |
+
+Reproduce: `AUDIO_LAG_MEASURE=1 AUDIO_LAG_REALTIME=1 AUDIO_LAG_ASSERT=1 AUDIO_LAG_LONG_VERDICT=1 pnpm --dir apps/web e2e --config audio-lag.playwright.config.ts -g "native audio"` (omit `AUDIO_LAG_LONG_VERDICT` for the default verdict). Not re-measured with a live Bedrock verdict or audible hardware Chrome.
