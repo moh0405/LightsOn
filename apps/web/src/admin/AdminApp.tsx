@@ -40,7 +40,8 @@ export function AdminApp() {
     try {
       await sock.current?.send({ type: "host_action", pin, ...extra });
     } catch (e) {
-      setMsg(e instanceof CommandError ? e.message : "Failed.");
+      // Server command errors already arrive through the shared error toast.
+      if (!(e instanceof CommandError)) setMsg("Failed.");
     }
   };
 
