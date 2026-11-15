@@ -18,7 +18,7 @@ sys.path.insert(0, str(ROOT / 'server'))
 
 from app.actions import select_target_floors, target_sqft, validate_verdict
 from app.agent.grounding import check_line
-from app.agent.live_agent import Bedrock, FAST, SMART, LiveAgent
+from app.agent.live_agent import LangChainBedrock as Bedrock, FAST, SMART, LiveAgent
 from app.agent.prompts import persona_for
 from app.agent.spend import SpendLedger
 from app.city import City
@@ -52,9 +52,14 @@ def challenge_plan() -> dict:
 async def evaluate(plan):
     output = dict(challenges=[], verdicts=[], rounds=[], requests=[], schema_failures=0)
     adapter = Bedrock()
-    def model(step, system, content, schema, timeout):
-        output['requests'].append(dict(step=step, timeout=timeout))
-        return adapter(step, system, content, schema, timeout)
+    class Recorded:
+        uses_tools = getattr(adapter, 'uses_tools', False)
+        async def __call__(self, step, system, content, schema, timeout, **kwargs):
+            output['requests'].append(dict(step=step, timeout=timeout))
+            if self.uses_tools:
+                return await adapter(step, system, content, schema, timeout, **kwargs)
+            return await asyncio.to_thread(adapter, step, system, content, schema, timeout)
+    model = Recorded()
     # Each building is one round: four independent, parallel player generations.
     for bid, rows in plan.items():
         dossier = provider_for_mode('kit').dossier(bid)

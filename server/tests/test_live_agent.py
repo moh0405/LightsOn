@@ -412,7 +412,7 @@ def test_live_context_focuses_facts_but_keeps_requested_floor_and_persona_refs(g
     prompt = build_prompt(d, 'hopeful', City(), pitches=[pitch(f'A community studio on floor {floor}')])
     assert fact['id'] in prompt and fact['say_as'] in prompt
     assert all(limit['fact_ref'] in prompt for limit in persona_for(d)['hard_limits'])
-    assert len(prompt.encode()) < 16000
+    assert len(prompt.encode()) < 24000  # full knowledge for a 71-floor tower stays bounded
 
 
 @pytest.mark.parametrize('text', [
@@ -570,7 +570,8 @@ async def test_small_check_runs_eight_independent_challenges_without_network(gam
             calls.append(step)
             if step == 'claim_check':
                 return {'checks': [{'index': row['index'], 'supported': True, 'reason': ''} for row in json.loads(content)]}
-            d = provider_for_mode(game_mode).dossier('233953' if 'Esperson' in system else '233899')
+            # Neighbors appear in every prompt; the prompt's own building names the dossier.
+            d = provider_for_mode(game_mode).dossier('233953' if re.search(r'you are Esperson,', system, re.I) else '233899')
             ps = [pitch(html.unescape(text), player=pid) for pid, text in
                   re.findall(r'<pitch player="([^"]+)"[^>]*>(.*?)</pitch>', content)]
             if step == 'challenge':
@@ -746,7 +747,8 @@ def test_challenge_context_is_small_shared_contact_free_and_pitch_specific(dossi
     assert 'floor_6_available_sqft' in context
     assert all(l['fact_ref'] in context for l in persona_for(dossier)['hard_limits'])
     assert len(context.encode()) < len(build_prompt(dossier, 'hopeful', City()).encode())
-    assert 'former_tenancy_records' not in context
+    # Full tenant-history knowledge is in the shared, cacheable prefix.
+    assert 'former_tenancy_records' in context.shared
     assert not any(f['id'] in context for f in dossier['facts'] if f['value'] is None)
 
 
