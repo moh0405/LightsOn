@@ -6,7 +6,7 @@ const effects: (() => void | (() => void))[] = [];
 vi.mock("react", async (original) => ({ ...await original<object>(), useState: (value: unknown) => [value === false ? true : value, vi.fn()],
   useRef: (value: unknown) => ({ current: value === null ? { duck, restore: vi.fn(), revive: vi.fn(), signature: vi.fn(), dispose: vi.fn() } : value }),
   useEffect: (effect: () => void | (() => void)) => effects.push(effect) }));
-import { browserSpeech, budgetLine, speechChunks, spokenWords, useScreenAudio } from "./music";
+import { browserSpeech, budgetLine, budgetVerdict, speechChunks, spokenWords, useScreenAudio } from "./music";
 class Utterance {
   text: string; voice = null; rate = 1; pitch = 1;
   onend: (() => void) | null = null; onerror: (() => void) | null = null;
@@ -29,13 +29,78 @@ async function mount() {
 }
 const flush = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
 afterEach(() => { cleanups.splice(0).forEach(c => c()); vi.unstubAllGlobals(); vi.clearAllMocks(); vi.useRealTimers(); });
-it("finishes the verdict across POWER_UP without canceling the voice", async () => {
+const verdictOf = (reason_line: string, desire_reveal = "") => ({ reason_line, desire_reveal, winner_player_id: "ann" }) as NonNullable<typeof initialGame.verdict>;
+const ann = { ann: { id: "ann", nickname: "Ann" } } as unknown as typeof initialGame.players;
+const inMs = (ms: number) => new Date(Date.now() + ms).toISOString();
+it("the verdict sentence in the air at POWER_UP finishes uncut; everything behind it is dropped", async () => {
   await mount();
-  useGame.setState({ phase: "VERDICT", verdict: { reason_line: "Thank you for listening." } as NonNullable<typeof initialGame.verdict> });
+  useGame.setState({ phase: "VERDICT", endsAt: inMs(60_000), players: ann, verdict: verdictOf("Thank you for listening. Please listen.", "Welcome.") });
   await flush();
-  const before = cancel.mock.calls.length;
-  useGame.setState({ phase: "POWER_UP" });
-  expect(cancel.mock.calls.length).toBe(before);
+  expect(spoken.map(u => u.text)).toEqual(["Ann wins."]);
+  spoken[0]!.onend!(); await flush();
+  expect(spoken.map(u => u.text)).toEqual(["Ann wins.", "Thank you for listening."]);
+  useGame.setState({ phase: "POWER_UP" }); await flush();
+  expect(cancel).not.toHaveBeenCalled();
+  spoken[1]!.onend!(); await flush();
+  expect(spoken).toHaveLength(2);
+  expect(duck).toHaveBeenLastCalledWith(false);
+});
+it("never starts a verdict that is still queued when POWER_UP begins", async () => {
+  await mount();
+  const offer = { line: "Thank you.", counteroffer: "Please listen.", audio_url: null, fact_ids: ["F_233953_dark_floor_count"] };
+  useGame.setState({ phase: "CHALLENGE", counteroffers: { ann: { ...offer, player_id: "ann" } } });
+  await flush();
+  useGame.setState({ phase: "VERDICT", endsAt: inMs(60_000), players: ann, verdict: verdictOf("Welcome.") }); await flush();
+  useGame.setState({ phase: "POWER_UP" }); await flush();
+  spoken[0]!.onend!(); await flush();
+  useGame.setState({ phase: "REVIVED" }); await flush();
+  expect(spoken.map(u => u.text)).toEqual(["Thank you."]);
+  expect(cancel).not.toHaveBeenCalled();
+});
+it("budgets the spoken verdict to the time left in VERDICT", async () => {
+  await mount();
+  const reason = "Your night market keeps my lobby open after dark. It gives the block a reason to stay. Nobody else offered that.";
+  // 6 s left, 1 s margin: 12 spoken words. The winner and the first reason sentence fit; the rest does not.
+  useGame.setState({ phase: "VERDICT", endsAt: inMs(6000), players: ann, verdict: verdictOf(reason, "I wanted a public ground floor all along.") });
+  await flush();
+  spoken[0]!.onend!(); await flush(); spoken[1]!.onend!(); await flush();
+  expect(spoken.map(u => u.text)).toEqual(["Ann wins.", "Your night market keeps my lobby open after dark."]);
+  expect(duck).toHaveBeenLastCalledWith(false);
+});
+it("budgets a live verdict that arrives before the server arms the VERDICT timer", async () => {
+  await mount();
+  // 10 s window, 1 s margin: 21 spoken words. The reveal would make it 23.
+  useGame.setState({ phase: "VERDICT", endsAt: null, players: ann, verdict: verdictOf("Your night market keeps my lobby open after dark. It gives the block a reason to stay.", "I wanted a public ground floor.") });
+  await flush();
+  for (let i = 0; i < 3; i++) { spoken[i]?.onend?.(); await flush(); }
+  expect(spoken.map(u => u.text)).toEqual(["Ann wins.", "Your night market keeps my lobby open after dark.", "It gives the block a reason to stay."]);
+});
+it("drops a verdict sentence that a slow voice can no longer finish inside VERDICT", async () => {
+  await mount();
+  vi.useFakeTimers({ toFake: ["Date"] });
+  useGame.setState({ phase: "VERDICT", endsAt: inMs(9000), players: ann, verdict: verdictOf("Your night market keeps my lobby open after dark. It gives the block a reason to stay.") });
+  await flush();
+  spoken[0]!.onend!(); await flush();
+  vi.setSystemTime(Date.now() + 7000); // the voice took far longer than budgeted
+  spoken[1]!.onend!(); await flush();
+  expect(spoken.map(u => u.text)).toEqual(["Ann wins.", "Your night market keeps my lobby open after dark."]);
+});
+it("budgetVerdict: winner and reason first, the reveal only when everything fits, never a cut word", () => {
+  const reason = "Your night market keeps my lobby open after dark. It gives the block a reason to stay.";
+  const reveal = "I wanted a public ground floor.";
+  expect(budgetVerdict("Ann wins.", reason, reveal, 40)).toBe(`Ann wins. ${reason} ${reveal}`);
+  expect(budgetVerdict("Ann wins.", reason, reveal, 22)).toBe(`Ann wins. ${reason}`);
+  expect(budgetVerdict("Ann wins.", reason, reveal, 12)).toBe("Ann wins. Your night market keeps my lobby open after dark.");
+  // One long sentence: its opening, cut back to a clause break, with an ellipsis.
+  const long = "A gym pitch with no footprint, no concept, and no sizzle — I have hosted better ideas than one lonely word typed in a hurry by somebody who never once looked up at my windows or asked what the street outside needs.";
+  expect(spokenWords(long)).toBeGreaterThanOrEqual(40);
+  expect(budgetVerdict("Ann wins.", long, reveal, 20)).toBe("Ann wins. A gym pitch with no footprint, no concept, and no sizzle…");
+  expect(budgetVerdict("Ann wins.", "Your night market keeps my lobby open after dark.", reveal, 8)).toBe("Ann wins. Your night market keeps my lobby…");
+  expect(budgetVerdict("Ann wins.", reason, reveal, 4)).toBe("Ann wins.");
+  expect(budgetVerdict("Ann wins.", reason, reveal, 1)).toBe("");
+  expect(budgetVerdict("", reason, "", 3)).toBe("");
+  // Markup is never spoken or counted.
+  expect(budgetVerdict("Ann wins.", "**Welcome** home.", "", 4)).toBe("Ann wins. Welcome home.");
 });
 it("does not repeat an intro on room_state replay", async () => {
   await mount();
@@ -68,7 +133,7 @@ it("never cuts a challenge sentence when the host advances; the rest is dropped 
   const offer = { line: "Thank you.", counteroffer: "Please listen.", audio_url: null, fact_ids: ["F_233953_dark_floor_count"] };
   useGame.setState({ phase: "CHALLENGE", counteroffers: { ann: { ...offer, player_id: "ann" }, bo: { ...offer, player_id: "bo" } } });
   await flush();
-  useGame.setState({ phase: "VERDICT", verdict: { reason_line: "Welcome." } as NonNullable<typeof initialGame.verdict> });
+  useGame.setState({ phase: "VERDICT", verdict: verdictOf("Welcome.") });
   await flush();
   expect(cancel).not.toHaveBeenCalled();
   expect(spoken.map(u => u.text)).toEqual(["Thank you."]);
