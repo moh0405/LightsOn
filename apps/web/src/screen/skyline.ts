@@ -102,8 +102,29 @@ export function cleanRing(ring: Position[]): Position[] {
   if (runs.length < 4 || runs.length % 2 || runs.some((r, i) => r.horizontal === runs[(i + 1) % runs.length]!.horizontal)) return fallback();
   const level = (r: Run) => { const values = r.points.map(p => r.horizontal ? p[1] : p[0]); return r.out > 0 ? Math.max(...values) : Math.min(...values); };
   const corners: P[] = runs.map((r, i) => { const next = runs[(i + 1) % runs.length]!; return r.horizontal ? [level(next), level(r)] : [level(r), level(next)]; });
-  const ratio = Math.abs(signedArea(corners)) / area;
-  return ratio > 0.85 && ratio < 1.25 ? close(corners.map(unturn), back) : fallback();
+  // A squared-off corner may not reach past the surveyed outline: cut it back to a chamfer where it would.
+  const beyond = (p: P) => {
+    let inside = false, nearest = Infinity;
+    turned.forEach((a, i) => {
+      const b = turned[(i + 1) % turned.length]!, dx = b[0] - a[0], dy = b[1] - a[1];
+      if ((a[1] > p[1]) !== (b[1] > p[1]) && p[0] < a[0] + dx * (p[1] - a[1]) / dy) inside = !inside;
+      const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (dx * dx + dy * dy || 1)));
+      nearest = Math.min(nearest, Math.hypot(p[0] - a[0] - dx * t, p[1] - a[1] - dy * t));
+    });
+    return !inside && nearest > 1;
+  };
+  const n = corners.length, shaped: P[] = [];
+  corners.forEach((c, i) => {
+    const prev = corners[(i + n - 1) % n]!, next = corners[(i + 1) % n]!;
+    const before = Math.hypot(c[0] - prev[0], c[1] - prev[1]), ahead = Math.hypot(next[0] - c[0], next[1] - c[1]);
+    if (!before || !ahead || !beyond(c)) { shaped.push(c); return; }
+    const along = (cut: number): [P, P] => [[c[0] + (prev[0] - c[0]) / before * Math.min(cut, before * 0.48), c[1] + (prev[1] - c[1]) / before * Math.min(cut, before * 0.48)], [c[0] + (next[0] - c[0]) / ahead * Math.min(cut, ahead * 0.48), c[1] + (next[1] - c[1]) / ahead * Math.min(cut, ahead * 0.48)]];
+    let cut = 0.5, ends = along(cut);
+    while (cut < Math.max(before, ahead) * 0.48 && beyond([(ends[0][0] + ends[1][0]) / 2, (ends[0][1] + ends[1][1]) / 2])) ends = along(cut += 0.5);
+    shaped.push(...ends);
+  });
+  const ratio = Math.abs(signedArea(shaped)) / area;
+  return ratio > 0.85 && ratio < 1.25 ? close(shaped.map(unturn), back) : fallback();
 }
 
 /** The same floors (every property untouched) on the cleaned footprint. */
@@ -136,13 +157,13 @@ export function facadeBands(floors: FeatureCollection): FeatureCollection {
         const nx = sign * dy / length, ny = -sign * dx / length;
         const at = (d: number, offset: number): Position => back([a[0] + dx * d / length + nx * offset, a[1] + dy * d / length + ny * offset]);
         for (let n = 0; n < count; n++) {
-          const lo = pier + (n + 0.16) * bay, hi = pier + (n + 0.84) * bay;
-          windows.push([[at(lo, 0.03), at(hi, 0.03), at(hi, 0.26), at(lo, 0.26), at(lo, 0.03)]]);
+          const lo = pier + (n + 0.11) * bay, hi = pier + (n + 0.89) * bay;
+          windows.push([[at(lo, 0.03), at(hi, 0.03), at(hi, 0.3), at(lo, 0.3), at(lo, 0.03)]]);
         }
       });
     }
     const height = z.top - z.base;
-    return windows.length ? [{ type: "Feature" as const, properties: { ...feature.properties, base_m: z.base + Math.min(0.85, height * 0.25), height_m: z.top - Math.min(0.45, height * 0.14) }, geometry: { type: "MultiPolygon" as const, coordinates: windows } }] : [];
+    return windows.length ? [{ type: "Feature" as const, properties: { ...feature.properties, base_m: z.base + Math.min(0.7, height * 0.2), height_m: z.top - Math.min(0.3, height * 0.09) }, geometry: { type: "MultiPolygon" as const, coordinates: windows } }] : [];
   }) };
 }
 
@@ -154,7 +175,7 @@ export function floorReveals(floors: FeatureCollection): FeatureCollection {
     const z = spans(feature);
     if (!z || z.base <= (ground.get(String(feature.properties?.building_id)) ?? 0)) return [];
     const coordinates = outerRings(feature).flatMap(ring => { const { points, back } = local(ring); return points.length < 3 ? [] : [[close(outset(points, 0.3), back)]]; });
-    return coordinates.length ? [{ type: "Feature" as const, properties: { ...feature.properties, height_m: z.base + Math.min(0.3, (z.top - z.base) * 0.1) }, geometry: { type: "MultiPolygon" as const, coordinates } }] : [];
+    return coordinates.length ? [{ type: "Feature" as const, properties: { ...feature.properties, height_m: z.base + Math.min(0.22, (z.top - z.base) * 0.07) }, geometry: { type: "MultiPolygon" as const, coordinates } }] : [];
   }) };
 }
 
@@ -200,8 +221,29 @@ export function mapColors<T extends Expression>(expression: T, fn: (color: strin
 /** Glass for a floor colour: lit floors burn hotter than their frame, unlit floors keep a cold sheen. */
 export function glass(color: string): string {
   const [r, g, b] = hex(color) as [number, number, number], bright = Math.max(r, g, b);
-  if (bright >= 150) return mixHex(color, "#ffffff", 0.22);
-  return r > b ? mixHex(color, "#f2c46d", 0.3) : mixHex(color, "#8ea6d2", 0.2);
+  if (bright >= 150) return mixHex(color, "#ffffff", 0.3);
+  return r > b ? mixHex(color, "#f2c46d", 0.3) : mixHex(color, "#9db8e8", 0.3);
+}
+/** The shadow line between floors: a darker shade of the floor itself, so the tower stays one object. */
+export const shadowLine = (color: string) => mixHex(color, "#05070c", 0.5);
+
+/** Compass direction (0-90 degrees) of the longest facade of the first footprint, or null. */
+export function facadeAxis(floors: FeatureCollection): number | null {
+  const ring = floors.features.flatMap(outerRings)[0];
+  if (!ring || ring.length < 4) return null;
+  const { points } = local(ring);
+  let best = 0, axis: number | null = null;
+  points.forEach((a, i) => {
+    const b = points[(i + 1) % points.length]!, length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (length > best) { best = length; axis = ((Math.atan2(b[0] - a[0], b[1] - a[1]) * 180 / Math.PI) % 90 + 90) % 90; }
+  });
+  return axis;
+}
+/** Nudge a camera bearing at least `min` degrees off the facade axis, so two faces are in view. */
+export function twoFacades(bearing: number, axis: number, min = 27): number {
+  const off = (((bearing - axis) % 90) + 90) % 90;
+  const turned = off < min ? bearing + (min - off) : off > 90 - min ? bearing - (off - (90 - min)) : bearing;
+  return ((turned % 360) + 360) % 360;
 }
 /** Other towers step back while one building holds the stage. */
 export const recede = (color: string) => mixHex(color, "#0b111c", 0.74);
