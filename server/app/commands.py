@@ -8,7 +8,7 @@ import sqlite3
 from typing import Any
 
 from .data.provider import provider_for_mode
-from .rooms import Conn, Room, RoomError, RoomManager
+from .rooms import MAX_PLAYERS, Conn, Room, RoomError, RoomManager
 
 log = logging.getLogger("lights_on.commands")
 
@@ -60,10 +60,19 @@ class CommandService:
         nickname = str(cmd.get("nickname", "")).strip()[:NICKNAME_MAX]
         if not nickname:
             raise RoomError("bad_payload", "Pick a nickname.")
+        # A full waiting room may contain phones from an earlier session/restart.
+        # Dict order is join order: remove disconnected entries oldest first.
+        stale_ids = [pid for pid, p in room.players.items() if not p.connected] if (
+            room.phase in ("LOBBY", "EXPLORE") and len(room.players) >= MAX_PLAYERS) else []
+        for pid in stale_ids:
+            del room.players[pid]
+        # Keep cleanup and admission together, before yielding to another join.
         player = room.add_player(nickname)
         if conn:
             conn.player_id = player.id
         room.save_players()
+        if stale_ids:
+            await room.broadcast("room_state", room.snapshot())
         await room.broadcast("player_joined", {"player": player.public()})
         # Two players is enough to play: leave the attract/lobby screen automatically.
         if room.phase == "LOBBY" and len(room.players) >= 2:
