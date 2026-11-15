@@ -43,6 +43,12 @@ const halfAngle = (o: Occluder, heroRadius: number, base: number) =>
 const excess = (o: Occluder, targetM: number, pitch: number, heroRadius: number) =>
   o.height - (targetM + Math.max(0, o.distance - heroRadius - (o.radius ?? 0)) * Math.tan(((90 - pitch) * Math.PI) / 180));
 
+/** Blockers for an already chosen bearing, including overlapping footprints. */
+export function fadedOccluders(near: Occluder[], bearing: number, targetM: number, pitch = ROUND_PITCH, heroRadius = 0): number[] {
+  const side = (bearing + 180) % 360;
+  return near.filter((o) => o.distance <= heroRadius + (o.radius ?? 0) || (angleDiff(o.azimuth, side) <= halfAngle(o, heroRadius, FADE_SECTOR_DEG) && excess(o, targetM, pitch, heroRadius) > 0)).map((o) => o.index);
+}
+
 /**
  * Pick the bearing whose camera side is most open, so lit floors at `targetM` stay in view,
  * and list the context buildings that would still block that view (to fade during the round).
@@ -56,8 +62,7 @@ export function planCamera(near: Occluder[], targetM: number, pitch = ROUND_PITC
     // Ties keep the bearing nearest north, the city's default framing.
     if (score < best.score - 1e-6 || (Math.abs(score - best.score) <= 1e-6 && angleDiff(bearing, 0) < angleDiff(best.bearing, 0))) best = { bearing, score };
   }
-  const side = (best.bearing + 180) % 360;
-  const faded = near.filter((o) => o.distance <= heroRadius + (o.radius ?? 0) || (angleDiff(o.azimuth, side) <= halfAngle(o, heroRadius, FADE_SECTOR_DEG) && excess(o, targetM, pitch, heroRadius) > 0)).map((o) => o.index);
+  const faded = fadedOccluders(near, best.bearing, targetM, pitch, heroRadius);
   return { bearing: best.bearing, faded };
 }
 
@@ -126,7 +131,7 @@ export function frameCamera(volume: FrameVolume, width: number, height: number, 
     const a = (2 * low + high) / 3, b = (low + 2 * high) / 3;
     if (distanceAt(a) < distanceAt(b)) high = b; else low = a;
   }
-  const distance = distanceAt((low + high) / 2) * 1.02;
+  let distance = distanceAt((low + high) / 2) * 1.02;
   low = -top * Math.tan(p) - r; high = top * Math.tan(p) + r;
   for (let i = 0; i < 50; i++) {
     const offset = (low + high) / 2;
@@ -134,6 +139,8 @@ export function frameCamera(volume: FrameVolume, width: number, height: number, 
     if (Math.min(...ys) + Math.max(...ys) > upper + lower) high = offset; else low = offset;
   }
   const offset = (low + high) / 2, b = bearing * Math.PI / 180;
+  // Balancing can make the near face wider in a narrow viewport; recheck all constraints.
+  distance = Math.max(distance, distanceAt(offset)) * 1.01;
   const meters = 40075016.68557849 * Math.cos(volume.center[1] * Math.PI / 180);
   const centerY = (1 - Math.log(Math.tan(Math.PI / 4 + volume.center[1] * Math.PI / 360)) / Math.PI) / 2 - offset * Math.cos(b) / meters;
   const center: Point = [volume.center[0] + offset * Math.sin(b) / meters * 360, Math.atan(Math.sinh(Math.PI * (1 - 2 * centerY))) * 180 / Math.PI];

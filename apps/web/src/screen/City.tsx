@@ -10,7 +10,7 @@ import { useGame } from "../lib/store";
 import { HoverCard } from "./overlays/HoverCard";
 import { Sparks } from "./Sparks";
 import { FLASH_MS, firstFloorAt, INTRO_DIVE_MS, lightUpDuration } from "./effects";
-import { frameCamera, frameVolume, occluders, planCamera, ROUND_PITCH } from "./camera";
+import { fadedOccluders, frameCamera, frameVolume, occluders, planCamera, ROUND_PITCH } from "./camera";
 
 declare global { interface Window { __lightsOnMap?: CityMap; __lightsOnFrameBuilding?: (id: string) => void } }
 const CENTER: [number, number] = [-95.3650891, 29.7588018];
@@ -78,6 +78,9 @@ export function City() {
           map.addLayer({ id: "floors", type: "fill-extrusion", source: "floors", paint: {
             "fill-extrusion-base": ["get", "base_m"], "fill-extrusion-height": ["get", "height_m"], "fill-extrusion-color": FLOOR_COLOR,
           } });
+          map.addLayer({ id: "floors-faded", type: "fill-extrusion", source: "floors", filter: ["in", ["get", "building_id"], ["literal", []]], paint: {
+            "fill-extrusion-base": ["get", "base_m"], "fill-extrusion-height": ["get", "height_m"], "fill-extrusion-color": FLOOR_COLOR, "fill-extrusion-opacity": 0.12,
+          } });
         }
         // Context towers between the round camera and the hero are drawn after the floors as glass,
         // so the light-up stays visible (filters are set per hero below).
@@ -108,10 +111,14 @@ export function City() {
   useEffect(() => {
     const map = mapRef.current;
     if (!ready || !map) return;
-    const fade = (indexes: number[]) => {
+    const fade = (indexes: number[], floorIds: string[] = []) => {
       if (!map.getLayer("context") || !map.getLayer("context-faded")) return;
       map.setFilter("context", indexes.length ? ["!", ["in", ["get", "_i"], ["literal", indexes]]] : null);
       map.setFilter("context-faded", ["in", ["get", "_i"], ["literal", indexes]]);
+      if (map.getLayer("floors-faded")) {
+        map.setFilter("floors", floorIds.length ? ["!", ["in", ["get", "building_id"], ["literal", floorIds]]] : null);
+        map.setFilter("floors-faded", ["in", ["get", "building_id"], ["literal", floorIds]]);
+      }
     };
     const dive = (id: string, duration = INTRO_DIVE_MS, settle = false) => {
       const { city, floors } = geo.current;
@@ -119,7 +126,11 @@ export function City() {
       if (!volume) return;
       // Protect the base as well as the lowest available floor. Keep the open-side bearing.
       const plan = city ? planCamera(occluders(city, ...volume.center), 0, ROUND_PITCH, volume.radius) : { bearing: 0, faded: [] };
-      fade(plan.faded);
+      // Wakeable neighbors also have floor geometry, independent of the city layer.
+      // Fade both representations without changing the open-side bearing.
+      const floorIds = floors ? [...new Set(fadedOccluders(occluders(floors, ...volume.center), plan.bearing, 0, ROUND_PITCH, volume.radius)
+        .map(index => String(floors.features[index]?.properties?.building_id)).filter(other => other !== id))] : [];
+      fade(plan.faded, floorIds);
       const canvas = map.getCanvas();
       const camera = frameCamera(volume, canvas.clientWidth, canvas.clientHeight, plan.bearing, ROUND_PITCH, map.getVerticalFieldOfView(), Math.min(220, canvas.clientHeight * 0.34));
       if (settle) map.easeTo({ ...camera, zoom: camera.zoom - 0.15, duration, essential: true });
@@ -174,12 +185,14 @@ export function City() {
     const map = mapRef.current;
     if (!ready || !map?.getLayer("floors")) return;
     map.setPaintProperty("floors", "fill-extrusion-color-transition", { duration: 0 });
+    map.setPaintProperty("floors-faded", "fill-extrusion-color-transition", { duration: 0 });
     let frame = 0;
     const paint = () => {
       // Paint and scheduling must share one clock read so the final frame
       // cannot be dropped when the deadline is crossed during setPaintProperty.
       const now = Date.now();
       map.setPaintProperty("floors", "fill-extrusion-color", floorColorExpression(revivedColors, revival ? { ...revival, at: firstFloorAt(revival.at) } : undefined, now));
+      map.setPaintProperty("floors-faded", "fill-extrusion-color", floorColorExpression(revivedColors, revival ? { ...revival, at: firstFloorAt(revival.at) } : undefined, now));
       if (revival && now - revival.at < lightUpDuration(revival.floors)) frame = requestAnimationFrame(paint);
     };
     paint();

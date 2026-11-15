@@ -1,36 +1,12 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import type { FeatureCollection } from "geojson";
-
-async function assertFramed(screen: Page, floors: FeatureCollection, id?: string) {
-const bounds = await screen.evaluate(({ floors, id }) => {
-  const map = window.__lightsOnMap!;
-  const matrix = map._camera.transform.getProjectionDataForCustomLayer().mainMatrix;
-  const { clientWidth: w, clientHeight: h } = map.getCanvas();
-  const projected: number[][] = [];
-  for (const f of floors.features.filter(f => id === undefined || String(f.properties?.building_id) === id)) {
-    const polygons = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.type === 'MultiPolygon' ? f.geometry.coordinates : [];
-    for (const polygon of polygons) for (const p of polygon[0] ?? []) for (const z of [0, Number(f.properties?.height_m)]) {
-      const lat = p[1]! * Math.PI / 180;
-      const v = [(p[0]! + 180) / 360, (180 - 180 / Math.PI * Math.log(Math.tan(Math.PI / 4 + lat / 2))) / 360, z / (40075016.68557849 * Math.cos(lat)), 1];
-      const out = [0, 1, 2, 3].map(row => v.reduce((s, n, col) => s + n * matrix[col * 4 + row]!, 0));
-      projected.push([(out[0]! / out[3]! + 1) * w / 2, (1 - out[1]! / out[3]!) * h / 2, out[3]!]);
-    }
-  }
-  return { w, h, points: projected };
-}, { floors, id });
-
-expect(bounds.points.length).toBeGreaterThan(0);
-expect(Math.min(...bounds.points.map(p => p[2]!))).toBeGreaterThan(0);
-expect(Math.min(...bounds.points.map(p => p[0]!))).toBeGreaterThan(20);
-expect(Math.max(...bounds.points.map(p => p[0]!))).toBeLessThan(bounds.w - 20);
-expect(Math.min(...bounds.points.map(p => p[1]!))).toBeGreaterThan(20);
-expect(Math.max(...bounds.points.map(p => p[1]!))).toBeLessThan(bounds.h - 20);
-}
+import { assertFramed } from "./camera-assertions";
 
 for (const [width, height] of [[1920, 1080], [1440, 900], [1280, 720]]) {
   test(`every building fits after wake at ${width}`, async ({ browser, baseURL, request }) => {
     test.setTimeout(300_000);
     const buildings = await (await request.get('/api/buildings')).json() as { id: string; name: string }[];
+    expect(buildings.map(b => b.id).sort()).toEqual(['233899', '233905', '233918', '233928', '233935', '233953', '519027']);
     expect((await (await request.get('/api/health')).json()).demo_mode).toBe(false);
     const floors = await (await request.get('/floors.geojson')).json() as FeatureCollection;
     const city = await (await request.get('/city.geojson')).json() as FeatureCollection;
@@ -66,7 +42,7 @@ for (const [width, height] of [[1920, 1080], [1440, 900], [1280, 720]]) {
         }
         await screen.waitForTimeout(2200);
         await expect.poll(() => screen.evaluate(() => !window.__lightsOnMap!.isMoving())).toBe(true);
-        await assertFramed(screen, floors, String(building.id));
+        const extent = await assertFramed(screen, floors, String(building.id));
         // Highlight only the target to measure actual WebGL pixels, including base and roof.
         await screen.evaluate(id => {
           const map = window.__lightsOnMap!;
@@ -82,6 +58,7 @@ for (const [width, height] of [[1920, 1080], [1440, 900], [1280, 720]]) {
           const map = window.__lightsOnMap!;
           map.setLayoutProperty('context', 'visibility', 'none');
           map.setLayoutProperty('context-faded', 'visibility', 'none');
+          map.setLayoutProperty('floors-faded', 'visibility', 'none');
           map.setFilter('floors', ['==', ['get', 'building_id'], id]);
         }, String(building.id));
         await settle();
@@ -106,14 +83,75 @@ for (const [width, height] of [[1920, 1080], [1440, 900], [1280, 720]]) {
             if (cyan(c.data, i)) expected[band]!++;
             if (cyan(a.data, i)) seen[band]!++;
           }
-          return { seen, expected };
+          return { seen, expected, top, bottom };
         }, { actual: actual.toString('base64'), clear: clear.toString('base64') });
         console.log(`${building.id}-${width} visible/clear pixels by roof, middle, base:`, pixels);
+        // The visible reference must reach the projected roof and ground, not merely a cropped sliver.
+        expect(Math.abs(pixels.top - extent.top)).toBeLessThan(5);
+        expect(Math.abs(pixels.bottom - extent.bottom)).toBeLessThan(5);
         for (let band = 0; band < 3; band++) {
           expect(pixels.expected[band]).toBeGreaterThan(100);
-          expect(pixels.seen[band]! / pixels.expected[band]!).toBeGreaterThan(0.8);
+          // Allow antialiasing at silhouettes, while rejecting even a small blocker.
+          expect(pixels.seen[band]! / pixels.expected[band]!).toBeGreaterThan(0.98);
         }
       } finally { await context.close(); }
     }
+  });
+
+  test(`INTRO handoff and revival ease keep the whole tower at ${width}`, async ({ browser, baseURL, request }) => {
+    test.setTimeout(60_000);
+    const context = await browser.newContext({ viewport: { width: width!, height: height! } });
+    try {
+      // The accelerated suite gives REVIVED only 0.8 s. Keep its screen beat
+      // visible while the production light-up and 1.8 s camera ease finish.
+      let revived = false;
+      await context.routeWebSocket(/\/ws\/.*role=screen/, socket => {
+        const server = socket.connectToServer();
+        server.onMessage(message => {
+          const event = JSON.parse(String(message)) as { type: string; phase?: string };
+          if (event.type === 'phase_changed' && event.phase === 'REVIVED') revived = true;
+          if (revived && event.type === 'phase_changed' && event.phase === 'EXPLORE') return;
+          socket.send(message);
+        });
+      });
+      const errors: string[] = [];
+      const screen = await context.newPage();
+      screen.on('pageerror', error => errors.push(error.message));
+      screen.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
+      await screen.goto(`${baseURL}/screen`);
+      const join = screen.locator('aside p').filter({ hasText: '/play?room=' });
+      await expect(join).toBeVisible();
+      const admin = await context.newPage();
+      await admin.goto(`${baseURL}/admin`);
+      await admin.getByLabel('Host PIN').fill('1234');
+      await admin.getByRole('button', { name: 'Data: kit', exact: true }).click();
+      const phone = await context.newPage();
+      await phone.goto((await join.innerText()).trim());
+      await phone.getByLabel('Nickname').fill('Camera');
+      await phone.getByRole('button', { name: 'Join', exact: true }).click();
+      await admin.getByRole('button', { name: 'Skip phase', exact: true }).click();
+      await expect(screen.getByTestId('field')).toHaveAttribute('data-facts-ready', 'true');
+      await phone.getByRole('button', { name: 'Wake building Esperson', exact: true }).click();
+      await expect(screen.getByTestId('subtitles')).toBeVisible();
+      await expect(screen.getByTestId('phase')).toContainText('PITCH');
+      await screen.waitForTimeout(2600);
+      await expect.poll(() => screen.evaluate(() => !window.__lightsOnMap!.isMoving())).toBe(true);
+      const floors = await (await request.get('/floors.geojson')).json() as FeatureCollection;
+      await assertFramed(screen, floors, '233953');
+      await screen.getByTestId('field').screenshot({ path: `e2e/screenshots/camera/intro-handoff-${width}.png` });
+      await phone.getByLabel('Your pitch').fill('A public community gaming studio open at night');
+      await phone.getByRole('button', { name: 'Submit pitch', exact: true }).click();
+      await expect(screen.getByTestId('phase')).toContainText('NEGOTIATE', { timeout: 15000 });
+      await phone.getByLabel('Your revision').fill('A public community gaming studio welcoming everyone at night');
+      await phone.getByRole('button', { name: 'Send revision', exact: true }).click();
+      await expect(screen.getByTestId('phase')).toContainText('POWER_UP', { timeout: 15000 });
+      await phone.getByRole('button', { name: 'Tap to charge', exact: true }).click();
+      await expect(screen.getByTestId('phase')).toContainText('REVIVED', { timeout: 15000 });
+      await screen.waitForTimeout(3500);
+      await expect.poll(() => screen.evaluate(() => !window.__lightsOnMap!.isMoving())).toBe(true);
+      await assertFramed(screen, floors, '233953');
+      await screen.getByTestId('field').screenshot({ path: `e2e/screenshots/camera/revival-ease-${width}.png` });
+      expect(errors).toEqual([]);
+    } finally { await context.close(); }
   });
 }
