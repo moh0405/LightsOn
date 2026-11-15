@@ -19,6 +19,8 @@
 .building-label { color: #b8c6dd; }
 .city-field { isolation: isolate; border: 1px solid #34445b; }
 .city-atmosphere { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, #070d1c70, transparent 32%, transparent 72%, #070d1c65), radial-gradient(ellipse at 50% 36%, #819fc214, transparent 65%); }
+/* In a round the stage narrows to the woken building: the surrounding city falls into night. */
+.city-field[data-staged] .city-atmosphere { background: radial-gradient(ellipse 46% 62% at 50% 46%, transparent 55%, #05091296 100%), linear-gradient(180deg, #070d1c90, transparent 30%, transparent 74%, #070d1c80); }
 .skyline-guide { position: absolute; left: 28px; bottom: 24px; pointer-events: none; text-shadow: 0 2px 12px #000; }
 .skyline-eyebrow { font-size: 28px; letter-spacing: 4px; color: #a4b9d5; }
 .skyline-guide p { font-size: 36px; font-weight: 600; letter-spacing: -1px; }
