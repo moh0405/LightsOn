@@ -101,10 +101,11 @@ def hyphen_numbers(line: str) -> str:
 
 MAGNITUDES = {'k': 1000, 'm': 1000000, 'b': 1000000000,
               'thousand': 1000, 'million': 1000000, 'billion': 1000000000}
+# Uppercase M/B are magnitude suffixes; lowercase m may mean meters.
 MAGNITUDE = re.compile(
     rf'(?<![\w.])(?P<amount>[-+]?(?:\d{{1,3}}(?:,\d{{3}})+|\d+)(?:\.\d+)?|'
     rf'half(?:\s+a)?|{_WORD}(?:[ -]+{_WORD})*)'
-    r'(?:(?:[ -]+)(?P<word>thousand|million|billion)|(?P<suffix>[kmb]))\b', re.I)
+    r'(?:(?:[ -]+)(?P<word>thousand|million|billion)|(?P<suffix>(?-i:[kKMB])))\b', re.I)
 
 
 def normalize_magnitudes(line: str) -> str:

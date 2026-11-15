@@ -1182,3 +1182,7 @@ def test_paid_eval_caps_reservations_before_invoking_fake_api(monkeypatch, tmp_p
     ledger.call(FAST, 100000, 0, invoke, lambda value: value)
     assert len(invoked) == 1
     assert ledger.snapshot()['total_usd'] - start <= .12
+
+
+def test_lowercase_metric_suffix_does_not_borrow_pitch_area(dossier):
+    assert check_line('Your 9m is too tall.', [], dossier, quoted=['9000000 square feet'])
