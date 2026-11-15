@@ -134,7 +134,7 @@ test("real Esperson lobby stays mounted beyond ten seconds at 1920x1080", async 
   await page.screenshot({ path: "e2e/screenshots/matterport/esperson-lobby-real.png" });
 });
 
-test("INTRO mounts the lobby immediately and holds its named view for six seconds", async ({ context, page }) => {
+test("INTRO mounts the lobby immediately and shows it from one second to the end of INTRO", async ({ context, page }) => {
   await stub(context);
   await page.clock.install({ time: new Date("2026-11-14T12:00:00Z") });
   await page.clock.pauseAt(new Date("2026-11-14T12:00:01Z"));
@@ -147,11 +147,50 @@ test("INTRO mounts the lobby immediately and holds its named view for six second
   const frame = page.getByTitle("Matterport interior tour");
   await expect(frame).toHaveCount(1);
   await expect(page.getByTestId("matterport-still")).toContainText("Lobby");
-  await page.clock.runFor(2100);
+  await page.clock.runFor(1100);
   await expect(frame).toBeVisible();
-  await page.clock.runFor(5700);
+  await page.clock.runFor(6700);
   await expect(frame).toBeVisible();
   await page.clock.runFor(400);
   await expect(frame).toBeHidden();
   await expect(frame).toHaveCount(1); // Visibility changes never restart the iframe.
+});
+
+test("real INTRO tour autoplays without the start poster and stays visible six seconds", async ({ page, browser }) => {
+  test.skip(process.env.LO_REAL_MATTERPORT !== "1" || process.env.PHASE_DURATIONS_SCALE !== "1", "Opt-in external check with natural timers");
+  test.setTimeout(90000);
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.goto("/screen");
+  await expect(page.getByTestId("qr")).toBeVisible();
+  const join = (await page.locator("aside p").filter({ hasText: "/play?room=" }).innerText()).trim();
+  const phones = await Promise.all([browser.newPage(), browser.newPage()]);
+  for (const [index, phone] of phones.entries()) {
+    await phone.goto(join);
+    await phone.getByLabel("Nickname").fill(index === 0 ? "Ann" : "Bo");
+    await phone.getByRole("button", { name: "Join", exact: true }).click();
+  }
+  // Sample visibility in the page so test polling never shortens the measured window.
+  await page.evaluate(() => {
+    const w = window as unknown as { tourLog: { t: number; shown: boolean; phase: string }[] };
+    w.tourLog = [];
+    setInterval(() => {
+      const still = document.querySelector<HTMLElement>('[data-testid="matterport-still"]');
+      w.tourLog.push({ t: performance.now(), shown: Boolean(still && getComputedStyle(still).visibility === "visible"), phase: document.querySelector('[data-testid="phase"]')?.textContent ?? "" });
+    }, 50);
+  });
+  await phones[0]!.getByRole("button", { name: "Wake building Esperson", exact: true }).click();
+  const still = page.getByTestId("matterport-still");
+  await expect(still).toBeVisible({ timeout: 10000 });
+  const frame = page.frameLocator('[data-testid="matterport-still"] iframe');
+  await expect(frame.locator("canvas").first()).toBeVisible({ timeout: 8000 });
+  await page.waitForTimeout(3000);
+  await expect(frame.getByText(/Explore 3D Space/i)).toHaveCount(0);
+  await page.screenshot({ path: "e2e/screenshots/matterport/intro-real-1920.png" });
+  await expect(page.getByTestId("phase")).toContainText("PITCH", { timeout: 12000 });
+  const log = await page.evaluate(() => (window as unknown as { tourLog: { t: number; shown: boolean; phase: string }[] }).tourLog);
+  const shown = log.filter((s) => s.shown);
+  expect(shown.length).toBeGreaterThan(0);
+  const span = shown.at(-1)!.t - shown[0]!.t;
+  expect(span, "INTRO tour stays visible for at least six seconds").toBeGreaterThanOrEqual(6000);
+  await Promise.all(phones.map((phone) => phone.close()));
 });

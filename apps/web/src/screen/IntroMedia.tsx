@@ -5,8 +5,10 @@ import { loadMedia } from "./media";
 import { useTours } from "./tours";
 import { TourFrame } from "./TourFrame";
 
-export const INTRO_TOUR_START_MS = 2000;
-export const INTRO_TOUR_DURATION_MS = 6000;
+// The client hears INTRO up to ~0.5 s after the server starts its 8 s timer;
+// a 1 s lead-in keeps the preloaded tour on screen for at least six seconds.
+export const INTRO_TOUR_START_MS = 1000;
+export const INTRO_TOUR_DURATION_MS = 7000;
 
 export function IntroMedia({ onError }: { onError: (message: string) => void }) {
   const { buildingId, roundId, dataMode, phase } = useGame();
