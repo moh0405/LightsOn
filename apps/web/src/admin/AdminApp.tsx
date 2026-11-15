@@ -4,7 +4,7 @@ import { CommandError } from "../lib/ws";
 import { safeGet, safeSet, useGame, useRoomSocket } from "../lib/store";
 import { ConnBanner, ErrorToast, PhaseBadge, button, input, page } from "../lib/ui";
 
-const ACTIONS: { action: string; label: string }[] = [
+export const ACTIONS: { action: string; label: string }[] = [
   { action: "skip_phase", label: "Skip phase" },
   { action: "reset_round", label: "Reset round" },
   { action: "reset_room", label: "Reset room" },

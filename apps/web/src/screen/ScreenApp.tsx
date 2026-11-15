@@ -9,6 +9,7 @@ import { WalkInside } from "./WalkInside";
 import { ConnBanner, ErrorToast, PhaseBadge, page } from "../lib/ui";
 import { useScreenAudio } from "./music";
 import { TracePanel } from "./overlays/TracePanel";
+import { HostControls } from "./overlays/HostControls";
 import { getDossier } from "../lib/buildings";
 
 /** The waking building's name from its dossier; the internal id never reaches the projector. */
@@ -29,7 +30,7 @@ export function ScreenApp() {
   const [mediaError, setMediaError] = useState<string | null>(null);
   const onMediaError = useCallback((message: string) => setMediaError(message), []);
   const [failed, setFailed] = useState(false);
-  useRoomSocket(room, "screen");
+  const sock = useRoomSocket(room, "screen");
   const { players, buildingId, hasState, dataMode, heroIds, tourRequest, phase } = useGame();
   const [hovered, setHovered] = useState<string | null>(null);
   const [walk, setWalk] = useState<{ buildingId: string; modelId: string | null } | null>(null);
@@ -71,7 +72,7 @@ export function ScreenApp() {
 
   return (
     <><TracePanel />
-    <main className={`projector${walk ? " walking" : ""}`} style={{ ...page, display: "grid", gridTemplateColumns: "minmax(0, 1fr) 390px", gap: 16, height: "100vh", boxSizing: "border-box", overflow: "hidden" }}>
+    <main className={`projector${walk ? " walking" : ""}`} style={page}>
       <section className="screen-stage">
         <ConnBanner /><ErrorToast />
         {failed && <p role="alert">Could not reach the server.</p>}
@@ -79,21 +80,22 @@ export function ScreenApp() {
         {audio.error && <p role="alert">{audio.error}</p>}
         <div className="screen-status"><PhaseBadge />{dataMode === "fixtures" && <span className="data-badge" data-testid="data-mode-badge">Fixture data · offline</span>}{buildingId && <p className="building-label" data-testid="building-label">Waking {buildingName ?? "a building"}</p>}</div>
         <div className="city-stage"><City onHover={setHovered} /><IntroMedia onError={onMediaError} /><RoundOverlays /></div>
+        <HostControls sock={sock} />
         {walk && <WalkInside key={walk.buildingId} buildingId={walk.buildingId} modelId={walk.modelId} close={closeTour} />}
         {mediaError && <div className="screen-toast" role="alert">{mediaError}<button aria-label="Dismiss media notice" onClick={() => setMediaError(null)}>×</button></div>}
       </section>
       <style>{`[data-testid="qr"] svg { display: block; width: 100%; height: auto; }`}</style>
-      <aside style={{ minHeight: 0, overflow: "hidden", display: "flex", flexDirection: "column", gap: 6 }}>
+      <aside className="screen-side">
         {qr && (
           <>
-            <div data-testid="qr" style={{ background: "#fff", padding: 8, borderRadius: 8, width: 200, boxSizing: "border-box" }} dangerouslySetInnerHTML={{ __html: qr.svg }} />
-            <p style={{ wordBreak: "break-all", fontSize: 28, margin: 0 }}>{qr.url}</p>
+            <div data-testid="qr" className="screen-qr" dangerouslySetInnerHTML={{ __html: qr.svg }} />
+            <p className="join-url">{qr.url}</p>
             <p style={{ margin: 0 }}>Room code: <strong>{room}</strong></p>
           </>
         )}
         <h3 style={{ margin: 0 }}>Players ({Object.keys(players).length}/4)</h3>
         {!hasState && <p>…</p>}
-        <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, fontSize: 28 }}>
+        <ul className="player-list">
           {Object.values(players).map((p) => (
             <li key={p.id} style={{ opacity: p.connected ? 1 : 0.4, display: "flex", gap: 6 }}>
               <span style={{ color: p.color, flexShrink: 0 }}>●</span><div>{p.nickname}</div>
