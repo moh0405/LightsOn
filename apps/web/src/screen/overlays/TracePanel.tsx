@@ -67,14 +67,14 @@ export function TracePanel() {
   return <>
     <button aria-expanded={open} aria-controls="trace-panel" onClick={() => setOpen((value) => !value)}
       style={{ ...button, fontSize: 28, padding: "4px 12px", position: "fixed", bottom: 16, right: 16, zIndex: 30 }}>Agent trace · T</button>
-    {open && <section id="trace-panel" role="region" aria-label="Agent trace" data-testid="trace-panel"
+    {open && <section id="trace-panel" className="trace-panel" role="region" aria-label="Agent trace" data-testid="trace-panel"
       style={{ fontFamily: "system-ui, sans-serif", fontSize: 22, lineHeight: 1.25, position: "fixed", inset: 32, zIndex: 40, background: "#0c1220f8", color: "#f2f6ff", border: "1px solid #637a9d", borderRadius: 18, padding: 24, boxSizing: "border-box", boxShadow: "0 16px 80px #000b", display: "flex", flexDirection: "column", gap: 18 }}>
-      <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
         <div><h2 style={{ margin: 0, fontSize: 32 }}>Inside the building’s agent</h2><p style={{ ...muted, margin: "6px 0 0" }}>Public tool activity · no private reasoning or prompts</p></div>
         <button style={{ ...button, fontSize: 22 }} onClick={() => setOpen(false)}>Close · T / Esc</button>
       </header>
       {error && <p role="alert">Recorded trace unavailable. Live events and the game remain available.</p>}
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(250px, 0.85fr) minmax(350px, 1.35fr) minmax(250px, 1fr)", gap: 18, minHeight: 0, flex: 1 }}>
+      <div className="trace-columns" style={{ display: "grid", gridTemplateColumns: "minmax(250px, 0.85fr) minmax(350px, 1.35fr) minmax(250px, 1fr)", gap: 18, minHeight: 0, flex: 1 }}>
         <aside style={{ ...card, overflow: "auto" }}>
           <h3 style={{ fontSize: 28, marginTop: 0 }}>Esperson · prep evidence</h3>
           <h4 style={{ fontSize: 28, margin: "20px 0 10px" }}>Plan · write_todos</h4>

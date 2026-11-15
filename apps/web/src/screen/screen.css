@@ -1,6 +1,10 @@
 @font-face { font-family: "Space Grotesk"; src: local("Space Grotesk"); font-display: swap; }
 @font-face { font-family: Inter; src: local("Inter"); font-display: swap; }
-.projector { font-family: Inter, system-ui, sans-serif !important; font-size: 28px; line-height: 1.25; }
+.projector { font-family: Inter, system-ui, sans-serif !important; font-size: 28px; line-height: 1.25; display: grid; grid-template-columns: minmax(0, 1fr) 390px; gap: 16px; height: 100vh; overflow: hidden; }
+.screen-side { min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 6px; }
+.screen-qr { background: #fff; padding: 8px; border-radius: 8px; width: 200px; flex-shrink: 0; }
+.join-url { word-break: break-all; font-size: 28px; margin: 0 !important; }
+.player-list { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 28px; }
 .projector * { box-sizing: border-box; min-width: 0; }
 .projector h1, .projector h2, .projector h3, .projector strong { font-family: "Space Grotesk", Inter, system-ui, sans-serif; }
 .projector h1 { font-size: 48px; margin: 0; letter-spacing: -2px; }
@@ -48,6 +52,10 @@
 .pitch-grid p, .challenge-grid p, .challenge-grid strong { overflow-wrap: anywhere; }
 .projector table { table-layout: fixed; font-size: 28px; border-spacing: 4px !important; }
 .projector th { overflow-wrap: anywhere; }
+.projector .score-table { width: 100%; text-align: left; table-layout: auto; border-spacing: 12px 4px !important; }
+.score-table th, .score-table td { white-space: nowrap; overflow-wrap: normal; }
+.score-table tbody th { overflow: hidden; text-overflow: ellipsis; max-width: 8em; }
+.score-note { color: #b8c6dd; margin: 0 !important; }
 .projector [aria-label="Cited evidence"] p { margin: 4px 0; }
 .projector [data-testid="city-meter"] { border-color: #56617a; }
 .needs-track { display: block; height: 16px; background: #30384c; border-radius: 8px; overflow: hidden; position: relative; }
@@ -82,3 +90,43 @@
 .walking .round-overlays { position: fixed !important; left: 16px !important; right: 438px !important; bottom: 90px !important; z-index: 11; max-height: 35vh !important; pointer-events: none; }
 .walking .round-overlays > * { pointer-events: auto; }
 .walking .screen-toast { position: fixed; z-index: 13; }
+
+/* A02: a phone-width projector stacks the sidebar under a usable skyline. */
+@media (max-width: 720px) {
+  .projector { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(70vh, auto) auto; height: auto; min-height: 100vh; overflow-x: hidden; overflow-y: auto; font-size: 18px; padding: 8px !important; }
+  .projector h1 { font-size: 30px; letter-spacing: -1px; }
+  .projector h2 { font-size: 24px; } .projector h3 { font-size: 20px; }
+  .projector table { font-size: 16px; }
+  .screen-heading { flex-wrap: wrap; gap: 8px; }
+  .screen-status { flex-wrap: wrap; gap: 8px; }
+  .screen-side { overflow: visible; }
+  .screen-side, .screen-side *, .player-list, .join-url { font-size: 18px !important; }
+  .screen-qr { width: 140px; }
+  .round-overlays { font-size: 18px !important; }
+  .walk-inside { padding-right: 0; }
+  .walking .screen-status { right: 8px; } .walking .round-overlays { right: 8px !important; }
+}
+/* A03: a 720-line projector shrinks the QR and sidebar type so every city need stays visible. */
+@media (min-width: 721px) and (max-height: 820px) {
+  .screen-side { gap: 2px; }
+  .screen-qr { width: 150px; padding: 6px; }
+  .join-url, .player-list, .screen-side h3 { font-size: 22px !important; }
+  .screen-side > p { font-size: 22px; }
+  .screen-side [data-testid="city-meter"], .screen-side [data-testid="city-meter"] * { font-size: 22px !important; }
+  .screen-side [data-testid="city-meter"] h2 { font-size: 26px !important; }
+  .screen-side .needs-track { height: 10px; }
+}
+/* A12: on phones the trace sections stack inside one scrolling panel; Close stays at the top. */
+@media (max-width: 900px) {
+  .trace-panel { inset: 8px !important; padding: 12px !important; overflow-x: hidden; overflow-y: auto; font-size: 16px !important; }
+  .trace-panel h2 { font-size: 22px !important; }
+  .trace-panel h3, .trace-panel h4 { font-size: 18px !important; }
+  .trace-columns { grid-template-columns: minmax(0, 1fr) !important; flex: none !important; }
+  .trace-columns > * { max-height: none; }
+}
+.host-controls { position: absolute; top: 72px; right: 8px; z-index: 20; width: min(560px, calc(100% - 16px)); background: #171e2df8; border: 1px solid #f2c46d; border-radius: 16px; padding: 16px; display: grid; gap: 8px; box-shadow: 0 6px 24px #0008; }
+.host-controls header { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.host-controls p { margin: 0; }
+.host-controls input { font: inherit; padding: 6px 10px; border-radius: 8px; border: 1px solid #6b7891; background: #10131c; color: #eee; }
+.host-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.host-actions [aria-pressed="true"] { border-color: #7bd88f; color: #7bd88f; }
