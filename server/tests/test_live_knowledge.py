@@ -118,7 +118,7 @@ async def test_tool_loop_round_trips_publish_grounded_line_and_trace(dossier):
         AIMessage(content='', tool_calls=[call('search_facts', {'query': 'dark floors'}, 't1'),
                                           call('get_fact', {'id': fact['id']}, 't2')]),
         answer({'challenges': [dict(player_id='p1', line=f"{fact['value']} dark floors, darling, and I want them swinging.",
-                                    fact_ids=[fact['id']], counteroffer='Could your club open on one dark floor first?',
+                                    fact_ids=[fact['id']], counteroffer='Could your club start small and swing after sunset?',
                                     category_guess='entertainment')]}),
     ])
     check = FakeChat([answer({'checks': [{'index': 0, 'supported': True, 'reason': ''}]})])
