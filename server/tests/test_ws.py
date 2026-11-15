@@ -25,6 +25,7 @@ def test_create_room_returns_qr(client):
     assert len(r["room"]) == 4
     assert r["join_url"] == f"https://example.test/play?room={r['room']}"
     assert r["qr_svg"].lstrip().startswith("<svg")
+    assert "viewBox" in r["qr_svg"]  # scales with CSS instead of cropping (QR was unscannable)
     again = client.post("/api/rooms", json={"room": r["room"]}).json()
     assert again["room"] == r["room"]  # screen refresh reuses the room
 

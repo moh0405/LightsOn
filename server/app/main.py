@@ -295,7 +295,7 @@ async def create_room(request: Request, body: CreateRoom | None = None) -> dict:
     room = manager.create(body.room.upper() if body.room else None)
     base = (os.getenv("PUBLIC_BASE_URL") or body.base_url or str(request.base_url)).rstrip("/")
     join_url = f"{base}/play?room={room.code}"
-    qr_svg = segno.make(join_url, error="m").svg_inline(scale=8, border=2, dark="#000", light="#fff")
+    qr_svg = segno.make(join_url, error="m").svg_inline(scale=8, border=4, dark="#000", light="#fff", omitsize=True)
     return {"room": room.code, "join_url": join_url, "qr_svg": qr_svg}
 
 
