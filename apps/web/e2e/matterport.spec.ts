@@ -57,6 +57,24 @@ for (const mode of ["kit", "fixtures"]) {
     await expect(page.getByTestId("qr")).toBeVisible();
     await admin.getByRole("button", { name: "Close interior tour", exact: true }).click();
     await expect(walk).toHaveCount(0);
+    await admin.getByRole("button", { name: "Walk inside", exact: true }).click();
+    await expect(walk).toBeVisible();
+    for (const [index, phone] of phones.entries()) {
+      await phone.getByLabel("Your pitch").fill(index === 0 ? "A public community games space" : "A shared food market");
+      await phone.getByRole("button", { name: "Submit pitch", exact: true }).click();
+    }
+    await expect(page.getByTestId("phase")).toContainText("NEGOTIATE", { timeout: 10000 });
+    await expect(walk).toBeVisible();
+    await expect(page.getByRole("region", { name: "Building counteroffers" })).toBeVisible();
+    await phones[0]!.getByLabel("Your revision").fill("A public community games space welcoming everyone at night");
+    await phones[0]!.getByRole("button", { name: "Send revision", exact: true }).click();
+    await expect(page.getByTestId("score-card")).toBeVisible();
+    await expect(walk).toBeVisible();
+    await expect(page.getByTestId("phase")).toContainText("POWER_UP");
+    await expect(walk).toHaveCount(0); // The interior cannot hide the light-up moment.
+    for (const phone of phones) await phone.getByRole("button", { name: "Tap to charge", exact: true }).click();
+    await expect(page.getByTestId("phase")).toContainText("REVIVED");
+    await expect(page.getByTestId("city-meter")).toContainText("1 buildings revived");
     expect(errors).toEqual([]);
     await Promise.all(phones.map((phone) => phone.close()));
   });
@@ -78,23 +96,41 @@ test("eight-second load timeout shows the cover and a quiet unavailable note", a
   await expect(walk).toHaveCount(0);
 });
 
-test("real Esperson lobby showcase at 1920x1080", async ({ page, context }) => {
+test("real Esperson lobby stays mounted beyond ten seconds at 1920x1080", async ({ page, context }) => {
   test.skip(process.env.LO_REAL_MATTERPORT !== "1", "Opt-in external visual verification");
   test.setTimeout(60000);
   await page.setViewportSize({ width: 1920, height: 1080 });
   await page.goto("/screen");
   await expect(page.getByTestId("qr")).toBeVisible();
-  await page.getByRole("button", { name: "Walk inside · M", exact: true }).click();
-  const walk = page.getByRole("region", { name: "Walk inside", exact: true });
-  await expect(walk.getByRole("tab", { name: "Lobby", exact: true })).toBeVisible({ timeout: 15000 });
-  const frame = page.frameLocator('.walk-inside iframe');
-  await expect(frame.locator("canvas").first()).toBeVisible({ timeout: 30000 });
-  await page.waitForTimeout(15000); // Allow real WebGL textures and quick-start transition to finish.
   const admin = await context.newPage();
   await admin.goto("/admin");
   await admin.getByLabel("Host PIN").fill("1234");
   await admin.getByRole("button", { name: "Data: kit", exact: true }).click();
   await expect(page.getByTestId("data-mode-badge")).toHaveCount(0);
+  let showcaseLoads = 0;
+  page.on("request", (request) => {
+    if (request.url().startsWith("https://my.matterport.com/show/")) showcaseLoads++;
+  });
+  await page.getByRole("button", { name: "Walk inside · M", exact: true }).click();
+  const walk = page.getByRole("region", { name: "Walk inside", exact: true });
+  await expect(walk.getByRole("tab", { name: "Lobby", exact: true })).toBeVisible({ timeout: 15000 });
+  const mountedFrame = await walk.locator("iframe").elementHandle();
+  const canvas = page.frameLocator('.walk-inside iframe').locator("canvas").first();
+  await expect(canvas).toBeVisible({ timeout: 30000 });
+  await page.waitForTimeout(10000);
+  await expect(walk).toBeVisible();
+  await expect(canvas).toBeVisible();
+  expect(await mountedFrame!.evaluate((element) => element.isConnected)).toBe(true);
+  expect(showcaseLoads, "Re-renders never reload the public showcase").toBe(1);
+  await page.waitForTimeout(5000); // Finish real WebGL textures and quick-start transition.
+  const before = await canvas.screenshot();
+  const box = (await canvas.boundingBox())!;
+  await page.mouse.move(box.x + box.width * 0.75, box.y + box.height * 0.5);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.25, box.y + box.height * 0.5, { steps: 30 });
+  await page.mouse.up();
+  await page.waitForTimeout(1000);
+  expect(before.equals(await canvas.screenshot()), "Public 3D canvas responds to a pointer drag").toBe(false);
   await page.screenshot({ path: "e2e/screenshots/matterport/esperson-lobby-real.png" });
 });
 

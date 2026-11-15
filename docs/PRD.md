@@ -634,6 +634,8 @@ All commands go through `CommandService.handle(cmd, origin)` where `origin` is `
 
 Voice: `POST /api/rooms/{room}/pitch_audio` (multipart `audio`, `player_id`, `phase`) → STT → `submit_pitch` or `revise_pitch`.
 
+Public tour metadata: `GET /api/buildings/{id}/tours` returns `[{model_id, name: string|null, cover_url: string|null}]` for dossier model IDs only, with the source-named lobby first. The server reads the public Matterport player API with a 3 s timeout and a five-minute cache, including failures; unavailable metadata returns the kit IDs with null names/covers. No SDK credentials or contact fields reach the client. `/screen` opens the public `https://my.matterport.com/show/?m=<id>` embed from **Walk inside**, **M**, or the host request; **Esc/M** and **Back to city** close it. The INTRO lobby beat lasts about six seconds, and an eight-second iframe load timeout falls back to its cover with **Tour unavailable**, without a toast. Tours are presentation only: round timers, subtitles, negotiation and charging continue, and POWER_UP/REVIVED close the walk-in to show the light-up moment.
+
 ### Events (server → clients)
 
 | Event | To | Payload |

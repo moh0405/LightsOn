@@ -157,7 +157,11 @@ class CommandService:
             rooms = list(self.manager.rooms.values())
             for active in rooms:
                 active.data_mode = mode
-                active.save_players()
+                # Reconnect/restore reads the process mode. Avoid rebuilding every
+                # historical room's validated dossiers when nobody is connected.
+                if active.conns:
+                    active.save_players()
             for active in rooms:
-                await active.broadcast("room_state", active.snapshot())
+                if active.conns:
+                    await active.broadcast("room_state", active.snapshot())
         return {"phase": room.phase}

@@ -33,3 +33,28 @@ async def test_host_tour_is_screen_only_without_round_mutation(tmp_path, monkeyp
         assert room.snapshot() == before
     finally:
         manager.close()
+
+
+async def test_host_mode_switch_defers_disconnected_room_snapshots(tmp_path, monkeypatch):
+    monkeypatch.setenv('HOST_PIN', '1234')
+    monkeypatch.setenv('DATA_MODE', 'kit')
+    manager = RoomManager(['233953'], tmp_path)
+    connected, disconnected = manager.create(), manager.create()
+    events = []
+    async def screen_send(event): events.append(event)
+    connected.conns.append(Conn(role='screen', send=screen_send))
+    def unnecessary_snapshot():
+        pytest.fail('A disconnected historical room must not revalidate dossiers on a host mode switch')
+    monkeypatch.setattr(disconnected, 'snapshot', unnecessary_snapshot)
+    try:
+        await CommandService(manager).handle({
+            'type': 'host_action', 'room': connected.code, 'pin': '1234',
+            'action': 'set_data_mode', 'data_mode': 'fixtures',
+        }, 'host')
+        assert connected.data_mode == disconnected.data_mode == 'fixtures'
+        assert events[-1]['type'] == 'room_state'
+        assert events[-1]['data_mode'] == 'fixtures'
+        import json
+        assert json.loads((tmp_path / f'{connected.code}.json').read_text())['data_mode'] == 'fixtures'
+    finally:
+        manager.close()

@@ -30,14 +30,17 @@ def test_matterport_get_single_model():
     assert get_model("") is None
 
 
-@pytest.fixture
-def tours_client(monkeypatch):
+@pytest.fixture(params=['kit', 'fixtures'])
+def tours_client(request, monkeypatch):
     import httpx
     from fastapi.testclient import TestClient
     from app.main import app
     from app.data import matterport
+    from app.data.provider import provider_for_mode
+    if request.param == 'kit' and not provider_for_mode('kit').index.is_file():
+        pytest.skip('Real CoStar index absent')
     matterport._public_metadata.cache_clear()
-    monkeypatch.setenv('DATA_MODE', 'fixtures')
+    monkeypatch.setenv('DATA_MODE', request.param)
     calls = []
     names = {'Wtxv2Mp8uQE': 'Lobby', 'nP2o5YT7nCP': 'Underground Tunnel System',
              'wovF4kpoaw4': '808 Travis - Suite 550'}
@@ -87,6 +90,10 @@ def test_tours_failure_returns_nulls_without_losing_kit_ids(tours_client, monkey
     assert len(result.json()) == 3
     assert all(t['name'] is None and t['cover_url'] is None for t in result.json())
     assert 'metadata unavailable' in caplog.text
+    def unexpected_request(*args, **kwargs):
+        pytest.fail('Unavailable metadata must be cached too')
+    monkeypatch.setattr(matterport.httpx, 'get', unexpected_request)
+    assert client.get('/api/buildings/233953/tours').json() == result.json()
 
 
 def test_all_prepared_tours_match_office_index_and_csv():
