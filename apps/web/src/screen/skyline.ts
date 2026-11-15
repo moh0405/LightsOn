@@ -153,8 +153,8 @@ export function floorReveals(floors: FeatureCollection): FeatureCollection {
   return { type: "FeatureCollection", features: floors.features.flatMap(feature => {
     const z = spans(feature);
     if (!z || z.base <= (ground.get(String(feature.properties?.building_id)) ?? 0)) return [];
-    const coordinates = outerRings(feature).flatMap(ring => { const { points, back } = local(ring); return points.length < 3 ? [] : [[close(outset(points, 0.34), back)]]; });
-    return coordinates.length ? [{ type: "Feature" as const, properties: { ...feature.properties, height_m: z.base + Math.min(0.42, (z.top - z.base) * 0.13) }, geometry: { type: "MultiPolygon" as const, coordinates } }] : [];
+    const coordinates = outerRings(feature).flatMap(ring => { const { points, back } = local(ring); return points.length < 3 ? [] : [[close(outset(points, 0.3), back)]]; });
+    return coordinates.length ? [{ type: "Feature" as const, properties: { ...feature.properties, height_m: z.base + Math.min(0.3, (z.top - z.base) * 0.1) }, geometry: { type: "MultiPolygon" as const, coordinates } }] : [];
   }) };
 }
 

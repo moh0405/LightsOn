@@ -25,9 +25,15 @@ function haloFilter(lit: Lit[], faded: string[]): FilterSpecification {
   return faded.length ? ["all", on, ["!", ["in", ["get", "building_id"], ["literal", faded]]]] : on;
 }
 const LIT = haloFilter([], []);
+/** The wide bloom is reserved for floors the players switched on. */
+function glowFilter(lit: Lit[], faded: string[]): FilterSpecification {
+  const on: FilterSpecification = ["any", ["==", ["get", "game_status"], "revived"],
+    ...lit.map(({ id, floors }): ExpressionSpecification => ["all", ["==", ["get", "building_id"], id], ["in", ["get", "floor_number"], ["literal", floors]]])];
+  return faded.length ? ["all", on, ["!", ["in", ["get", "building_id"], ["literal", faded]]]] : on;
+}
 // Decorative layers that follow each tower's floors (hidden together when a tower is faded).
 const TOWER_LAYERS = ["floors", "windows", "reveals", "roof-deck", "roof-crown"];
-const CONTEXT_COLOR = "#29394e", CONTEXT_RECEDED = "#131b29";
+const CONTEXT_COLOR = "#29394e", CONTEXT_RECEDED = "#182234";
 interface Bounds { left: number; right: number; top: number; bottom: number }
 interface Hover { player: string; building: string; color: string; floor: number | null; bounds: Bounds | null }
 
@@ -160,6 +166,8 @@ export function City({ onHover }: { onHover?: (id: string | null) => void }) {
           // One soft shell around lit floors only, drawn last so it blooms over the facade.
           map.addSource("halos", { type: "geojson", data: floorHalos(display) });
           map.addLayer({ id: "floor-halos", type: "fill-extrusion", source: "halos", filter: LIT, paint: { ...extrusion, "fill-extrusion-color": FLOOR_COLOR, "fill-extrusion-opacity": 0.22 } });
+          map.addSource("glow", { type: "geojson", data: floorHalos(display, 5) });
+          map.addLayer({ id: "revived-glow", type: "fill-extrusion", source: "glow", filter: glowFilter([], []), paint: { ...extrusion, "fill-extrusion-color": FLOOR_COLOR, "fill-extrusion-opacity": 0.26 } });
         }
         // Context towers between the round camera and the hero are drawn after the floors as glass,
         // so the light-up stays visible (filters are set per hero below).
@@ -205,6 +213,7 @@ export function City({ onHover }: { onHover?: (id: string | null) => void }) {
         map.setFilter("floors-faded", ["in", ["get", "building_id"], ["literal", floorIds]]);
         fadedFloors.current = floorIds;
         map.setFilter("floor-halos", haloFilter(lit.current, floorIds));
+        map.setFilter("revived-glow", glowFilter(lit.current, floorIds));
       }
       // Neighbours step back while a building holds the stage.
       map.setPaintProperty("context", "fill-extrusion-color", staged ? CONTEXT_RECEDED : CONTEXT_COLOR);
@@ -297,10 +306,11 @@ export function City({ onHover }: { onHover?: (id: string | null) => void }) {
   useEffect(() => {
     const map = mapRef.current;
     if (!ready || !map?.getLayer("floors")) return;
-    for (const layer of ["floors", "floors-faded", "windows", "floor-halos"]) map.setPaintProperty(layer, "fill-extrusion-color-transition", { duration: 0 });
+    for (const layer of ["floors", "floors-faded", "windows", "floor-halos", "revived-glow"]) map.setPaintProperty(layer, "fill-extrusion-color-transition", { duration: 0 });
     const hero = revival?.building_id ?? buildingId;
     lit.current = Object.entries(revivedColors).map(([id, entry]) => ({ id, floors: entry.floors }));
     map.setFilter("floor-halos", haloFilter(lit.current, fadedFloors.current));
+    map.setFilter("revived-glow", glowFilter(lit.current, fadedFloors.current));
     let frame = 0;
     const paint = () => {
       // Paint and scheduling must share one clock read so the final frame
@@ -313,6 +323,7 @@ export function City({ onHover }: { onHover?: (id: string | null) => void }) {
       map.setPaintProperty("floors-faded", "fill-extrusion-color", color);
       map.setPaintProperty("windows", "fill-extrusion-color", staged(mapColors(color, glass)));
       map.setPaintProperty("floor-halos", "fill-extrusion-color", color);
+      map.setPaintProperty("revived-glow", "fill-extrusion-color", color);
       if (revival && now - revival.at < lightUpDuration(revival.floors)) frame = requestAnimationFrame(paint);
     };
     paint();
