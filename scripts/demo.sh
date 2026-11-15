@@ -36,13 +36,14 @@ done
 if [ "$AGENT_MODE" = live ]; then
   if has_key AWS_ACCESS_KEY_ID && has_key AWS_SECRET_ACCESS_KEY; then echo "ok       AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY set"
   elif has_key AWS_PROFILE || [ -n "${AWS_PROFILE:-}" ]; then echo "ok       AWS_PROFILE set"
-  else echo "MISSING  AWS credentials (AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY, or AWS_PROFILE)"; fail=1; fi
+  elif [ -s "$HOME/.aws/credentials" ] || [ -d "$HOME/.aws/sso/cache" ]; then echo "ok       AWS credentials from ~/.aws (default chain)"
+  else echo "MISSING  AWS credentials (.env keys, AWS_PROFILE, or ~/.aws)"; fail=1; fi
 fi
 has_key COSTAR_DATA_DIR && echo "ok       COSTAR_DATA_DIR set (optional)" || echo "absent   COSTAR_DATA_DIR (optional; default data/costar)"
 for k in ELEVENLABS_API_KEY LANGSMITH_API_KEY PHOTON_PROJECT_ID; do
   has_key "$k" && echo "ok       $k set (optional)" || echo "absent   $k (optional; fallbacks apply)"
 done
-KIT_DIR="$(grep -E '^[[:space:]]*COSTAR_DATA_DIR=' .env 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '"'"'"'"' || true)"
+KIT_DIR="$(grep -E '^[[:space:]]*COSTAR_DATA_DIR=' .env 2>/dev/null | tail -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*$//; s/[[:space:]]*$//' | tr -d '"'"'"'"' || true)"
 KIT_DIR="${KIT_DIR:-data/costar}"
 if [ "$DATA_MODE" = kit ] && [ ! -f "$KIT_DIR/index.sqlite" ]; then
   echo "MISSING  $KIT_DIR/index.sqlite (run: uv run --project server python scripts/build_kit_index.py)"; fail=1
