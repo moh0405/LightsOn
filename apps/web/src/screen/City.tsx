@@ -1,3 +1,4 @@
+import { useShallow } from "zustand/react/shallow";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Map as CityMap, setWorkerUrl } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -20,9 +21,9 @@ interface Hover { player: string; building: string; color: string }
 export function City() {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<CityMap | null>(null);
-  const { pointers, players, phase, buildingId, revivedColors, revival, dataMode, hasState } = useGame();
-  const current = useRef({ pointers, phase });
-  current.current = { pointers, phase };
+  const { phase, buildingId, revivedColors, revival, dataMode, hasState } = useGame(useShallow(s => ({ phase: s.phase, buildingId: s.buildingId, revivedColors: s.revivedColors, revival: s.revival, dataMode: s.dataMode, hasState: s.hasState })));
+  const current = useRef({ phase });
+  current.current = { phase };
   const [ready, setReady] = useState(false);
   const [flashPoint, setFlashPoint] = useState<{ x: number; y: number } | null>(null);
   const [factsReady, setFactsReady] = useState(false);
@@ -51,7 +52,7 @@ export function City() {
     let map: CityMap;
     try {
       map = new CityMap({ container: container.current!, center: CENTER, zoom: 15.5, pitch: 60,
-        attributionControl: false, interactive: false,
+        attributionControl: false, interactive: false, fadeDuration: 0,
         style: { version: 8, sources: {}, layers: [{ id: "night", type: "background", paint: { "background-color": "#10131c" } }] },
       });
     } catch { setError("Skyline unavailable. Use the Wake buttons on your phone."); return; }
@@ -126,9 +127,12 @@ export function City() {
     const map = mapRef.current;
     if (!ready || !map?.getLayer("floors")) return;
     const outlined = new Map<string, string>();
+    const layers = new Set<string>();
     const update = () => {
+      const pointers = useGame.getState().pointers;
+      if (!Object.keys(pointers).length && !layers.size) return;
       const next: Hover[] = [];
-      for (const [player, p] of Object.entries(current.current.pointers)) {
+      for (const [player, p] of Object.entries(pointers)) {
         // The visible beam is 22 px wide. A small hit area keeps its edge
         // responsive while the attract camera orbits and touch rounds pixels.
         const x = p.x * map.getCanvas().clientWidth, y = p.y * map.getCanvas().clientHeight;
@@ -136,20 +140,24 @@ export function City() {
         const building = feature?.properties?.building_id as string | undefined;
         const layer = `hover-${player}`;
         if (!map.getLayer(layer)) map.addLayer({ id: layer, type: "line", source: "floors", filter: ["==", ["get", "building_id"], ""], paint: { "line-color": p.color, "line-width": 3, "line-offset": -3 } });
+        layers.add(layer);
         if (outlined.get(layer) !== (building ?? "")) {
           map.setFilter(layer, ["==", ["get", "building_id"], building ?? ""]);
           outlined.set(layer, building ?? "");
         }
         if (building) next.push({ player, building: String(building), color: p.color });
       }
-      for (const layer of map.getStyle().layers ?? []) {
-        if (layer.id.startsWith("hover-") && !current.current.pointers[layer.id.slice(6)]) map.removeLayer(layer.id);
+      for (const layer of layers) {
+        if (!pointers[layer.slice(6)]) { map.removeLayer(layer); layers.delete(layer); outlined.delete(layer); }
       }
       setHovers((previous) => JSON.stringify(previous) === JSON.stringify(next) ? previous : next);
     };
     update(); map.on("render", update);
-    return () => { map.off("render", update); };
-  }, [ready, pointers]);
+    // A pointer schedules a map frame without remounting this effect, rebuilding
+    // filters, or rerendering every projector overlay.
+    const unsubscribe = useGame.subscribe((s, p) => { if (s.pointers !== p.pointers) map.triggerRepaint(); });
+    return () => { unsubscribe(); map.off("render", update); };
+  }, [ready]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -193,12 +201,18 @@ export function City() {
       <style>{`@keyframes city-flash { from { opacity: 0.9 } to { opacity: 0 } }`}</style>
       <div ref={container} style={{ position: "absolute", inset: 0 }} />
       <Sparks target={flashPoint} />
-      {Object.entries(pointers).map(([id, p]) => <div key={id} data-testid="dot" style={{ pointerEvents: "none", position: "absolute", left: `${p.x * 100}%`, top: `${p.y * 100}%`, width: 22, height: 22, marginLeft: -11, marginTop: -11, borderRadius: "50%", background: p.color, boxShadow: `0 0 16px 6px ${p.color}`, transition: "left 60ms linear, top 60ms linear" }}>
-        <span style={{ position: "absolute", top: 26, fontSize: 28 }}>{players[id]?.nickname}</span>
-      </div>)}
+      <PointerDots />
       <div style={{ position: "absolute", left: 16, top: 16, display: "grid", gap: 8, pointerEvents: "none" }}>
         {hovers.map((h) => <HoverCard key={`${dataMode}-${h.player}-${h.building}`} id={h.building} color={h.color} onError={factError} />)}
       </div>
     </div>
   </>;
+}
+
+/** Pointer traffic only rerenders the beams; facts, camera and subtitles stay idle. */
+function PointerDots() {
+  const { pointers, players } = useGame(useShallow(s => ({ pointers: s.pointers, players: s.players })));
+  return <>{Object.entries(pointers).map(([id, p]) => <div key={id} data-testid="dot" style={{ pointerEvents: "none", position: "absolute", left: `${p.x * 100}%`, top: `${p.y * 100}%`, width: 22, height: 22, marginLeft: -11, marginTop: -11, borderRadius: "50%", background: p.color, boxShadow: `0 0 16px 6px ${p.color}`, transition: "left 60ms linear, top 60ms linear" }}>
+        <span style={{ position: "absolute", top: 26, fontSize: 28 }}>{players[id]?.nickname}</span>
+      </div>)}</>;
 }

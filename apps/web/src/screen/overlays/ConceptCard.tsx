@@ -1,3 +1,4 @@
+import { useShallow } from "zustand/react/shallow";
 import { useEffect, useState } from "react";
 import { useGame } from "../../lib/store";
 import type { Category } from "../../lib/types";
@@ -5,7 +6,7 @@ import { lightUpDuration, type MediaBeat } from "../effects";
 import { loadMedia } from "../media";
 export const conceptLabels: Record<Category, string> = { housing: "Homes", food_retail: "Food and retail", entertainment: "Play space", community: "Community hub", culture: "Arts space", health: "Wellness space", work: "Shared workspace", wildcard: "Something unexpected" };
 export function ConceptCard() {
-  const { revival, phase } = useGame();
+  const { revival, phase } = useGame(useShallow(s => ({ revival: s.revival, phase: s.phase })));
   const [ready, setReady] = useState(false);
   const [before, setBefore] = useState<MediaBeat | null>(null);
   useEffect(() => {

@@ -66,7 +66,7 @@ it("serializes both players, dedupes replays, and keeps ducking until each line 
 });
 it("finishes an active challenge but skips stale queued challenges after a host advances", async () => {
   await mount();
-  const offer = { line: "Thank you.", counteroffer: "", audio_url: null, fact_ids: [] };
+  const offer = { line: "Thank you.", counteroffer: "", audio_url: null, fact_ids: ["F_233953_dark_floor_count"] };
   useGame.setState({ phase: "CHALLENGE", counteroffers: { ann: { ...offer, player_id: "ann" }, bo: { ...offer, player_id: "bo" } } });
   await flush();
   useGame.setState({ phase: "VERDICT", verdict: { reason_line: "Welcome." } as NonNullable<typeof initialGame.verdict> });
@@ -82,27 +82,24 @@ it("cancels on a new round and does not enqueue the remaining chunks", async () 
   expect(spoken).toHaveLength(1);
   expect(duck).toHaveBeenLastCalledWith(false);
 });
-it("waits for voiceschanged and selects a natural English voice, not a novelty voice", async () => {
+it("uses a natural English voice immediately, not a novelty voice", async () => {
   await mount();
-  const synth = window.speechSynthesis;
-  vi.spyOn(synth, "getVoices").mockReturnValue([]);
+  vi.spyOn(window.speechSynthesis, "getVoices").mockReturnValue([{ name: "Bells", lang: "en-US", default: true }, { name: "Samantha", lang: "en-US", default: false }] as SpeechSynthesisVoice[]);
   const promise = browserSpeech("Thank you.", { voice_style: "warm", voice_id: "" }, "bitter", new AbortController().signal);
-  await flush(); expect(spoken).toHaveLength(0);
-  vi.spyOn(synth, "getVoices").mockReturnValue([{ name: "Bells", lang: "en-US", default: true }, { name: "Samantha", lang: "en-US", default: false }] as SpeechSynthesisVoice[]);
-  synth.dispatchEvent(new Event("voiceschanged")); await flush();
   expect(spoken[0]!.voice).toMatchObject({ name: "Samantha" });
   expect([spoken[0]!.rate, spoken[0]!.pitch]).toEqual([1, 1]);
   spoken[0]!.onend!(); await promise;
 });
-it("bounds voice discovery and aborts it without speaking", async () => {
-  vi.useFakeTimers(); await mount();
+it("uses the browser default without a one-second voice-discovery delay", async () => {
+  await mount();
   vi.spyOn(window.speechSynthesis, "getVoices").mockReturnValue([]);
   const controller = new AbortController();
+  const promise = browserSpeech("Thank you.", { voice_style: "", voice_id: "" }, "proud", controller.signal);
+  expect(spoken).toHaveLength(1);
+  expect(spoken[0]!.voice).toBeNull();
+  controller.abort(); await promise;
   const aborted = browserSpeech("Thank you.", { voice_style: "", voice_id: "" }, "proud", controller.signal);
-  controller.abort(); await aborted; expect(spoken).toHaveLength(0);
-  const fallback = browserSpeech("Thank you.", { voice_style: "", voice_id: "" }, "proud", new AbortController().signal);
-  await vi.advanceTimersByTimeAsync(1000); expect(spoken).toHaveLength(1);
-  spoken[0]!.onend!(); await fallback;
+  await aborted; expect(spoken).toHaveLength(1);
 });
 it("splits long lines at sentence/word boundaries without changing numbers or speaking markup", () => {
   const line = "<em>Thank you.</em> [Please listen](https://example.test) [F_233953_buildingName] **Welcome.**";
@@ -122,21 +119,85 @@ it("does not impose a 20-second limit on an entire multi-sentence line", async (
   }
   await promise; expect(cancel).not.toHaveBeenCalled(); expect(spoken).toHaveLength(3);
 });
-it("allows a real challenge to replace the live agent's preliminary line", async () => {
+it("allows a real challenge after the live agent's silent preliminary line", async () => {
   await mount();
   const offer = { player_id: "ann", line: "Please wait.", counteroffer: "", audio_url: null, fact_ids: [] };
   useGame.setState({ phase: "CHALLENGE", counteroffers: { ann: offer } }); await flush();
-  spoken[0]!.onend!(); await flush();
-  useGame.setState({ counteroffers: { ann: { ...offer, line: "Thank you." } } }); await flush();
-  expect(spoken.map(u => u.text)).toEqual(["Please wait.", "Thank you."]);
+  expect(spoken).toHaveLength(0);
+  useGame.setState({ counteroffers: { ann: { ...offer, line: "Thank you.", counteroffer: "Please listen." } } }); await flush();
+  expect(spoken.map(u => u.text)).toEqual(["Thank you."]);
 });
 it("does not start a stale line after a delayed TTS response", async () => {
   await mount();
   let release!: (value: Response) => void;
+  vi.stubGlobal("window", { speechSynthesis: undefined });
   vi.mocked(fetch).mockReturnValueOnce(new Promise<Response>(resolve => { release = resolve; }));
   useGame.setState({ intro: { text: "Thank you.", audio_url: null, mood: "proud", analyst_line: "" } }); await flush();
   useGame.setState({ phase: "VERDICT" });
   release({ ok: true, json: async () => ({ audio_url: null }) } as Response); await flush();
+  expect(spoken).toHaveLength(0);
+  expect(duck).toHaveBeenLastCalledWith(false);
+});
+
+it("starts browser speech without waiting for an unresponsive TTS provider", async () => {
+  await mount();
+  vi.mocked(fetch).mockReturnValue(new Promise(() => {}));
+  useGame.setState({ intro: { text: "Thank you.", audio_url: null, mood: "proud", analyst_line: "" } });
+  await flush();
+  expect(spoken.map(u => u.text)).toEqual(["Thank you."]);
+});
+it("does not let optional persona loading block the first word", async () => {
+  await mount();
+  vi.mocked(fetch).mockReturnValue(new Promise(() => {}));
+  useGame.setState({ buildingId: "233953", intro: { text: "Thank you.", audio_url: null, mood: "proud", analyst_line: "" } });
+  await flush();
+  expect(spoken.map(u => u.text)).toEqual(["Thank you."]);
+});
+it("shows preliminary challenges silently so thinking cannot block the real offer", async () => {
+  await mount();
+  const offer = { player_id: "ann", line: "Please wait.", counteroffer: "", audio_url: null, fact_ids: [] };
+  useGame.setState({ phase: "CHALLENGE", counteroffers: { ann: offer } }); await flush();
+  expect(spoken).toHaveLength(0);
+  useGame.setState({ counteroffers: { ann: { ...offer, line: "Thank you.", counteroffer: "Please listen." } } }); await flush();
+  expect(spoken.map(u => u.text)).toEqual(["Thank you."]);
+});
+it("drops superseded queued offers for a player, keeping the latest complete line", async () => {
+  await mount();
+  const offer = { line: "Thank you.", counteroffer: "Please listen.", audio_url: null, fact_ids: [] };
+  useGame.setState({ phase: "CHALLENGE", counteroffers: { ann: { ...offer, player_id: "ann" }, bo: { ...offer, player_id: "bo", line: "Old offer." } } }); await flush();
+  useGame.setState({ counteroffers: { ...useGame.getState().counteroffers, bo: { ...offer, player_id: "bo", line: "New offer." } } }); await flush();
+  spoken[0]!.onend!(); await flush(); spoken[1]!.onend!(); await flush();
+  expect(spoken[2]!.text).toBe("New offer.");
+});
+
+it("falls back from a stalled prepared clip within the first-word budget", async () => {
+  vi.useFakeTimers(); await mount();
+  const pause = vi.fn();
+  vi.stubGlobal("Audio", class {
+    onended = null; onerror = null; onplaying = null;
+    play = () => Promise.resolve(); pause = pause; removeAttribute = vi.fn();
+  });
+  useGame.setState({ intro: { text: "Thank you.", audio_url: "/media/prepared.mp3", mood: "proud", analyst_line: "" } }); await flush();
+  expect(spoken).toHaveLength(0);
+  await vi.advanceTimersByTimeAsync(150);
+  expect(spoken.map(u => u.text)).toEqual(["Thank you."]);
+  expect(pause).toHaveBeenCalledTimes(1);
+});
+
+it("keeps the bounded voice-service fallback when browser speech is absent", async () => {
+  await mount();
+  vi.stubGlobal("window", { speechSynthesis: undefined });
+  const play = vi.fn().mockResolvedValue(undefined);
+  let clip: { onended: (() => void) | null; onplaying: (() => void) | null };
+  vi.stubGlobal("Audio", class {
+    onended = null; onplaying = null; onerror = null;
+    play = play; pause = vi.fn(); removeAttribute = vi.fn();
+    constructor() { clip = this; }
+  });
+  vi.mocked(fetch).mockResolvedValue({ ok: true, json: async () => ({ audio_url: "/api/tts/cached.mp3" }) } as Response);
+  useGame.setState({ intro: { text: "Thank you.", audio_url: null, mood: "proud", analyst_line: "" } }); await flush();
+  expect(play).toHaveBeenCalledTimes(1);
+  clip!.onplaying!(); clip!.onended!(); await flush();
   expect(spoken).toHaveLength(0);
   expect(duck).toHaveBeenLastCalledWith(false);
 });

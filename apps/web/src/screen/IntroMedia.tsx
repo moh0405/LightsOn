@@ -1,3 +1,4 @@
+import { useShallow } from "zustand/react/shallow";
 import { useEffect, useRef, useState } from "react";
 import { useGame } from "../lib/store";
 import { INTRO_DIVE_MS, MEDIA_BEAT_MS, mediaAt, type MediaBeat } from "./effects";
@@ -31,7 +32,7 @@ export function Matterport({ beat, visible }: { beat: MediaBeat; visible: boolea
   </figure>;
 }
 export function IntroMedia({ onError }: { onError: (message: string) => void }) {
-  const { buildingId, roundId, dataMode, phase } = useGame();
+  const { buildingId, roundId, dataMode, phase } = useGame(useShallow(s => ({ buildingId: s.buildingId, roundId: s.roundId, dataMode: s.dataMode, phase: s.phase })));
   const [beats, setBeats] = useState<MediaBeat[]>([]);
   const [elapsed, setElapsed] = useState(0);
   // Only embed the third-party tour while the projector page is actually shown.

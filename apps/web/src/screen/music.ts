@@ -124,15 +124,10 @@ export function speechChunks(text: string): string[] {
   return chunks;
 }
 
-async function browserVoice(persona: PersonaVoice, signal: AbortSignal): Promise<SpeechSynthesisVoice | null> {
+function browserVoice(persona: PersonaVoice): SpeechSynthesisVoice | null {
   const synth = window.speechSynthesis;
-  if (!synth.getVoices().length && !signal.aborted) await new Promise<void>((resolve) => {
-    const done = () => { clearTimeout(timer); synth.removeEventListener("voiceschanged", changed); signal.removeEventListener("abort", done); resolve(); };
-    const changed = () => { if (synth.getVoices().length) done(); };
-    const timer = setTimeout(done, 1000);
-    synth.addEventListener("voiceschanged", changed); signal.addEventListener("abort", done, { once: true });
-    changed();
-  });
+  // Start audio primes discovery. If OS voices are still loading, speak with
+  // the browser default now; a later line can select the prepared voice.
   // OS lists include musical/novelty voices; hashing across all English voices
   // can select Bells, Whisper, or Zarvox. Use the natural default unless named.
   const voices = synth.getVoices().filter(v => /^en(?:-|$)/i.test(v.lang));
@@ -144,7 +139,7 @@ async function browserVoice(persona: PersonaVoice, signal: AbortSignal): Promise
 
 export async function browserSpeech(text: string, persona: PersonaVoice, _mood: Mood, signal: AbortSignal): Promise<void> {
   if (!window.speechSynthesis || typeof SpeechSynthesisUtterance === "undefined") throw new Error("speech unavailable");
-  const voice = await browserVoice(persona, signal);
+  const voice = browserVoice(persona);
   for (const chunk of speechChunks(text)) {
     if (signal.aborted) return;
     await new Promise<void>((resolve, reject) => {
@@ -167,16 +162,21 @@ export async function browserSpeech(text: string, persona: PersonaVoice, _mood: 
     });
   }
 }
-function playAudio(url: string, signal: AbortSignal): Promise<void> {
+function playAudio(url: string, signal: AbortSignal, startupMs: number): Promise<void> {
   return new Promise((resolve, reject) => {
     const audio = new Audio(url);
+    let settled = false;
     const finish = (failed = false) => {
-      clearTimeout(timeout); signal.removeEventListener("abort", abort);
-      audio.onended = null; audio.onerror = null; audio.pause(); audio.removeAttribute("src");
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout); clearTimeout(startup); signal.removeEventListener("abort", abort);
+      audio.onplaying = null; audio.onended = null; audio.onerror = null; audio.pause(); audio.removeAttribute("src");
       if (failed && !signal.aborted) reject(new Error("audio unavailable")); else resolve();
     };
     const abort = () => finish();
+    const startup = setTimeout(() => finish(true), startupMs);
     const timeout = setTimeout(() => finish(true), 20_000);
+    audio.onplaying = () => clearTimeout(startup);
     signal.addEventListener("abort", abort, { once: true });
     audio.onended = () => finish(); audio.onerror = () => finish(true);
     void audio.play().catch(() => finish(true));
@@ -194,8 +194,8 @@ export function useScreenAudio() {
     const cityMusic = music.current;
     if (!cityMusic) return;
     let persona = defaultVoice;
-    let personaReady = Promise.resolve();
     const spoken = new Set<string>();
+    const latest = new Map<string, string>();
     let generation = 0;
     let queue = Promise.resolve();
     let controller = new AbortController();
@@ -205,12 +205,12 @@ export function useScreenAudio() {
       generation++; controller.abort(); controller = new AbortController(); queue = Promise.resolve(); cityMusic.duck(false);
     };
     const loadPersona = (id: string | null) => {
-      personaRequest.abort(); personaRequest = new AbortController(); persona = defaultVoice; personaReady = Promise.resolve();
+      personaRequest.abort(); personaRequest = new AbortController(); persona = defaultVoice;
       if (!id) return;
       const requestSignal = personaRequest.signal;
       // The dossier says whether a persona was prepared, so an unprepared
       // building never triggers a 404 persona request.
-      personaReady = getDossier(id)
+      void getDossier(id)
         .then((dossier) => {
           const prepared = (dossier as typeof dossier & { persona?: Partial<PersonaVoice> | null }).persona;
           if (!requestSignal.aborted && prepared) persona = { voice_style: prepared.voice_style ?? "", voice_id: prepared.voice_id ?? "" };
@@ -224,16 +224,19 @@ export function useScreenAudio() {
       const identity = `${key}:${text}`;
       if (spoken.has(identity)) return;
       spoken.add(identity);
+      latest.set(key, identity);
       const group = speechGroup(useGame.getState().phase);
       const { room, roundId } = useGame.getState();
       const current = generation, signal = controller.signal;
       queue = queue.then(async () => {
-        await personaReady;
         // Finish the active line, but never start queued lines from an old phase.
-        if (signal.aborted || current !== generation || group !== speechGroup(useGame.getState().phase)) return;
+        if (signal.aborted || current !== generation || latest.get(key) !== identity || group !== speechGroup(useGame.getState().phase)) return;
         cityMusic.duck(true);
         try {
-          if (!url) {
+          // Dynamic provider rendering must never delay a browser voice. Prepared
+          // audio still plays; TTS remains the fallback where native speech is absent.
+          const native = !!window.speechSynthesis && typeof SpeechSynthesisUtterance !== "undefined";
+          if (!url && !native) {
             try {
               const r = await fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ room, round_id: roundId, text, voice_id: persona.voice_id }), signal: AbortSignal.any([signal, AbortSignal.timeout(5000)]) });
@@ -241,9 +244,9 @@ export function useScreenAudio() {
               url = (await r.json() as { audio_url: string | null }).audio_url;
             } catch { if (!signal.aborted) warn("Voice service unavailable. Browser speech and subtitles remain available."); }
           }
-          if (signal.aborted || group !== speechGroup(useGame.getState().phase)) return;
+          if (signal.aborted || latest.get(key) !== identity || group !== speechGroup(useGame.getState().phase)) return;
           if (url) {
-            try { await playAudio(url, signal); return; }
+            try { await playAudio(url, signal, native ? 150 : 5000); return; }
             catch { warn("Recorded speech unavailable. Using browser speech."); }
           }
           if (!signal.aborted && group === speechGroup(useGame.getState().phase)) await browserSpeech(text, persona, mood, signal);
@@ -254,10 +257,13 @@ export function useScreenAudio() {
     const sync = (state: GameState, previous?: GameState) => {
       if (!previous || state.buildingId !== previous.buildingId || state.dataMode !== previous.dataMode) loadPersona(state.buildingId);
       if (!previous || state.room !== previous.room || (state.hasState && !previous.hasState) || (state.city?.buildings_revived === 0 && previous.city?.buildings_revived !== 0)) cityMusic.restore(state.city?.song_categories ?? []);
-      if (previous && (state.roundId !== previous.roundId || state.room !== previous.room || state.dataMode !== previous.dataMode)) { cancel(); spoken.clear(); }
+      if (previous && (state.roundId !== previous.roundId || state.room !== previous.room || state.dataMode !== previous.dataMode)) { cancel(); spoken.clear(); latest.clear(); }
       if (["INTRO", "PITCH"].includes(state.phase) && state.intro) say("intro", state.intro.text, state.intro.audio_url, state.intro.mood);
       if (["CHALLENGE", "NEGOTIATE"].includes(state.phase)) {
         for (const [player, offer] of Object.entries(state.counteroffers)) {
+          // Live-agent catchphrase/thinking updates remain visible as subtitles.
+          // Only a completed challenge owns the voice queue.
+          if (!offer.counteroffer.trim() && !offer.fact_ids.length) continue;
           say(`challenge:${player}`, `${offer.line} ${offer.counteroffer}`, offer.audio_url, state.mood);
         }
       }
@@ -276,6 +282,8 @@ export function useScreenAudio() {
   const start = async () => {
     if (starting.current || ready) return;
     starting.current = true; setError(null);
+    // Trigger OS voice discovery inside the gesture, alongside AudioContext unlock.
+    try { window.speechSynthesis?.getVoices(); } catch { /* Discovery is optional. */ }
     const instance = new CityMusic(); music.current = instance;
     try { await instance.start(); setReady(true); }
     catch { instance.dispose(); music.current = null; console.warn("Audio unavailable"); setError("Audio unavailable. Subtitles and typed play still work."); }

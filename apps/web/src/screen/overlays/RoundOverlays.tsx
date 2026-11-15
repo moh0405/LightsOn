@@ -1,3 +1,4 @@
+import { useShallow } from "zustand/react/shallow";
 import { useEffect, useState, type CSSProperties } from "react";
 import { evidenceLine, getDossier, type Dossier } from "../../lib/buildings";
 import { useGame } from "../../lib/store";
@@ -8,12 +9,12 @@ const card: CSSProperties = { background: "#171e2de8", border: "1px solid #39455
 const labels: Record<Need, string> = { housing: "Housing", food_retail: "Food and retail", entertainment: "Entertainment", community: "Community" };
 
 export function Subtitles() {
-  const { intro, phase } = useGame();
+  const { intro, phase } = useGame(useShallow(s => ({ intro: s.intro, phase: s.phase })));
   if (!intro || !["INTRO", "PITCH"].includes(phase)) return null;
   return <section style={card} data-testid="subtitles" aria-live="polite"><p>{intro.text}</p><p>{intro.analyst_line}</p><small>Mood: {intro.mood}</small></section>;
 }
 export function Bubbles() {
-  const { pitches, players, phase, counteroffers } = useGame();
+  const { pitches, players, phase, counteroffers } = useGame(useShallow(s => ({ pitches: s.pitches, players: s.players, phase: s.phase, counteroffers: s.counteroffers })));
   if (!["PITCH", "CHALLENGE", "NEGOTIATE"].includes(phase)) return null;
   // Once a player has a counteroffer, their pitch moves into that card so four
   // players' counteroffers and evidence fit the projector without scrolling.
@@ -22,7 +23,7 @@ export function Bubbles() {
   return <section aria-label="Player pitches" className="pitch-grid" style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>{waiting.map((p) => <blockquote style={{ ...card, borderColor: players[p.player_id]?.color, margin: 0, flex: "1 1 280px" }} key={p.player_id}><strong>{players[p.player_id]?.nickname ?? "Player"}</strong><p>{p.text}</p></blockquote>)}</section>;
 }
 export function ChallengeCards() {
-  const { counteroffers, players, phase, mood, pitches } = useGame();
+  const { counteroffers, players, phase, mood, pitches } = useGame(useShallow(s => ({ counteroffers: s.counteroffers, players: s.players, phase: s.phase, mood: s.mood, pitches: s.pitches })));
   if (!["CHALLENGE", "NEGOTIATE"].includes(phase)) return null;
   return <section aria-label="Building counteroffers" className="challenge-grid" style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>{Object.values(counteroffers).map((c) => <article className="challenge-card" style={{ ...card, borderColor: players[c.player_id]?.color ?? "#39455a", flex: "1 1 280px" }} key={c.player_id}>
     <h3>To {players[c.player_id]?.nickname ?? "Player"} <small>· Mood: {mood}</small></h3>
@@ -30,7 +31,7 @@ export function ChallengeCards() {
     <p aria-live="polite">{c.line}</p><p><strong>{c.counteroffer}</strong></p><Evidence ids={c.fact_ids} /></article>)}</section>;
 }
 export function Evidence({ ids }: { ids: string[] }) {
-  const { buildingId, dataMode } = useGame();
+  const { buildingId, dataMode } = useGame(useShallow(s => ({ buildingId: s.buildingId, dataMode: s.dataMode })));
   const [dossier, setDossier] = useState<Dossier | null>(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
@@ -45,7 +46,7 @@ export function Evidence({ ids }: { ids: string[] }) {
   })}</div>;
 }
 export function ScoreCard() {
-  const { verdict, players, phase } = useGame();
+  const { verdict, players, phase } = useGame(useShallow(s => ({ verdict: s.verdict, players: s.players, phase: s.phase })));
   if (!verdict || phase !== "VERDICT") return null;
   const impact = verdict.impact;
   return <section data-testid="score-card" style={card}>
@@ -59,7 +60,7 @@ export function ScoreCard() {
   </section>;
 }
 export function EnergyMeter() {
-  const { phase, charge, revival } = useGame();
+  const { phase, charge, revival } = useGame(useShallow(s => ({ phase: s.phase, charge: s.charge, revival: s.revival })));
   if (!["POWER_UP", "REVIVED"].includes(phase)) return null;
   return <section style={card} data-testid="energy-meter"><label>Power up together · <strong>{charge}%</strong><progress aria-label="City energy" value={charge} max={100} style={{ width: "100%", height: 32, accentColor: revival?.color ?? "#f2c46d" }} /></label>{revival?.auto_completed && <p>The city helped finish this charge.</p>}</section>;
 }
