@@ -49,17 +49,23 @@ export function createRecorder(callbacks: Callbacks, environment?: RecorderEnvir
       if (env.Recognition) {
         try {
           recognition = new env.Recognition();
-          recognition.lang = "en-US"; recognition.continuous = true; recognition.interimResults = false;
+          // Interim results show words while the player speaks. iOS Safari often never marks a
+          // continuous result final, so the latest interim words count as heard too.
+          recognition.lang = "en-US"; recognition.continuous = true; recognition.interimResults = true;
           let transcript = "";
           recognition.onresult = (event) => {
             if (disposed) return;
+            let interim = "";
             for (let i = event.resultIndex; i < event.results.length; i++) {
               const result = event.results[i];
               if (result?.isFinal) transcript += `${result[0].transcript} `;
+              else if (result) interim += `${result[0].transcript} `;
             }
-            callbacks.onText(transcript.trim().slice(0, 280));
+            const heard = `${transcript}${interim}`.replace(/\s+/g, " ").trim().slice(0, 280);
+            if (heard) callbacks.onText(heard);
           };
-          recognition.onerror = () => { if (!disposed) fail(); };
+          // Silence or our own stop is not a failure: the text box and typing stay as they are.
+          recognition.onerror = (event) => { if (!disposed && event?.error !== "no-speech" && event?.error !== "aborted") fail(); };
           recognition.onend = () => { held = false; idle(); };
           recognition.start();
           return;

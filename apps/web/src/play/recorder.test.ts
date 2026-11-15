@@ -32,6 +32,30 @@ describe("hold to talk fallbacks", () => {
     recorder.dispose();
     expect(instance!.abort).toHaveBeenCalled();
   });
+  it("shows interim words, keeps them when nothing is marked final, and ignores silence", async () => {
+    const text = vi.fn(), error = vi.fn();
+    let instance: FakeRecognition;
+    class FakeRecognition implements Recognition {
+      lang = ""; interimResults = false; continuous = false;
+      onresult: Recognition["onresult"] = null;
+      onerror: Recognition["onerror"] = null;
+      onend: Recognition["onend"] = null;
+      start = vi.fn(); stop = vi.fn(); abort = vi.fn();
+      constructor() { instance = this; }
+    }
+    const recorder = createRecorder({ onText: text, onAudio: vi.fn(), onError: error }, { Recognition: FakeRecognition });
+    await recorder.start();
+    expect(instance!.interimResults).toBe(true);
+    instance!.onresult?.({ resultIndex: 0, results: [{ isFinal: false, 0: { transcript: "A late night" } }] });
+    instance!.onresult?.({ resultIndex: 0, results: [{ isFinal: false, 0: { transcript: "A late night board game cafe" } }] });
+    expect(text).toHaveBeenLastCalledWith("A late night board game cafe");
+    instance!.onerror?.({ error: "no-speech" });
+    expect(error).not.toHaveBeenCalled();
+    instance!.onerror?.({ error: "not-allowed" });
+    expect(error).toHaveBeenCalledWith("Voice unavailable. Type your pitch below.");
+    recorder.dispose();
+  });
+
   it("does not record after release while the permission dialog was pending", async () => {
     let resolve!: (stream: MediaStream) => void;
     const track = { stop: vi.fn() };
