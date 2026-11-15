@@ -39,6 +39,7 @@ export function useHealth(): HealthState {
 
 // ---- game state (fed by the WebSocket) ---------------------------------
 export interface GameState {
+  tourRequest: { buildingId: string | null; modelId: string | null; open: boolean } | null;
   agentSteps: AgentStep[];
   conn: ConnStatus;
   room: string | null;
@@ -68,6 +69,7 @@ export interface GameState {
 export const TOAST_MS = 6000;
 
 export const initialGame: GameState = {
+  tourRequest: null,
   agentSteps: [],
   conn: "closed",
   room: null,
@@ -90,9 +92,11 @@ export const initialGame: GameState = {
 /** Pure reducer: server message in, state patch out. */
 export function reduce(s: GameState, msg: ServerMessage, now = Date.now()): Partial<GameState> {
   switch (msg.type) {
+    case "tour_requested": return { tourRequest: { buildingId: msg.building_id, modelId: msg.model_id, open: msg.open } };
     case "room_state":
       return {
         agentSteps: msg.round_id === s.roundId ? s.agentSteps : [],
+        tourRequest: null,
         hasState: true,
         room: msg.room,
         phase: msg.phase,

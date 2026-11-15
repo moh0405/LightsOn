@@ -55,6 +55,19 @@
 .projector aside { line-height: 1.15; }
 .round-overlays:has(.concept-card) { grid-template-columns: minmax(0, 1fr) minmax(400px, 600px); align-items: end; }
 .round-overlays:has(.concept-card) .concept-pair img, .round-overlays:has(.concept-card) .concept-before { height: 150px; }
-/* Keep the source caption visible even when a browser hides iframe errors. */
-.intro-media:has(iframe) .tour-still { width: 35%; padding: 16px; }
-.intro-media:has(iframe) iframe { left: 35%; width: 65%; }
+
+.tour-frame { position: relative; width: 100%; height: 100%; margin: 0; background: #10131c; }
+.tour-frame iframe, .tour-frame .tour-cover { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; object-fit: cover; }
+.tour-frame figcaption { position: absolute; bottom: 0; left: 0; right: 0; padding: 12px 20px; background: #10131ce8; pointer-events: none; }
+.walk-inside { position: fixed; inset: 0; z-index: 10; background: #10131c; display: flex; flex-direction: column; padding-right: 422px; }
+.tour-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px; }
+.tour-toolbar span { font-size: 20px; color: #b8c6dd; }
+.tour-tabs { display: flex; gap: 8px; padding: 0 16px 12px; overflow-x: auto; flex-shrink: 0; }
+.tour-tabs button { white-space: nowrap; }
+.tour-tabs [aria-selected="true"] { border-color: #f2c46d; color: #f2c46d; }
+.walk-interior { flex: 1; min-height: 0; }
+.walking > aside { position: relative; z-index: 11; background: #10131c; }
+.walking .screen-status { position: fixed; left: auto; right: 438px; bottom: 12px; z-index: 12; background: #10131cf2; padding: 8px; border-radius: 8px; }
+.walking .round-overlays { position: fixed !important; left: 16px !important; right: 438px !important; bottom: 90px !important; z-index: 11; max-height: 35vh !important; pointer-events: none; }
+.walking .round-overlays > * { pointer-events: auto; }
+.walking .screen-toast { position: fixed; z-index: 13; }

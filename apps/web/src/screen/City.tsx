@@ -17,7 +17,7 @@ const CENTER: [number, number] = [-95.3650891, 29.7588018];
 const FLOOR_COLOR = floorColorExpression({});
 interface Hover { player: string; building: string; color: string }
 
-export function City() {
+export function City({ onHover }: { onHover?: (id: string | null) => void }) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<CityMap | null>(null);
   const { pointers, players, phase, buildingId, revivedColors, revival, dataMode, hasState } = useGame();
@@ -180,6 +180,8 @@ export function City() {
     update(); map.on("render", update);
     return () => { map.off("render", update); };
   }, [ready, pointers]);
+
+  useEffect(() => { onHover?.(hovers[0]?.building ?? null); }, [hovers, onHover]);
 
   useEffect(() => {
     const map = mapRef.current;
