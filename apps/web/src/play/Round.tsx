@@ -4,6 +4,7 @@ import { button, input } from "../lib/ui";
 import type { RoomSocket } from "../lib/ws";
 import { createFlickDetector } from "./gesture";
 import { createRecorder, submitAudio } from "./recorder";
+import { formError, type FormError } from "./errors";
 
 type SocketRef = MutableRefObject<RoomSocket | null>;
 export function Pitch({ sock, revision = false, playerId }: { sock: SocketRef; revision?: boolean; playerId: string }) {
@@ -12,7 +13,8 @@ export function Pitch({ sock, revision = false, playerId }: { sock: SocketRef; r
   const [text, setText] = useState("");
   const [sent, setSent] = useState(() => safeGet(key, "session") === "yes");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setFormError] = useState<FormError | null>(null);
+  const setError = useCallback((message: string | null) => setFormError(message ? { message, live: true } : null), []);
   const [listening, setListening] = useState(false);
   const recorder = useRef<ReturnType<typeof createRecorder> | null>(null);
   useEffect(() => {
@@ -41,7 +43,7 @@ export function Pitch({ sock, revision = false, playerId }: { sock: SocketRef; r
       setBusy(true); setError(null);
       void sock.current.send({ type: revision ? "revise_pitch" : "submit_pitch", round_id: roundId, text: text.trim() }).then(() => {
         setSent(true); safeSet(key, "yes", "session");
-      }).catch((err: unknown) => setError(err instanceof Error ? err.message : "Could not send. Try again.")).finally(() => setBusy(false));
+      }).catch((err: unknown) => setFormError(formError(err, "Could not send. Try again."))).finally(() => setBusy(false));
     }}>
       <label htmlFor="pitch-text">{revision ? "Your revision" : "Your pitch"}</label>
       <button type="button" style={{ ...button, touchAction: "none", background: listening ? "#39455a" : button.background }}
@@ -57,7 +59,7 @@ export function Pitch({ sock, revision = false, playerId }: { sock: SocketRef; r
       <span>{text.length}/280</span>
       <button style={button} disabled={conn !== "open" || busy || sent || !text.trim()}>{sent ? "Sent" : busy ? "Sending…" : revision ? "Send revision" : "Submit pitch"}</button>
       {sent && <p role="status">{revision ? "Revision sent. Watch for the verdict!" : "Pitch sent. Get ready to negotiate!"}</p>}
-      {error && <p role="alert">{error}</p>}
+      {error && <p role={error.live ? "alert" : undefined}>{error.message}</p>}
     </form>
   </section>;
 }
@@ -65,7 +67,7 @@ export function Pitch({ sock, revision = false, playerId }: { sock: SocketRef; r
 export function PowerUp({ sock, color }: { sock: SocketRef; color: string }) {
   const { charge, roundId, conn } = useGame();
   const [pulse, setPulse] = useState(0);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FormError | null>(null);
   const last = useRef(-Infinity);
   const contribute = useCallback(() => {
     const now = performance.now();
@@ -75,7 +77,7 @@ export function PowerUp({ sock, color }: { sock: SocketRef; color: string }) {
     setError(null);
     void sock.current.send({ type: "contribute_energy", round_id: roundId }).then(() => {
       try { navigator.vibrate?.(45); } catch { /* Haptics are optional. */ }
-    }).catch((err: unknown) => setError(err instanceof Error ? err.message : "Could not charge. Tap to try again."));
+    }).catch((err: unknown) => setError(formError(err, "Could not charge. Tap to try again.")));
   }, [charge, conn, roundId, sock]);
   useEffect(() => {
     const flick = createFlickDetector();
@@ -87,7 +89,7 @@ export function PowerUp({ sock, color }: { sock: SocketRef; color: string }) {
     <h1>Flick your phone up!</h1><p>Or tap to power up together.</p>
     <button style={{ ...button, minHeight: 190, borderRadius: 40, borderColor: color, boxShadow: `0 0 ${pulse ? 45 : 24}px ${color}`, fontSize: 32, transform: pulse % 2 ? "scale(0.97)" : "scale(1)" }} onClick={contribute} disabled={conn !== "open" || charge >= 100}>Tap to charge</button>
     <label>Shared energy <strong>{charge}%</strong><progress aria-label="Shared energy" max={100} value={charge} style={{ width: "100%", accentColor: color }} /></label>
-    {error && <p role="alert">{error}</p>}
+    {error && <p role={error.live ? "alert" : undefined}>{error.message}</p>}
   </section>;
 }
 
