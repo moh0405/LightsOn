@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
 import { safeGet, safeSet, useGame } from "../lib/store";
+import { displayDialogue } from "../lib/dialogue";
 import { button, input } from "../lib/ui";
 import type { RoomSocket } from "../lib/ws";
 import { createFlickDetector } from "./gesture";
@@ -8,7 +9,7 @@ import { formError, type FormError } from "./errors";
 
 type SocketRef = MutableRefObject<RoomSocket | null>;
 export function Pitch({ sock, revision = false, playerId }: { sock: SocketRef; revision?: boolean; playerId: string }) {
-  const { room, roundId, conn, counteroffers } = useGame();
+  const { room, roundId, conn, counteroffers, buildingId } = useGame();
   const key = `lo.sent.${room}.${roundId}.${playerId}.${revision ? "revision" : "pitch"}`;
   const [text, setText] = useState("");
   const [sent, setSent] = useState(() => safeGet(key, "session") === "yes");
@@ -36,7 +37,7 @@ export function Pitch({ sock, revision = false, playerId }: { sock: SocketRef; r
   const offer = counteroffers[playerId];
   return <section style={{ display: "grid", gap: 16 }}>
     <h1>{revision ? "Make your deal" : "Pitch a new use"}</h1>
-    {revision && (offer ? <blockquote><p>{offer.line}</p><strong>{offer.counteroffer}</strong></blockquote> : <p>Watch the building’s challenge on the big screen. You have one revision.</p>)}
+    {revision && (offer ? <blockquote><p>{displayDialogue(offer.line, buildingId)}</p><strong>{displayDialogue(offer.counteroffer, buildingId)}</strong></blockquote> : <p>Watch the building’s challenge on the big screen. You have one revision.</p>)}
     <form style={{ display: "grid", gap: 12 }} onSubmit={(e) => {
       e.preventDefault();
       if (busy || sent || !text.trim() || !sock.current) return;
@@ -94,11 +95,11 @@ export function PowerUp({ sock, color }: { sock: SocketRef; color: string }) {
 }
 
 export function Result({ playerId }: { playerId: string }) {
-  const { verdict, players } = useGame();
+  const { verdict, players, buildingId } = useGame();
   if (!verdict) return <p>Waiting for the building’s decision…</p>;
   const score = verdict.scores.find((s) => s.player_id === playerId);
   return <section><h1>{verdict.winner_player_id === playerId ? "You won the deal!" : `${players[verdict.winner_player_id]?.nickname ?? "A player"} won the deal!`}</h1>
-    <p>{verdict.reason_line}</p>{score && <p>Your score: <strong>{score.total ?? "—"}/40</strong> · Needs bonus: +{score.needs_bonus ?? 0}</p>}
-    <p>{verdict.desire_reveal}</p>
+    <p>{displayDialogue(verdict.reason_line, buildingId)}</p>{score && <p>Your score: <strong>{score.total ?? "—"}/40</strong> · Needs bonus: +{score.needs_bonus ?? 0}</p>}
+    <p>{displayDialogue(verdict.desire_reveal, buildingId)}</p>
   </section>;
 }

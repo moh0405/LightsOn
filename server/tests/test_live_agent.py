@@ -62,6 +62,36 @@ class Model:
         return value
 
 
+async def test_dress_rehearsal_fact_id_stays_in_citations_only(dossier):
+    line = 'Floor 7 has 31,503 listed available square feet—plenty for tables, but will your crowd stay past midnight? F_233953_floor_7_available_sqft'
+    clean = line.rsplit(' ', 1)[0]
+    refs = ['F_233953_floor_7_available_sqft']
+    offer = 'Show me your table count and seating plan; then light up those late hours with a soft opening.'
+    p = pitch()
+    candidate = dict(player_id=p.player_id, line=line, fact_ids=refs,
+                     counteroffer=offer + ' [F_233953_floor_7_available_sqft]', category_guess='wildcard')
+    proposal = fake_agent.verdict([p.model_copy(update={'player_id': 'candidate_0'})], dossier, City())
+    proposal = proposal.model_copy(update={'reason_line': line, 'fact_ids': refs,
+        'desire_reveal': 'Light up those late hours. (233953) [F_233953_floor_7_available_sqft].'})
+    supported = {'checks': [{'index': 0, 'supported': True, 'reason': ''}]}
+    model = Model([{'challenges': [candidate]}, supported, proposal.model_dump(), supported])
+    published = []
+    agent = LiveAgent(model=model, on_challenge=published.append)
+    challenge = (await agent.challenge([p], dossier))[0]
+    verdict = (await agent.verdict_batches([p], [], dossier, City(), [challenge]))[0][0]
+    assert agent.fallbacks == 0
+    assert published == [challenge]
+    assert challenge.line == verdict.reason_line == clean
+    assert challenge.counteroffer == offer
+    assert verdict.desire_reveal == 'Light up those late hours.'
+    assert challenge.fact_ids == verdict.fact_ids == refs
+    assert check_line(challenge.line + ' ' + challenge.counteroffer, refs, dossier) is None
+    assert check_line(verdict.reason_line, refs, dossier) is None
+    # Semantic checks still receive the full, unstripped proposals.
+    assert all(json.loads(content)[0]['line'].find(refs[0]) >= 0
+               for step, content in model.calls if step == 'claim_check')
+
+
 async def test_bad_json_retries_once_then_falls_back(dossier):
     model = Model(['bad', 'bad'])
     events = []

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { displayDialogue } from "../lib/dialogue";
 import { CommandError } from "../lib/ws";
 import { safeGet, safeSet, useGame, useRoomSocket } from "../lib/store";
 import { ConnBanner, ErrorToast, PhaseBadge, button, input, page } from "../lib/ui";
@@ -17,7 +18,7 @@ export function PlayApp() {
   const idRef = useRef(playerId);
   idRef.current = playerId;
   const sock = useRoomSocket(room, "play", () => idRef.current);
-  const { players, hasState, phase, conn, roundId, counteroffers } = useGame();
+  const { players, hasState, phase, conn, roundId, counteroffers, buildingId } = useGame();
 
   useEffect(() => {
     if (room) safeSet("lo.room", room);
@@ -67,7 +68,7 @@ export function PlayApp() {
             phase === "PITCH" || phase === "NEGOTIATE" ? <Pitch key={`${roundId}-${phase}`} sock={sock} playerId={me.id} revision={phase === "NEGOTIATE"} /> :
             phase === "POWER_UP" ? <PowerUp sock={sock} color={me.color} /> :
             phase === "VERDICT" || phase === "REVIVED" ? <Result playerId={me.id} /> :
-            phase === "CHALLENGE" ? <section><h1>The city fights back</h1><p>{counteroffers[me.id]?.counteroffer ?? "The building is considering your pitch…"}</p><p>Get ready for one revision.</p></section> :
+            phase === "CHALLENGE" ? <section><h1>The city fights back</h1><p>{displayDialogue(counteroffers[me.id]?.counteroffer ?? "The building is considering your pitch…", buildingId)}</p><p>Get ready for one revision.</p></section> :
             <p>{phase === "LOBBY" ? "Waiting for another player…" : "Meet the building on the big screen."}</p>
           )}
         </>
