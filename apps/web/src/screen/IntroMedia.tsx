@@ -39,7 +39,7 @@ export function IntroMedia({ onError }: { onError: (message: string) => void }) 
   // Fixed child order keeps the preloading iframe mounted when its beat starts.
   return <>
     {tour && visible && <div className="intro-media" data-testid="matterport-still" aria-hidden={!showTour} style={{ visibility: showTour ? "visible" : "hidden" }}><TourFrame key={tour.model_id} tour={tour} /></div>}
-    {!beat && elapsed < INTRO_DIVE_MS ? <div className="intro-approach" data-testid="intro-approach">Meet your next investor</div> : null}
+    {!beat && !aerial && elapsed < INTRO_DIVE_MS ? <div className="intro-approach" data-testid="intro-approach">Meet your next investor</div> : null}
     {aerial && <figure className="intro-media" key={aerial.src} data-testid="intro-aerial" style={{ animationDuration: `${MEDIA_BEAT_MS}ms` }}>
       <img src={aerial.src} alt={aerial.caption ?? "Aerial view"} onError={() => { console.warn("Local aerial unavailable; skipping beat"); onError("Aerial image unavailable. Continuing the approach."); setBeats((list) => list.filter((b) => b.src !== aerial.src)); }} />
       <figcaption>{aerial.caption}{aerial.captureDate ? ` · Captured ${aerial.captureDate}` : ""}</figcaption>
