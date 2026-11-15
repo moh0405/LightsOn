@@ -1,6 +1,7 @@
 import { useShallow } from "zustand/react/shallow";
 import { useEffect, useState, type CSSProperties } from "react";
 import { evidenceLine, getDossier, type Dossier } from "../../lib/buildings";
+import { displayDialogue } from "../../lib/dialogue";
 import { useGame } from "../../lib/store";
 import { ConceptCard } from "./ConceptCard";
 import { useAnimatedNumber } from "../animated";
@@ -25,12 +26,12 @@ export function Bubbles() {
   return <section aria-label="Player pitches" className="pitch-grid" style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>{waiting.map((p) => <blockquote style={{ ...card, borderColor: players[p.player_id]?.color, margin: 0, flex: "1 1 280px" }} key={p.player_id}><strong>{players[p.player_id]?.nickname ?? "Player"}</strong><p>{p.text}</p></blockquote>)}</section>;
 }
 export function ChallengeCards() {
-  const { counteroffers, players, phase, mood, pitches } = useGame(useShallow(s => ({ counteroffers: s.counteroffers, players: s.players, phase: s.phase, mood: s.mood, pitches: s.pitches })));
+  const { counteroffers, players, phase, mood, pitches, buildingId } = useGame(useShallow(s => ({ counteroffers: s.counteroffers, players: s.players, phase: s.phase, mood: s.mood, pitches: s.pitches, buildingId: s.buildingId })));
   if (!["CHALLENGE", "NEGOTIATE"].includes(phase)) return null;
   return <section aria-label="Building counteroffers" className="challenge-grid" style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>{Object.values(counteroffers).map((c) => <article className="challenge-card" style={{ ...card, borderColor: players[c.player_id]?.color ?? "#39455a", flex: "1 1 280px" }} key={c.player_id}>
     <h3>To {players[c.player_id]?.nickname ?? "Player"} <small>· Mood: {mood}</small></h3>
     {pitches[c.player_id] && <p className="pitch-quote" title={pitches[c.player_id]!.text}>“{pitches[c.player_id]!.text}”</p>}
-    <p aria-live="polite">{c.line}</p><p><strong>{c.counteroffer}</strong></p><Evidence ids={c.fact_ids} /></article>)}</section>;
+    <p aria-live="polite">{displayDialogue(c.line, buildingId)}</p><p><strong>{displayDialogue(c.counteroffer, buildingId)}</strong></p><Evidence ids={c.fact_ids} /></article>)}</section>;
 }
 export function Evidence({ ids }: { ids: string[] }) {
   const { buildingId, dataMode } = useGame(useShallow(s => ({ buildingId: s.buildingId, dataMode: s.dataMode })));
@@ -48,12 +49,12 @@ export function Evidence({ ids }: { ids: string[] }) {
   })}</div>;
 }
 export function ScoreCard() {
-  const { verdict, players, phase } = useGame(useShallow(s => ({ verdict: s.verdict, players: s.players, phase: s.phase })));
+  const { verdict, players, phase, buildingId } = useGame(useShallow(s => ({ verdict: s.verdict, players: s.players, phase: s.phase, buildingId: s.buildingId })));
   if (!verdict || phase !== "VERDICT") return null;
   const impact = verdict.impact;
   return <section data-testid="score-card" style={card}>
     <h2 style={{ color: players[verdict.winner_player_id]?.color }}>{players[verdict.winner_player_id]?.nickname ?? "Player"} wins · {verdict.category.replaceAll("_", " ")}</h2>
-    <p>{verdict.reason_line}</p><p>{verdict.desire_reveal}</p>
+    <p>{displayDialogue(verdict.reason_line, buildingId)}</p><p>{displayDialogue(verdict.desire_reveal, buildingId)}</p>
     <div style={{ overflowX: "auto" }}><table className="score-table"><thead><tr>{SCORE_COLUMNS.map(([label, full]) => <th key={label} scope="col" title={full} aria-label={full}>{label}</th>)}</tr></thead>
       <tbody>{verdict.scores.map((s) => <tr key={s.player_id}><th scope="row">{players[s.player_id]?.nickname ?? "Player"}</th><td>{s.data_fit}</td><td>{s.neighborhood_fit}</td><td>{s.creativity}</td><td>{s.charm}</td><td>+{s.needs_bonus ?? 0}</td><td><strong>{s.total ?? "—"}</strong></td></tr>)}</tbody></table></div>
     <p className="score-note"><small>Criteria out of 10 · total out of 40 · needs bonus included in total</small></p>

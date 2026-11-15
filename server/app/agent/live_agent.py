@@ -46,6 +46,20 @@ def prepared_voice(line: str) -> str:
     return re.sub(r' +', ' ', OFF_VOICE.sub('', line)).strip()
 
 
+def display_text(line: str, dossier: dict) -> str:
+    """Remove internal citations only after grounding; keep fact_ids untouched."""
+    property_ids = {str(dossier['id'])}
+    property_ids.update(m[1] for f in safe_facts(dossier)
+                        if (m := re.match(r'F_(\d+)_', f['id'])))
+    ids = r'F_\d+_[\w]+(?:[.-][\w]+)*|' + '|'.join(re.escape(pid) for pid in property_ids)
+    line = re.sub(r'(?<!\w)(?:' + ids + r')(?!\w)', '', line, flags=re.I)
+    line = re.sub(r'\[\s*\]|\(\s*\)|\{\s*\}|`\s*`', '', line)
+    line = re.sub(r'\s+', ' ', line)
+    line = re.sub(r'\s+([,.;:!?])', r'\1', line)
+    line = re.sub(r'([.!?])\s*[.,;:]+', r'\1', line)
+    return line.strip(' ,;:—-')
+
+
 def repair_scores(proposal, candidates, sources, names, dossier, city):
     """The server owns eligibility; ambiguous aliases receive deterministic scores."""
     expected = {c.player_id for c in candidates}
@@ -394,6 +408,10 @@ class LiveAgent:
                     self.challenge_fallback_causes[cause] += 1
                     diagnostic('challenge_fallback', cause, building_id=dossier['id'], player_id=p.player_id)
                     await self.fallback('challenge', started, cause)
+            # Ground the full proposal before removing citations from public copy.
+            candidate = candidate.model_copy(update={
+                'line': display_text(candidate.line, dossier),
+                'counteroffer': display_text(candidate.counteroffer, dossier)})
             ready = monotonic()
             if from_model:
                 self.challenge_latencies[p.player_id] = ready - started
@@ -475,6 +493,9 @@ class LiveAgent:
                     await self.fallback('verdict', started, self.last_failure)
                 else:
                     content += '\nRegenerate verdict. Grounding failure: ' + reason[:240]
+            proposal = proposal.model_copy(update={
+                'reason_line': display_text(proposal.reason_line, dossier),
+                'desire_reveal': display_text(proposal.desire_reveal, dossier)})
             scores = {s.player_id: s for s in proposal.scores}
             # Screened candidates get low scores, never a model reward for injection.
             for c in candidates:
@@ -496,6 +517,9 @@ class LiveAgent:
                 if not batch:
                     continue
                 proposal = fake_agent.verdict(batch, dossier, city)
+                proposal = proposal.model_copy(update={
+                    'reason_line': display_text(proposal.reason_line, dossier),
+                    'desire_reveal': display_text(proposal.desire_reveal, dossier)})
                 for score, p in zip(proposal.scores, batch):
                     if safety_reason(p.text):
                         score.data_fit = score.neighborhood_fit = score.creativity = score.charm = 0
