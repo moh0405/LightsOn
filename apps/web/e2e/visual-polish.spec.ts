@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { silence } from "./silence";
 import { writeFileSync, mkdirSync } from "node:fs";
 import { assertFramed } from "./camera-assertions";
 import type { FeatureCollection } from "geojson";
@@ -10,7 +11,7 @@ test.use({ launchOptions: { args: process.platform === "darwin" ? ["--use-gl=ang
 test("1080p skyline, stable floor selection, eased dive and frame times", async ({ browser, baseURL, request }) => {
   test.setTimeout(90_000);
   const baseline = process.env.LO_VISUAL_BASELINE === "1";
-  const context = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
+  const context = await silence(await browser.newContext({ viewport: { width: 1920, height: 1080 } }));
   const errors: string[] = [];
   const dir = "e2e/screenshots/visual-polish";
   mkdirSync(dir, { recursive: true });
