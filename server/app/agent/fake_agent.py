@@ -97,7 +97,12 @@ def challenge(pitch: Pitch, dossier: dict, *, variant: int | None = None) -> Cha
         'make_things': f'Let people create something in your {use}',
         'be_famous_again': f'Give people a reason to talk about your {use}',
     }.get(persona.get('desire_key'), f'Give your {use} a public welcome')
-    counteroffer = f"{hint}; {persona.get('catchphrase') or 'Bring me an idea. Let us make a deal.'}"
+    # The catchphrase already opens the intro; a fallback uses it at most one time in four
+    # so judges do not hear it in every challenge. The pitch varies the closer across rounds.
+    closers = (persona.get('catchphrase') or 'Bring me an idea. Let us make a deal.',
+               'Show me how.', 'Make me believe it.', 'What do you say?')
+    closer = closers[(variant + len(pitch.text)) % len(closers)]
+    counteroffer = f"{hint}. {closer}"
     # The building's own limits first, then any other validated limit. A limit is used
     # only when the pitch states a number beyond its cited fact; a category alone proves nothing.
     own = (dossier.get('persona') or {}).get('hard_limits') or []

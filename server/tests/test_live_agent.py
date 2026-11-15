@@ -351,7 +351,10 @@ async def test_round_fallbacks_vary_and_keep_persona_and_desire(dossier):
     assert len({c.line for c in results}) == len(results)
     assert len({tuple(c.fact_ids) for c in results}) > 1
     persona = persona_for(dossier)
-    assert all(persona['catchphrase'] in c.counteroffer for c in results)
+    # The catchphrase opens the intro; fallbacks vary their closer instead of repeating it.
+    assert sum(persona['catchphrase'] in c.counteroffer for c in results) <= 1
+    assert len({c.counteroffer for c in results}) == len(results)
+    assert all('; ' not in c.counteroffer for c in results)
     assert all(check_line(c.line + ' ' + c.counteroffer, c.fact_ids, dossier) is None for c in results)
     assert all('after sunset' in c.counteroffer for c in results)
 
@@ -360,9 +363,18 @@ def test_fallback_prioritizes_triggered_limit_and_relevant_facts(dossier):
     impossible = fake_agent.challenge(pitch('I need 9000000 square feet on a single floor for a restaurant.'), dossier)
     assert impossible.fact_ids == ['F_233953_grossTypicalFloorSquareFeet']
     assert '22,189' in impossible.line
-    assert dossier['persona']['catchphrase'] in impossible.counteroffer
+    assert impossible.counteroffer.endswith(('.', '?'))
     housing = fake_agent.challenge(pitch('Homes where everyone can live'), dossier)
     assert all('parking' not in fid for fid in housing.fact_ids)
+
+
+def test_fallback_counteroffer_does_not_repeat_the_catchphrase_each_round(dossier):
+    catchphrase = dossier['persona']['catchphrase']
+    texts = ['A public community gaming studio open at night', 'A night market', 'Esports arena for everyone',
+             'A rooftop cinema open late', 'A music hall with late shows', 'A public gaming lounge']
+    offers = [fake_agent.challenge(pitch(t), dossier).counteroffer for t in texts]
+    assert sum(catchphrase in o for o in offers) < len(offers) / 2
+    assert len(set(offers)) > 2
 
 
 async def test_per_player_challenges_accept_voice_and_hypothetical_counteroffers(dossier):
