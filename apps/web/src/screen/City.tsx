@@ -12,7 +12,7 @@ import { Sparks } from "./Sparks";
 import { SkylineAccents } from "./SkylineAccents";
 import { FLASH_MS, firstFloorAt, INTRO_DIVE_MS, lightUpDuration } from "./effects";
 import { fadedOccluders, frameCamera, frameVolume, occluders, planCamera, ROUND_PITCH } from "./camera";
-import { facadeBands, groundGrid, roofEdges, smoothFlight, stickyHit, type Hit } from "./skyline";
+import { facadeBands, floorHalos, groundGrid, roofEdges, smoothFlight, stickyHit, type Hit } from "./skyline";
 
 declare global { interface Window { __lightsOnMap?: CityMap; __lightsOnFrameBuilding?: (id: string) => void } }
 const CENTER: [number, number] = [-95.3650891, 29.7588018];
@@ -58,7 +58,7 @@ export function City({ onHover }: { onHover?: (id: string | null) => void }) {
       map = new CityMap({ container: container.current!, center: CENTER, zoom: 15.5, pitch: 60,
         attributionControl: false, interactive: false,
         pixelRatio: Math.min(window.devicePixelRatio, 1.5),
-        style: { version: 8, light: { anchor: "map", color: "#dce7ff", position: [1.5, 235, 48], intensity: 0.38 },
+        style: { version: 8, light: { anchor: "viewport", color: "#f6f8ff", position: [1.5, 205, 58], intensity: 0.45 },
           sky: { "sky-color": "#070d1c", "horizon-color": "#354363", "fog-color": "#17243a", "sky-horizon-blend": 0.75, "horizon-fog-blend": 0.65 },
           sources: {}, layers: [{ id: "night", type: "background", paint: { "background-color": "#101b2b" } }] },
       });
@@ -91,6 +91,11 @@ export function City({ onHover }: { onHover?: (id: string | null) => void }) {
           map.addLayer({ id: "floors-faded", type: "fill-extrusion", source: "floors", filter: ["in", ["get", "building_id"], ["literal", []]], paint: {
             "fill-extrusion-base": ["get", "base_m"], "fill-extrusion-height": ["get", "height_m"], "fill-extrusion-color": FLOOR_COLOR, "fill-extrusion-opacity": 0.12,
           } });
+          map.addSource("halos", { type: "geojson", data: floorHalos(floors.value) });
+          map.addLayer({ id: "floor-halos", type: "fill-extrusion", source: "halos", paint: {
+            "fill-extrusion-base": ["get", "base_m"], "fill-extrusion-height": ["get", "height_m"],
+            "fill-extrusion-color": FLOOR_COLOR, "fill-extrusion-opacity": 0.2, "fill-extrusion-vertical-gradient": false,
+          } });
           map.addSource("windows", { type: "geojson", data: facadeBands(floors.value) });
           map.addLayer({ id: "windows", type: "fill-extrusion", source: "windows", paint: {
             "fill-extrusion-base": ["get", "base_m"], "fill-extrusion-height": ["get", "height_m"],
@@ -101,7 +106,8 @@ export function City({ onHover }: { onHover?: (id: string | null) => void }) {
         // so the light-up stays visible (filters are set per hero below).
         if (city.status === "fulfilled") map.addLayer({ id: "context-faded", type: "fill-extrusion", source: "city", filter: ["in", ["get", "_i"], ["literal", []]], paint: { "fill-extrusion-color": "#3a4560", "fill-extrusion-height": ["get", "height_m"], "fill-extrusion-opacity": 0.12 } });
         if (city.status === "rejected" || floors.status === "rejected") setError("Skyline data is unavailable. Use the Wake buttons on your phone.");
-        overview.current = frameVolume([geo.current.city, geo.current.floors].filter((g): g is FeatureCollection => !!g));
+        // Attract frames the wakeable towers so they fill the projector; the context city runs off the edges.
+        overview.current = frameVolume(geo.current.floors ? [geo.current.floors] : geo.current.city ? [geo.current.city] : []);
         setReady(true);
       });
     });
@@ -138,6 +144,7 @@ export function City({ onHover }: { onHover?: (id: string | null) => void }) {
         map.setFilter("floors", floorIds.length ? ["!", ["in", ["get", "building_id"], ["literal", floorIds]]] : null);
         map.setFilter("floors-faded", ["in", ["get", "building_id"], ["literal", floorIds]]);
         map.setFilter("windows", floorIds.length ? ["!", ["in", ["get", "building_id"], ["literal", floorIds]]] : null);
+          if (map.getLayer("floor-halos")) map.setFilter("floor-halos", floorIds.length ? ["!", ["in", ["get", "building_id"], ["literal", floorIds]]] : null);
       }
     };
     const dive = (id: string, duration = INTRO_DIVE_MS, settle = false) => {
@@ -229,14 +236,14 @@ export function City({ onHover }: { onHover?: (id: string | null) => void }) {
     map.setPaintProperty("floors", "fill-extrusion-color-transition", { duration: 0 });
     map.setPaintProperty("floors-faded", "fill-extrusion-color-transition", { duration: 0 });
     map.setPaintProperty("windows", "fill-extrusion-color-transition", { duration: 0 });
+    map.setPaintProperty("floor-halos", "fill-extrusion-color-transition", { duration: 0 });
     let frame = 0;
     const paint = () => {
       // Paint and scheduling must share one clock read so the final frame
       // cannot be dropped when the deadline is crossed during setPaintProperty.
       const now = Date.now();
-      map.setPaintProperty("floors", "fill-extrusion-color", floorColorExpression(revivedColors, revival ? { ...revival, at: firstFloorAt(revival.at) } : undefined, now));
-      map.setPaintProperty("floors-faded", "fill-extrusion-color", floorColorExpression(revivedColors, revival ? { ...revival, at: firstFloorAt(revival.at) } : undefined, now));
-      map.setPaintProperty("windows", "fill-extrusion-color", floorColorExpression(revivedColors, revival ? { ...revival, at: firstFloorAt(revival.at) } : undefined, now));
+      const color = floorColorExpression(revivedColors, revival ? { ...revival, at: firstFloorAt(revival.at) } : undefined, now);
+      for (const layer of ["floors", "floors-faded", "windows", "floor-halos"]) map.setPaintProperty(layer, "fill-extrusion-color", color);
       if (revival && now - revival.at < lightUpDuration(revival.floors)) frame = requestAnimationFrame(paint);
     };
     paint();
@@ -263,7 +270,7 @@ export function City({ onHover }: { onHover?: (id: string | null) => void }) {
       <style>{`@keyframes city-flash { from { opacity: 0.9 } to { opacity: 0 } }`}</style>
       <div ref={container} style={{ position: "absolute", inset: 0 }} />
       <div className="city-atmosphere" aria-hidden="true" />
-      {ready && mapRef.current && geo.current.floors && <SkylineAccents map={mapRef.current} floors={geo.current.floors} selections={hovers} colors={revivedColors} revival={revival} />}
+      {ready && mapRef.current && geo.current.floors && <SkylineAccents map={mapRef.current} floors={geo.current.floors} selections={hovers} />}
       {["LOBBY", "EXPLORE"].includes(phase) && <div className="skyline-guide">
         <span className="skyline-eyebrow">DOWNTOWN HOUSTON</span>
         <p>Aim your beam. Wake a building.</p>

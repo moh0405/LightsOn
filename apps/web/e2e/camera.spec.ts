@@ -30,7 +30,8 @@ for (const [width, height] of [[1920, 1080], [1440, 900], [1280, 720]]) {
         await expect(screen.getByTestId('field')).toHaveAttribute('data-facts-ready', 'true');
         if (building.id === '233953') {
           await screen.waitForTimeout(2700);
-          await assertFramed(screen, { type: 'FeatureCollection', features: [...floors.features, ...city.features] });
+          // The attract overview frames every wakeable tower; context buildings may run off the edges.
+          await assertFramed(screen, floors);
           await screen.getByTestId('field').screenshot({ path: `e2e/screenshots/camera/overview-${width}.png` });
         }
         if (building.id === '233899') {

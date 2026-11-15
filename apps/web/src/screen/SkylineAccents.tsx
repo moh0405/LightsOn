@@ -1,9 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { MercatorCoordinate, type Map as CityMap } from "maplibre-gl";
 import type { FeatureCollection } from "geojson";
-import { resolveFloorColor, type RevivedColors } from "../lib/floor-colors";
-import type { Status } from "../lib/buildings";
-import { firstFloorAt } from "./effects";
 
 type Point = [number, number];
 type Vertex = [number, number, number];
@@ -23,11 +20,8 @@ function hull(points: Point[]): Point[] {
   return [...half(sorted), ...half(sorted.reverse())];
 }
 
-/** Cosmetic light only: the authoritative, depth-tested floors stay in MapLibre. */
-export function SkylineAccents({ map, floors, selections, colors, revival }: {
-  map: CityMap; floors: FeatureCollection; selections: Selection[]; colors: RevivedColors;
-  revival: { building_id: string; floors: number[]; at: number } | null;
-}) {
+/** The selection outline only: floors, window bands and their glow stay depth-tested in MapLibre. */
+export function SkylineAccents({ map, floors, selections }: { map: CityMap; floors: FeatureCollection; selections: Selection[] }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const geometry = useMemo(() => floors.features.map(f => {
     const polygons = f.geometry.type === "Polygon" ? [f.geometry.coordinates] : f.geometry.type === "MultiPolygon" ? f.geometry.coordinates : [];
@@ -35,9 +29,7 @@ export function SkylineAccents({ map, floors, selections, colors, revival }: {
     const vertex = (p: number[], z: number): Vertex => {
       const m = MercatorCoordinate.fromLngLat([p[0]!, p[1]!], z); return [m.x, m.y, m.z];
     };
-    return { id: String(f.properties?.building_id), floor: Number(f.properties?.floor_number), status: f.properties?.source_status as Status,
-      game: f.properties?.game_status as string | null,
-      edges: polygons.map(p => (p[0] ?? []).map(v => vertex(v, (base + top) / 2))),
+    return { id: String(f.properties?.building_id),
       volume: polygons.flatMap(p => (p[0] ?? []).flatMap(v => [vertex(v, base), vertex(v, top)])),
     };
   }), [floors]);
@@ -59,27 +51,6 @@ export function SkylineAccents({ map, floors, selections, colors, revival }: {
       const path = (points: Point[]) => {
         ctx.beginPath(); points.forEach((p, i) => i ? ctx.lineTo(...p) : ctx.moveTo(...p)); ctx.closePath();
       };
-      // Batch lit floors by colour and fake the glow with a wide faint stroke:
-      // canvas shadowBlur per floor cost ~5 ms a frame on the attract orbit.
-      const lit = new Map<string, Point[][]>();
-      for (const floor of geometry) {
-        const revived = colors[floor.id]?.floors.includes(floor.floor);
-        if (floor.status !== "occupied" && !revived) continue;
-        const order = revival?.building_id === floor.id ? [...revival.floors].sort((a, b) => a - b).indexOf(floor.floor) : -1;
-        const progress = order >= 0 && revival ? Math.max(0, Math.min(1, (Date.now() - firstFloorAt(revival.at) - order * 60) / 600)) : 1;
-        if (progress <= 0) continue;
-        const key = `${resolveFloorColor(floor.status, floor.game, floor.id, floor.floor, colors)}|${Math.round(progress * 10)}`;
-        const list = lit.get(key) ?? []; lit.set(key, list);
-        for (const edge of floor.edges) list.push(edge.map(project));
-      }
-      for (const [key, edges] of lit) {
-        const [color, step] = key.split("|");
-        ctx.beginPath();
-        for (const points of edges) { points.forEach((p, i) => i ? ctx.lineTo(...p) : ctx.moveTo(...p)); ctx.closePath(); }
-        ctx.strokeStyle = color!; const progress = Number(step) / 10;
-        ctx.lineWidth = 5; ctx.globalAlpha = 0.04 * progress; ctx.stroke();
-        ctx.lineWidth = 1; ctx.globalAlpha = 0.12 * progress; ctx.stroke();
-      }
       for (const selection of selections) {
         const points = hull(geometry.filter(f => f.id === selection.building).flatMap(f => f.volume.map(project)));
         if (points.length < 3) continue;
@@ -91,6 +62,6 @@ export function SkylineAccents({ map, floors, selections, colors, revival }: {
     };
     draw(); map.on("render", draw);
     return () => { map.off("render", draw); };
-  }, [map, geometry, selections, colors, revival]);
+  }, [map, geometry, selections]);
   return <canvas ref={canvas} aria-hidden="true" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }} />;
 }

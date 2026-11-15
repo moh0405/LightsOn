@@ -31,6 +31,22 @@ export function facadeBands(floors: FeatureCollection): FeatureCollection {
   }) };
 }
 
+/** A slightly wider shell per floor. Drawn translucent in the 3D pass it reads as a soft,
+ * depth-correct bloom around lit floors (a 2D overlay would shine through nearer towers). */
+export function floorHalos(floors: FeatureCollection, scale = 1.07): FeatureCollection {
+  return { type: "FeatureCollection", features: floors.features.flatMap(feature => {
+    const polygons = feature.geometry.type === "Polygon" ? [feature.geometry.coordinates]
+      : feature.geometry.type === "MultiPolygon" ? feature.geometry.coordinates : [];
+    const coordinates = polygons.flatMap(polygon => {
+      const ring = polygon[0]; if (!ring || ring.length < 4) return [];
+      const n = ring.length - 1;
+      const cx = ring.slice(0, n).reduce((sum, p) => sum + p[0]!, 0) / n, cy = ring.slice(0, n).reduce((sum, p) => sum + p[1]!, 0) / n;
+      return [[ring.map(p => [cx + (p[0]! - cx) * scale, cy + (p[1]! - cy) * scale])]];
+    });
+    return coordinates.length ? [{ type: "Feature" as const, properties: { ...feature.properties }, geometry: { type: "MultiPolygon" as const, coordinates } }] : [];
+  }) };
+}
+
 /** A slim architectural cornice; generated only from the supplied footprint and roof. */
 export function roofEdges(city: FeatureCollection): FeatureCollection {
   const features: Feature<Polygon>[] = [];
