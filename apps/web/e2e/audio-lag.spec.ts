@@ -21,6 +21,7 @@ for (const mode of (process.env.AUDIO_LAG_DATA ? [process.env.AUDIO_LAG_DATA] : 
         const events: Entry[] = [];
         const lines: { id: number; text: string; consumed: string; key: string; preliminary: boolean }[] = [];
         let round = 0;
+        const names: Record<string, string> = {};
         const clean = (s: string) => s.replace(/\s+/g, ' ').trim();
         const log = (event: string, data: Omit<Entry, 'event' | 'ms'> = {}) => events.push({ ms: performance.now(), event, ...data });
         Object.assign(window, { audioLag: events, audioLagLog: log });
@@ -33,9 +34,11 @@ for (const mode of (process.env.AUDIO_LAG_DATA ? [process.env.AUDIO_LAG_DATA] : 
               const raw = JSON.parse(String(e.data));
               if (raw.type === 'phase_changed') log('phase', { value: raw.phase });
               if (raw.type === 'round_started') round++;
+              for (const p of [...(Array.isArray(raw.players) ? raw.players : []), ...(raw.player ? [raw.player] : [])]) names[p.id] = p.nickname;
               const m = raw.type === 'room_state' && raw.phase === 'VERDICT' && raw.verdict ? { ...raw.verdict, type: 'verdict' } : raw;
               if (['building_intro', 'counteroffer', 'verdict'].includes(m.type)) {
-                const text = clean(m.text ?? (m.reason_line ?? `${m.line} ${m.counteroffer}`));
+                // The spoken verdict names the winner, gives the reason, then the desire reveal.
+                const text = clean(m.text ?? (m.type === 'verdict' ? `${names[m.winner_player_id] ? `${names[m.winner_player_id]} wins.` : ''} ${m.reason_line} ${m.desire_reveal}` : `${m.line} ${m.counteroffer}`));
                 const key = `${m.type}:${round}:${m.player_id ?? ''}:${text}`;
                 if (lines.some(l => l.key === key)) return;
                 const id = lines.length;
@@ -66,9 +69,11 @@ for (const mode of (process.env.AUDIO_LAG_DATA ? [process.env.AUDIO_LAG_DATA] : 
           const id = utterance++;
           const text = clean(u.text);
           // A budgeted challenge speaks a part of its line; match that by containment.
+          // A budgeted verdict speaks the opening of its line, perhaps ending in an ellipsis.
           // Thinking lines are subtitle-only and share the intro's catchphrase: never attribute speech to them.
           const real = lines.filter(l => !l.preliminary);
           const line = real.find(l => clean(l.text.slice(l.consumed.length)).startsWith(text))
+            ?? real.find(l => l.key.startsWith('verdict:') && text.endsWith('…') && clean(l.text.slice(l.consumed.length)).startsWith(text.slice(0, -1)))
             ?? (() => {
               const fits = real.filter(l => l.key.startsWith('counteroffer:') && !l.consumed && l.text.includes(text.replace(/…$/, '')));
               return fits.find(l => l.id === lastChallenge) ?? fits.find(l => !spokenLines.has(l.id)) ?? fits[0];
@@ -235,6 +240,9 @@ for (const mode of (process.env.AUDIO_LAG_DATA ? [process.env.AUDIO_LAG_DATA] : 
         const endOf = (id?: number) => entries.find(e => e.event === 'end' && e.id === id);
         const spoken = starts.filter(e => challenges.some(r => r.id === e.line));
         const negotiateAfter = (ms: number) => entries.find(e => e.event === 'phase' && e.value === 'NEGOTIATE' && e.ms > ms)?.ms ?? Infinity;
+        const verdictStarts = starts.filter(e => metrics.rows.some(r => r.type === 'verdict' && r.id === e.line));
+        const powerUps = entries.filter(e => e.event === 'phase' && e.value === 'POWER_UP').map(e => e.ms);
+        const exploreAfter = (ms: number) => entries.find(e => e.event === 'phase' && e.value === 'EXPLORE' && e.ms > ms)?.ms ?? Infinity;
         const worst = (type: string, field: 'firstWord' | 'readyToStart') => Math.max(...metrics.rows.filter(r => r.type === type && r[field] !== null).map(r => r[field]!));
         const summary = { rounds, firstWord: { building_intro: worst('building_intro', 'firstWord'), counteroffer: worst('counteroffer', 'readyToStart'), verdict: worst('verdict', 'firstWord') },
           utterances: starts.length, unfinished: starts.filter(e => !endOf(e.id)).map(e => e.text),
@@ -245,6 +253,11 @@ for (const mode of (process.env.AUDIO_LAG_DATA ? [process.env.AUDIO_LAG_DATA] : 
           challengesSpoken: new Set(spoken.map(e => e.line)).size,
           challengeEndBeforeNegotiate: Math.min(...spoken.map(e => negotiateAfter(e.ms) - (endOf(e.id)?.ms ?? Infinity))),
           spokenChallenges: spoken.map(e => e.text),
+          verdictsSpoken: new Set(verdictStarts.map(e => e.line)).size, spokenVerdicts: verdictStarts.map(e => e.text),
+          // Speech from VERDICT (or earlier) still in the air after POWER_UP began, and anything started during POWER_UP or REVIVED.
+          speechOverPowerUp: powerUps.flatMap(p => starts.filter(e => e.ms < exploreAfter(p) && (endOf(e.id)?.ms ?? Infinity) > p)
+            .map(e => `${Math.round((endOf(e.id)?.ms ?? Infinity) - p)} ms: ${e.text}`)),
+          verdictEndBeforePowerUp: Math.min(...verdictStarts.map(e => (powerUps.find(p => p > e.ms) ?? Infinity) - (endOf(e.id)?.ms ?? Infinity))),
           phases: entries.filter(e => e.event === 'phase').map(e => `${e.value}@${Math.round(e.ms)}`), maxChunkGap: metrics.maxChunkGap, maxLongTask: metrics.maxLongTask };
         console.log(`${building} demo-path: ${JSON.stringify(summary)}`);
         if (process.env.AUDIO_LAG_OUTPUT) writeFileSync(join(process.env.AUDIO_LAG_OUTPUT, 'demo-path-summary.json'), JSON.stringify(summary, null, 2));
@@ -258,6 +271,9 @@ for (const mode of (process.env.AUDIO_LAG_DATA ? [process.env.AUDIO_LAG_DATA] : 
           // A07: both players are challenged aloud each round, inside CHALLENGE.
           expect(summary.challengesSpoken, 'each challenge is spoken').toBe(2 * rounds);
           expect(summary.challengeEndBeforeNegotiate, 'challenge speech ends before NEGOTIATE').toBeGreaterThanOrEqual(0);
+          // The verdict is spoken each round and is silent before the charge and the light-up.
+          expect(summary.verdictsSpoken, 'each verdict is spoken').toBe(rounds);
+          expect(summary.speechOverPowerUp, 'no utterance is speaking when POWER_UP begins, or starts before EXPLORE').toEqual([]);
           expect(metrics.maxChunkGap).toBeLessThanOrEqual(250);
           expect(metrics.provisionalSpoken).toBe(0);
         }

@@ -154,6 +154,38 @@ export function budgetLine(line: string, counteroffer: string, maxWords: number)
   return head.length ? `${head.join(" ").replace(/[,;:.!?]+$/, "")}…` : "";
 }
 
+/** The server's VERDICT window; it is armed once the verdict resolves. */
+const VERDICT_WINDOW_MS = 10_000;
+/** Chunk start latency and voice drift: the verdict must be silent before POWER_UP. */
+const VERDICT_MARGIN_MS = 1000;
+/** The longest whole-word opening of `sentence` within `maxWords`, cut back to a
+ * clause break when one keeps at least half of it. Never ends mid-word. */
+function clip(sentence: string, maxWords: number): string {
+  if (maxWords < 4) return "";
+  const head: string[] = [];
+  for (const word of words(sentence)) { if (spokenWords([...head, word].join(" ")) > maxWords) break; head.push(word); }
+  if (head.length < 4) return "";
+  for (let i = head.length - 1; i >= Math.max(4, head.length / 2); i--) if (/[,;:]$|^[—–-]$/.test(head[i - 1]!)) { head.length = i; break; }
+  return `${head.join(" ").replace(/[\s,;:.!?—–-]+$/, "")}…`;
+}
+/** Fit the spoken verdict into `maxWords`. The score card keeps the full text.
+ * The winner and the reason line come first, whole sentences at a time; the
+ * desire reveal is spoken only when everything fits. */
+export function budgetVerdict(winner: string, reason: string, reveal: string, maxWords: number): string {
+  const [name, why, wish] = [winner, reason, reveal].map(part => speechChunks(part).join(" "));
+  const full = [name, why, wish].filter(Boolean).join(" ");
+  if (spokenWords(full) <= maxWords) return full;
+  let kept = spokenWords(name!) <= maxWords ? name! : "";
+  for (const [index, sentence] of why!.split(/(?<=[.!?])\s+/).entries()) {
+    const next = `${kept} ${sentence}`.trim();
+    if (spokenWords(next) <= maxWords) { kept = next; continue; }
+    // Not even the first reason sentence fits: say its opening clause.
+    if (index === 0) kept = `${kept} ${clip(sentence, maxWords - spokenWords(kept))}`.trim();
+    break;
+  }
+  return kept;
+}
+
 function browserVoice(persona: PersonaVoice): SpeechSynthesisVoice | null {
   const synth = window.speechSynthesis;
   // Start audio primes discovery. If OS voices are still loading, speak with
@@ -168,14 +200,14 @@ function browserVoice(persona: PersonaVoice): SpeechSynthesisVoice | null {
 }
 
 /** Speaks sentence by sentence. `proceed` is asked before every sentence after
- * the first: a line that lost its turn finishes the sentence it is on and drops
- * the rest. Only `signal` (reset, unmount) interrupts a sentence. */
-export async function browserSpeech(text: string, persona: PersonaVoice, _mood: Mood, signal: AbortSignal, proceed?: () => boolean): Promise<void> {
+ * the first: a line that lost its turn (or whose next sentence no longer fits
+ * its phase) finishes the sentence it is on and drops the rest. Only `signal` (reset, unmount) interrupts a sentence. */
+export async function browserSpeech(text: string, persona: PersonaVoice, _mood: Mood, signal: AbortSignal, proceed?: (chunk: string) => boolean): Promise<void> {
   if (!window.speechSynthesis || typeof SpeechSynthesisUtterance === "undefined") throw new Error("speech unavailable");
   const synth = window.speechSynthesis;
   const voice = browserVoice(persona);
   for (const [index, chunk] of speechChunks(text).entries()) {
-    if (signal.aborted || (index > 0 && proceed && !proceed())) return;
+    if (signal.aborted || (index > 0 && proceed && !proceed(chunk))) return;
     await new Promise<void>((resolve, reject) => {
       const speech = new SpeechSynthesisUtterance(chunk);
       speech.voice = voice; speech.lang = voice?.lang ?? "en-US";
@@ -266,10 +298,10 @@ export function useScreenAudio() {
         })
         .catch(() => { /* Optional persona: default browser voice still speaks the subtitle. */ });
     };
-    const speechGroup = (phase: string) => ["INTRO", "PITCH"].includes(phase) ? "intro"
-      // A challenge belongs to its own beat: NEGOTIATE is the players' turn.
-      : ["VERDICT", "POWER_UP", "REVIVED"].includes(phase) ? "verdict" : phase;
-    const say = (key: string, text: string, url: string | null, mood: Mood, prepare?: () => string) => {
+    // A challenge belongs to its own beat: NEGOTIATE is the players' turn. The
+    // verdict belongs to VERDICT: the charge and the light-up are never talked over.
+    const speechGroup = (phase: string) => ["INTRO", "PITCH"].includes(phase) ? "intro" : phase;
+    const say = (key: string, text: string, url: string | null, mood: Mood, prepare?: () => string, fits?: (chunk: string) => boolean) => {
       const identity = `${key}:${text}`;
       if (spoken.has(identity)) return;
       spoken.add(identity);
@@ -302,7 +334,7 @@ export function useScreenAudio() {
             try { await playAudio(url, signal, native ? 150 : 5000); return; }
             catch { warn("Recorded speech unavailable. Using browser speech."); }
           }
-          if (!signal.aborted && group === speechGroup(useGame.getState().phase)) await browserSpeech(words, persona, mood, signal, () => current === generation && group === speechGroup(useGame.getState().phase));
+          if (!signal.aborted && group === speechGroup(useGame.getState().phase)) await browserSpeech(words, persona, mood, signal, (chunk) => current === generation && group === speechGroup(useGame.getState().phase) && (!fits || fits(chunk)));
         } catch (error) { if (!signal.aborted) { console.warn(error); warn("Audio unavailable. Follow the subtitles."); } }
         finally { if (!signal.aborted) cityMusic.duck(false); }
       });
@@ -335,7 +367,19 @@ export function useScreenAudio() {
           });
         }
       }
-      if (speechGroup(state.phase) === "verdict" && state.verdict) say("verdict", state.verdict.reason_line, null, state.mood);
+      // The verdict is budgeted to end inside VERDICT. A sentence still in the air
+      // at POWER_UP finishes; nothing behind it starts.
+      if (state.phase === "VERDICT" && state.verdict) {
+        const verdict = state.verdict;
+        // Live verdicts can arrive before the server arms the timer (endsAt is null).
+        const left = () => { const { endsAt } = useGame.getState(); return endsAt ? new Date(endsAt).getTime() - Date.now() : VERDICT_WINDOW_MS; };
+        say("verdict", `${verdict.reason_line} ${verdict.desire_reveal}`, null, state.mood, () => {
+          const nickname = useGame.getState().players[verdict.winner_player_id]?.nickname;
+          return budgetVerdict(nickname ? `${nickname} wins.` : "", verdict.reason_line, verdict.desire_reveal,
+            Math.floor((left() - VERDICT_MARGIN_MS) / 1000 * SPOKEN_WORDS_PER_SECOND));
+        // A slow voice: a sentence that can no longer end inside VERDICT is dropped.
+        }, (chunk) => spokenWords(chunk) / SPOKEN_WORDS_PER_SECOND * 1000 <= left() - 250);
+      }
       if (previous && state.revival && state.revival !== previous.revival) {
         cityMusic.revive(state.revival.category);
         // Share the visual flash lead-in and first-floor timestamp.
