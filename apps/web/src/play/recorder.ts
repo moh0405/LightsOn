@@ -3,6 +3,7 @@ export interface Recognition {
   lang: string; continuous: boolean; interimResults: boolean;
   onresult: ((event: { resultIndex: number; results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }> }) => void) | null;
   onerror: ((event: { error: string }) => void) | null;
+  onstart?: (() => void) | null;
   onend: (() => void) | null;
   start(): void; stop(): void; abort(): void;
 }
@@ -17,6 +18,7 @@ interface Callbacks {
   onAudio(blob: Blob): void;
   onError(message: string): void;
   onListening?(listening: boolean): void;
+  onReady?(): void;
 }
 export function createRecorder(callbacks: Callbacks, environment?: RecorderEnvironment) {
   const browser = globalThis as typeof globalThis & { SpeechRecognition?: RecognitionConstructor; webkitSpeechRecognition?: RecognitionConstructor };
@@ -26,6 +28,7 @@ export function createRecorder(callbacks: Callbacks, environment?: RecorderEnvir
     Recorder: typeof MediaRecorder === "undefined" ? undefined : MediaRecorder,
   };
   let held = false, disposed = false;
+  let generation = 0;
   let recognition: Recognition | null = null;
   let stream: MediaStream | null = null;
   let recorder: MediaRecorder | null = null;
@@ -34,6 +37,7 @@ export function createRecorder(callbacks: Callbacks, environment?: RecorderEnvir
   const idle = () => { clearTimeout(timer); callbacks.onListening?.(false); };
   const fail = () => { held = false; idle(); releaseTracks(); callbacks.onError("Voice unavailable. Type your pitch below."); };
   const stop = () => {
+    if (!held) return;
     held = false;
     idle();
     try { recognition?.stop(); } catch { /* Recognition already ended. */ }
@@ -43,6 +47,11 @@ export function createRecorder(callbacks: Callbacks, environment?: RecorderEnvir
   return {
     async start() {
       if (held || disposed) return;
+      const session = ++generation;
+      const current = () => !disposed && session === generation;
+      // A previous session may still deliver final results/end after release.
+      try { recognition?.abort(); } catch { /* Already ended. */ }
+      recognition = null;
       held = true;
       callbacks.onListening?.(true);
       timer = setTimeout(stop, 30_000);
@@ -52,44 +61,54 @@ export function createRecorder(callbacks: Callbacks, environment?: RecorderEnvir
           // Interim results show words while the player speaks. iOS Safari often never marks a
           // continuous result final, so the latest interim words count as heard too.
           recognition.lang = "en-US"; recognition.continuous = true; recognition.interimResults = true;
-          let transcript = "";
+          recognition.onstart = () => { if (current() && held) callbacks.onReady?.(); };
           recognition.onresult = (event) => {
-            if (disposed) return;
-            let interim = "";
-            for (let i = event.resultIndex; i < event.results.length; i++) {
+            if (!current()) return;
+            let transcript = "";
+            for (let i = 0; i < event.results.length; i++) {
               const result = event.results[i];
-              if (result?.isFinal) transcript += `${result[0].transcript} `;
-              else if (result) interim += `${result[0].transcript} `;
+              if (result) transcript += `${result[0].transcript} `;
             }
-            const heard = `${transcript}${interim}`.replace(/\s+/g, " ").trim().slice(0, 280);
+            const heard = transcript.replace(/\s+/g, " ").trim().slice(0, 280);
             if (heard) callbacks.onText(heard);
           };
           // Silence or our own stop is not a failure: the text box and typing stay as they are.
-          recognition.onerror = (event) => { if (!disposed && event?.error !== "no-speech" && event?.error !== "aborted") fail(); };
-          recognition.onend = () => { held = false; idle(); };
+          recognition.onerror = (event) => { if (current() && event?.error !== "no-speech" && event?.error !== "aborted") fail(); };
+          recognition.onend = () => { if (current()) { held = false; idle(); } };
           recognition.start();
           return;
         } catch { fail(); return; }
       }
       try {
         if (!env.media) { fail(); return; }
-        stream = await env.media.getUserMedia({ audio: true });
-        if (!held || disposed) { releaseTracks(); return; }
+        const acquired = await env.media.getUserMedia({ audio: true });
+        if (!held || !current()) { acquired.getTracks().forEach((track) => track.stop()); return; }
+        stream = acquired;
         if (!env.Recorder) { fail(); return; }
         const parts: BlobPart[] = [];
-        recorder = new env.Recorder(stream);
-        recorder.ondataavailable = (event) => { if (event.data.size) parts.push(event.data); };
-        recorder.onerror = fail;
-        recorder.onstop = () => {
-          idle(); releaseTracks();
-          if (!disposed && parts.length) callbacks.onAudio(new Blob(parts, { type: recorder?.mimeType || "audio/webm" }));
+        const recording = new env.Recorder(stream);
+        recorder = recording;
+        recording.ondataavailable = (event) => { if (event.data.size) parts.push(event.data); };
+        recording.onerror = () => { if (current()) fail(); };
+        recording.onstop = () => {
+          acquired.getTracks().forEach((track) => track.stop());
+          if (!current()) return;
+          idle();
+          if (parts.length) callbacks.onAudio(new Blob(parts, { type: recording.mimeType || "audio/webm" }));
         };
-        recorder.start();
-      } catch { if (!disposed) fail(); }
+        recording.start();
+        callbacks.onReady?.();
+      } catch { if (current()) fail(); }
     },
     stop,
+    cancel() {
+      generation++; held = false; idle();
+      try { recognition?.abort(); } catch { /* Optional API. */ }
+      if (recorder?.state === "recording") recorder.stop();
+      releaseTracks();
+    },
     dispose() {
-      disposed = true; held = false; clearTimeout(timer);
+      disposed = true; generation++; held = false; clearTimeout(timer);
       try { recognition?.abort(); } catch { /* Optional API. */ }
       if (recorder?.state === "recording") recorder.stop();
       releaseTracks();

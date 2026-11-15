@@ -21,9 +21,18 @@ for (const mode of ["kit", "fixtures"] as const) {
             class FakeRecognition {
               onresult: ((event: unknown) => void) | null = null;
               onend: (() => void) | null = null;
-              start() { this.onresult?.({ resultIndex: 0, results: [{ isFinal: true, 0: { transcript: "A public community gaming studio open at night" } }] }); }
-              stop() { this.onend?.(); }
-              abort() { this.onend?.(); }
+              onstart: (() => void) | null = null;
+              timer: ReturnType<typeof setTimeout> | undefined;
+              start() {
+                // Permission UI can take focus; real recognition is not ready at pointer-up.
+                document.activeElement?.dispatchEvent(new FocusEvent("blur"));
+                this.timer = setTimeout(() => {
+                  this.onstart?.();
+                  this.onresult?.({ resultIndex: 0, results: [{ isFinal: true, 0: { transcript: "A public community gaming studio open at night" } }] });
+                }, 350);
+              }
+              stop() { clearTimeout(this.timer); this.onend?.(); }
+              abort() { this.stop(); }
             }
             Object.defineProperty(window, "SpeechRecognition", { value: FakeRecognition, configurable: true });
           }
@@ -70,8 +79,20 @@ for (const mode of ["kit", "fixtures"] as const) {
         await expect(screen.getByTestId("subtitles")).toBeVisible();
         await expect(screen.getByTestId("phase")).toContainText("PITCH");
         await phone.getByRole("button", { name: "Hold to talk", exact: true }).tap();
-        if (voice === "browser") await expect(phone.getByLabel("Your pitch")).toHaveValue("A public community gaming studio open at night");
+        if (voice === "browser") {
+          await expect(phone.getByLabel("Your pitch")).toHaveValue("A public community gaming studio open at night");
+          await phone.getByRole("button", { name: "Listening… tap to stop", exact: true }).tap();
+          await expect(phone.getByRole("button", { name: "Hold to talk", exact: true })).toBeVisible();
+          // A deliberate hold still ends when released; it must not latch like a tap.
+          const talk = phone.getByRole("button", { name: "Hold to talk", exact: true });
+          await talk.focus();
+          await phone.keyboard.down("Space");
+          await expect(phone.getByRole("button", { name: "Listening… tap to stop", exact: true })).toBeVisible();
+          await phone.keyboard.up("Space");
+          await expect(talk).toBeVisible();
+        }
         else {
+          if (voice === "recorded") await phone.getByRole("button", { name: "Listening… tap to stop", exact: true }).tap();
           await expect(phone.getByRole("alert")).toContainText(/Type|type/);
           await phone.getByLabel("Your pitch").fill("A public community gaming studio open at night");
         }

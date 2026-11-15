@@ -17,11 +17,14 @@ export function Pitch({ sock, revision = false, playerId }: { sock: SocketRef; r
   const [error, setFormError] = useState<FormError | null>(null);
   const setError = useCallback((message: string | null) => setFormError(message ? { message, live: true } : null), []);
   const [listening, setListening] = useState(false);
+  const [micReady, setMicReady] = useState(false);
+  const press = useRef<{ at: number; started: boolean } | null>(null);
   const recorder = useRef<ReturnType<typeof createRecorder> | null>(null);
   useEffect(() => {
     const current = createRecorder({
       onText: setText,
-      onListening: setListening,
+      onListening: (active) => { setListening(active); if (!active) setMicReady(false); },
+      onReady: () => setMicReady(true),
       onError: setError,
       onAudio: (audio) => {
         if (!room) return;
@@ -34,6 +37,17 @@ export function Pitch({ sock, revision = false, playerId }: { sock: SocketRef; r
     recorder.current = current;
     return () => { current.dispose(); recorder.current = null; };
   }, [room, roundId, playerId, revision, key]);
+  const beginVoice = () => {
+    press.current = { at: performance.now(), started: !listening };
+    if (listening) recorder.current?.stop();
+    else { setError(null); setMicReady(false); void recorder.current?.start(); }
+  };
+  const endVoice = () => {
+    const gesture = press.current;
+    press.current = null;
+    // A tap latches the microphone on. A deliberate hold still stops on release.
+    if (gesture?.started && performance.now() - gesture.at >= 300) recorder.current?.stop();
+  };
   const offer = counteroffers[playerId];
   return <section style={{ display: "grid", gap: 16 }}>
     <h1>{revision ? "Make your deal" : "Pitch a new use"}</h1>
@@ -41,6 +55,7 @@ export function Pitch({ sock, revision = false, playerId }: { sock: SocketRef; r
     <form style={{ display: "grid", gap: 12 }} onSubmit={(e) => {
       e.preventDefault();
       if (busy || sent || !text.trim() || !sock.current) return;
+      recorder.current?.cancel();
       setBusy(true); setError(null);
       void sock.current.send({ type: revision ? "revise_pitch" : "submit_pitch", round_id: roundId, text: text.trim() }).then(() => {
         setSent(true); safeSet(key, "yes", "session");
@@ -49,14 +64,14 @@ export function Pitch({ sock, revision = false, playerId }: { sock: SocketRef; r
       <label htmlFor="pitch-text">{revision ? "Your revision" : "Your pitch"}</label>
       <button type="button" style={{ ...button, touchAction: "none", background: listening ? "#39455a" : button.background }}
         disabled={sent || busy || conn !== "open"} aria-pressed={listening}
-        onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); setError(null); void recorder.current?.start(); }}
-        onPointerUp={() => recorder.current?.stop()} onPointerCancel={() => recorder.current?.stop()}
-        onKeyDown={(e) => { if ((e.key === " " || e.key === "Enter") && !e.repeat) { e.preventDefault(); void recorder.current?.start(); } }}
-        onKeyUp={(e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); recorder.current?.stop(); } }}
-        onBlur={() => recorder.current?.stop()}>{listening ? "Listening… release to finish" : "Hold to talk"}</button>
-      <small>Browser dictation fills the text box for review. Recorded audio is sent on release. Typing always works.</small>
+        onPointerDown={(e) => { if (e.button !== 0 || !e.isPrimary) return; e.currentTarget.setPointerCapture(e.pointerId); beginVoice(); }}
+        onPointerUp={endVoice} onPointerCancel={() => { press.current = null; recorder.current?.stop(); }}
+        onKeyDown={(e) => { if ((e.key === " " || e.key === "Enter") && !e.repeat) { e.preventDefault(); beginVoice(); } }}
+        onKeyUp={(e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); endVoice(); } }}>
+        {listening ? micReady ? "Listening… tap to stop" : "Starting mic… tap to cancel" : "Hold to talk"}</button>
+      <small>Tap to start, tap again to stop, or hold and release. Wait for “Listening” before speaking. Browser dictation fills the text box for review. Recorded audio is sent when recording stops. Typing always works.</small>
       <textarea id="pitch-text" style={{ ...input, minHeight: 150, resize: "vertical" }} maxLength={280} value={text} disabled={sent || busy}
-        onChange={(e) => setText(e.target.value)} />
+        onChange={(e) => { recorder.current?.cancel(); setText(e.target.value); }} />
       <span>{text.length}/280</span>
       <button style={button} disabled={conn !== "open" || busy || sent || !text.trim()}>{sent ? "Sent" : busy ? "Sending…" : revision ? "Send revision" : "Submit pitch"}</button>
       {sent && <p role="status">{revision ? "Revision sent. Watch for the verdict!" : "Pitch sent. Get ready to negotiate!"}</p>}
