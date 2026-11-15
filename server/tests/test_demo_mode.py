@@ -4,7 +4,7 @@ import pytest
 from app.main import build_health
 from app.rooms import DEFAULT_DURATIONS, Room, RoomError, phase_durations
 
-HEROES = ['233953', '233899']  # Esperson (prepared persona), Wells Fargo Plaza (no persona)
+HEROES = ['233953', '233899']  # Esperson and Wells Fargo Plaza, both with prepared personas
 
 
 def test_demo_preset_shortens_pitch_and_negotiate_only(monkeypatch):
@@ -19,29 +19,42 @@ def test_demo_preset_shortens_pitch_and_negotiate_only(monkeypatch):
     assert build_health()['demo_mode'] is True
 
 
-async def test_unprepared_hero_is_not_wakeable(game_mode, monkeypatch):
+async def test_prepared_heroes_are_wakeable(game_mode, monkeypatch):
     monkeypatch.delenv('DEMO_MODE', raising=False)
     room = Room(code='TEST', hero_ids=HEROES, durations={})
     ids = room.wakeable_ids()
-    assert '233953' in ids and '233899' not in ids
+    assert '233953' in ids and '233899' in ids
     assert any(bid not in HEROES for bid in ids)  # context buildings with dark floors stay in normal play
+
+
+async def test_unprepared_hero_is_not_wakeable(game_mode, monkeypatch):
+    from app.data.fixtures import FixtureProvider
+    monkeypatch.delenv('DEMO_MODE', raising=False)
+    original = FixtureProvider.dossier
+    def without_persona(self, bid):
+        d = original(self, bid)
+        if d is not None and bid == '233899':
+            d.pop('persona', None)
+        return d
+    monkeypatch.setattr(FixtureProvider, 'dossier', without_persona)
+    room = Room(code='TEST', hero_ids=HEROES, durations={})
+    assert '233899' not in room.wakeable_ids()
     room.phase = 'EXPLORE'
     with pytest.raises(RoomError) as err:
         room.can_wake('233899')
     assert err.value.code == 'unknown_building'
 
 
-async def test_demo_mode_wakes_esperson_only(game_mode, monkeypatch):
+async def test_demo_mode_wakes_prepared_demo_buildings_only(game_mode, monkeypatch):
     monkeypatch.setenv('DEMO_MODE', '1')
     monkeypatch.delenv('DEMO_BUILDING_IDS', raising=False)
     room = Room(code='TEST', hero_ids=HEROES, durations={})
-    assert room.wakeable_ids() == ['233953']
-    assert room.snapshot()['hero_building_ids'] == ['233953']
+    assert room.wakeable_ids() == ['233953', '233899']
+    assert room.snapshot()['hero_building_ids'] == ['233953', '233899']
     room.phase = 'EXPLORE'
     with pytest.raises(RoomError):
         room.can_wake('233905')
-    # A demo list cannot smuggle in an unprepared building.
-    monkeypatch.setenv('DEMO_BUILDING_IDS', '233953,233899,233905')
+    monkeypatch.setenv('DEMO_BUILDING_IDS', '233953')
     assert room.wakeable_ids() == ['233953']
 
 

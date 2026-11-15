@@ -1,0 +1,116 @@
+{
+  "building_id": "233918",
+  "name": "3 Houston Center",
+  "voice_style": "boomtime boardroom swagger confident sharp playful investor lonely",
+  "voice_id": "",
+  "mood_baseline": "lonely",
+  "desire_key": "people_living_here",
+  "desire_text": "People making a home here.",
+  "desire_reason_fact_ids": [
+    "F_233918_floor_4_available_sqft",
+    "F_233918_floor_13_available_sqft",
+    "F_233918_floor_17_available_sqft",
+    "F_233918_floor_9_available_sqft",
+    "F_233918_floor_12_available_sqft",
+    "F_233918_floor_24_available_sqft",
+    "F_233918_floor_30_available_sqft",
+    "F_233918_floor_34_available_sqft",
+    "F_233918_floor_16_available_sqft",
+    "F_233918_floor_18_available_sqft",
+    "F_233918_floor_22_available_sqft",
+    "F_233918_floor_25_available_sqft",
+    "F_233918_floor_26_available_sqft",
+    "F_233918_floor_5_available_sqft",
+    "F_233918_floor_21_available_sqft",
+    "F_233918_floor_27_available_sqft",
+    "F_233918_floor_33_available_sqft",
+    "F_233918_dark_floor_count",
+    "F_233918_dark_sqft"
+  ],
+  "desire_reason": "A fictional wish for company, inspired by dark space awaiting a new game use.",
+  "hard_limits": [
+    {
+      "fact_ref": "F_233918_grossTypicalFloorSquareFeet",
+      "constraint": "floor_plate",
+      "threshold": 24452.0,
+      "unit": "sqft",
+      "floor": null,
+      "applies_to": [],
+      "text": "For a typical single-floor pitch, fit within 24,452 square feet; show me your area budget."
+    },
+    {
+      "fact_ref": "F_233918_dark_sqft",
+      "constraint": "dark_area",
+      "threshold": 423761.0,
+      "unit": "sqft",
+      "floor": null,
+      "applies_to": [],
+      "text": "My dark floors list 423,761 available square feet in total; fit your plan inside that, darling."
+    },
+    {
+      "fact_ref": "F_233918_parkingRatio",
+      "constraint": "parking",
+      "threshold": 1.0,
+      "unit": "spaces_per_1000_sqft",
+      "floor": null,
+      "applies_to": [],
+      "text": "My parking ratio is 1.0 spaces per 1,000 square feet; tell me where the extra cars go."
+    }
+  ],
+  "hard_limits_empty_reason": null,
+  "backstory": [
+    {
+      "text": "423,761 square feet across my dark floors await your pitch. That is a lot of upside sitting in the dark, hotshot; show me the play.",
+      "fact_ref": "F_233918_dark_sqft",
+      "fiction": false
+    },
+    {
+      "text": "Completed in 1982.",
+      "fact_ref": "F_233918_construction_ConstructionComplete",
+      "fiction": false
+    },
+    {
+      "text": "A renovation finished in 2023.",
+      "fact_ref": "F_233918_construction_RenovationFinished",
+      "fiction": false
+    },
+    {
+      "text": "I rise 51 stories.",
+      "fact_ref": "F_233918_numStoriesAboveGrade",
+      "fiction": false
+    },
+    {
+      "text": "17 dark floors, darling.",
+      "fact_ref": "F_233918_dark_floor_count",
+      "fiction": false
+    },
+    {
+      "text": "I've known the professional scientific and technical services crowd.",
+      "fact_ref": "F_233918_top_former_industry_1",
+      "fiction": false
+    },
+    {
+      "text": "Let us talk upside, hotshot; impress me.",
+      "fact_ref": null,
+      "fiction": true
+    },
+    {
+      "text": "Pitch me like it is a bull market.",
+      "fact_ref": null,
+      "fiction": true
+    },
+    {
+      "text": "I am top shelf, and I price my yes accordingly.",
+      "fact_ref": null,
+      "fiction": true
+    }
+  ],
+  "catchphrase": "Let's talk upside, hotshot; time is money.",
+  "intro_line": "423,761 square feet across my dark floors await your pitch. That is a lot of upside sitting in the dark, hotshot; show me the play.",
+  "signature_sound": "bright strings",
+  "neighbor_lines": {
+    "233953": "Look at that neighbor, playing it big; I respect the hustle.",
+    "233899": "That neighbor keeps me sharp; competition is good for business.",
+    "233905": "I am rooting for them, but I am betting on me."
+  }
+}

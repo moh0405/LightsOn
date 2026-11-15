@@ -1,0 +1,93 @@
+{
+  "building_id": "233899",
+  "name": "Wells Fargo Plaza",
+  "voice_style": "boomtime boardroom swagger confident sharp playful investor anxious",
+  "voice_id": "",
+  "mood_baseline": "anxious",
+  "desire_key": "be_famous_again",
+  "desire_text": "To be a place people dream of visiting.",
+  "desire_reason_fact_ids": [
+    "F_233899_numStoriesAboveGrade"
+  ],
+  "desire_reason": "A fictional wish for attention, inspired by measured height; no past fame is claimed.",
+  "hard_limits": [
+    {
+      "fact_ref": "F_233899_grossTypicalFloorSquareFeet",
+      "constraint": "floor_plate",
+      "threshold": 25529.0,
+      "unit": "sqft",
+      "floor": null,
+      "applies_to": [],
+      "text": "For a typical single-floor pitch, fit within 25,529 square feet; show me your area budget."
+    },
+    {
+      "fact_ref": "F_233899_dark_sqft",
+      "constraint": "dark_area",
+      "threshold": 415496.0,
+      "unit": "sqft",
+      "floor": null,
+      "applies_to": [],
+      "text": "My dark floors list 415,496 available square feet in total; fit your plan inside that, darling."
+    },
+    {
+      "fact_ref": "F_233899_numStoriesAboveGrade",
+      "constraint": "stories",
+      "threshold": 71.0,
+      "unit": "stories",
+      "floor": null,
+      "applies_to": [],
+      "text": "I rise 71 stories; a pitch above that needs a different building, darling."
+    }
+  ],
+  "hard_limits_empty_reason": null,
+  "backstory": [
+    {
+      "text": "I rise 71 stories. Hotshot, I only shake hands on big ideas, so think big.",
+      "fact_ref": "F_233899_numStoriesAboveGrade",
+      "fiction": false
+    },
+    {
+      "text": "Completed in 1983.",
+      "fact_ref": "F_233899_construction_ConstructionComplete",
+      "fiction": false
+    },
+    {
+      "text": "17 dark floors, darling.",
+      "fact_ref": "F_233899_dark_floor_count",
+      "fiction": false
+    },
+    {
+      "text": "415,496 square feet across my dark floors await your pitch.",
+      "fact_ref": "F_233899_dark_sqft",
+      "fiction": false
+    },
+    {
+      "text": "I've known the professional scientific and technical services crowd.",
+      "fact_ref": "F_233899_top_former_industry_1",
+      "fiction": false
+    },
+    {
+      "text": "Let us talk upside, hotshot; impress me.",
+      "fact_ref": null,
+      "fiction": true
+    },
+    {
+      "text": "Pitch me like it is a bull market.",
+      "fact_ref": null,
+      "fiction": true
+    },
+    {
+      "text": "I am top shelf, and I price my yes accordingly.",
+      "fact_ref": null,
+      "fiction": true
+    }
+  ],
+  "catchphrase": "Go big or go home, hotshot.",
+  "intro_line": "I rise 71 stories. Hotshot, I only shake hands on big ideas, so think big.",
+  "signature_sound": "bright strings",
+  "neighbor_lines": {
+    "233953": "Look at that neighbor, playing it big; I respect the hustle.",
+    "233918": "That neighbor keeps me sharp; competition is good for business.",
+    "233905": "I am rooting for them, but I am betting on me."
+  }
+}

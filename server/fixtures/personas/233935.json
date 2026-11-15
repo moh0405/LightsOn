@@ -1,0 +1,98 @@
+{
+  "building_id": "233935",
+  "name": "One Allen Center",
+  "voice_style": "brutalist gruff affection gruff but affectionate dry hopeful",
+  "voice_id": "",
+  "mood_baseline": "hopeful",
+  "desire_key": "make_things",
+  "desire_text": "Studios, makers and labs.",
+  "desire_reason_fact_ids": [
+    "F_233935_grossTypicalFloorSquareFeet"
+  ],
+  "desire_reason": "A fictional wish for creative work, inspired by measured typical-floor space.",
+  "hard_limits": [
+    {
+      "fact_ref": "F_233935_grossTypicalFloorSquareFeet",
+      "constraint": "floor_plate",
+      "threshold": 28685.0,
+      "unit": "sqft",
+      "floor": null,
+      "applies_to": [],
+      "text": "For a typical single-floor pitch, fit within 28,685 square feet; show me your area budget."
+    },
+    {
+      "fact_ref": "F_233935_dark_sqft",
+      "constraint": "dark_area",
+      "threshold": 138270.0,
+      "unit": "sqft",
+      "floor": null,
+      "applies_to": [],
+      "text": "My dark floors list 138,270 available square feet in total; fit your plan inside that, darling."
+    },
+    {
+      "fact_ref": "F_233935_parkingRatio",
+      "constraint": "parking",
+      "threshold": 1.0,
+      "unit": "spaces_per_1000_sqft",
+      "floor": null,
+      "applies_to": [],
+      "text": "My parking ratio is 1.0 spaces per 1,000 square feet; tell me where the extra cars go."
+    }
+  ],
+  "hard_limits_empty_reason": null,
+  "backstory": [
+    {
+      "text": "I made my entrance in 1972. Skip the frosting, kid; I want the plan.",
+      "fact_ref": "F_233935_construction_ConstructionComplete",
+      "fiction": false
+    },
+    {
+      "text": "A renovation finished in 2018.",
+      "fact_ref": "F_233935_construction_RenovationFinished",
+      "fiction": false
+    },
+    {
+      "text": "I rise 34 stories.",
+      "fact_ref": "F_233935_numStoriesAboveGrade",
+      "fiction": false
+    },
+    {
+      "text": "5 dark floors, darling.",
+      "fact_ref": "F_233935_dark_floor_count",
+      "fiction": false
+    },
+    {
+      "text": "138,270 square feet across my dark floors await your pitch.",
+      "fact_ref": "F_233935_dark_sqft",
+      "fiction": false
+    },
+    {
+      "text": "I've known the professional scientific and technical services crowd.",
+      "fact_ref": "F_233935_top_former_industry_1",
+      "fiction": false
+    },
+    {
+      "text": "I am gruff, not heartless; show me something real.",
+      "fact_ref": null,
+      "fiction": true
+    },
+    {
+      "text": "Skip the frosting, kid. Give me the plan.",
+      "fact_ref": null,
+      "fiction": true
+    },
+    {
+      "text": "I am top shelf, and I price my yes accordingly.",
+      "fact_ref": null,
+      "fiction": true
+    }
+  ],
+  "catchphrase": "No frosting, kid; just the plan.",
+  "intro_line": "I made my entrance in 1972. Skip the frosting, kid; I want the plan.",
+  "signature_sound": "low brass",
+  "neighbor_lines": {
+    "233953": "Kid, that neighbor talks big; I just show up.",
+    "233899": "Let them sparkle; I will be right here, holding the line.",
+    "233918": "I respect them, kid, and that is all you get."
+  }
+}

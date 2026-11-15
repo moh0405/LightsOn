@@ -38,7 +38,7 @@ DEFAULT_DURATIONS: dict[Phase, float | None] = {
 }
 # Demo preset (server env DEMO_MODE=1): shorter pitch and negotiate windows, polished buildings only.
 DEMO_DURATIONS: dict[Phase, float | None] = {"PITCH": 20, "NEGOTIATE": 15}
-DEFAULT_DEMO_BUILDINGS = "233953"  # Esperson, the building with a prepared persona
+DEFAULT_DEMO_BUILDINGS = "233953,233899"  # Esperson and Wells Fargo Plaza; each still needs a valid persona
 
 
 def demo_mode() -> bool:

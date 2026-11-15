@@ -242,7 +242,8 @@ def prep_building(property_id: str, force: bool = False, *, provider=None, model
         steps = Steps(directory / 'agent_steps.json', emit)
         if property_id not in HEROES:
             result = {**tools.dossier, 'facts': tools.facts}
-            result['persona'] = fake_persona(result).model_dump()
+            from .persona_gen import generate_persona
+            result['persona'] = generate_persona(result).model_dump()
             steps.record('fallback', 'fake_agent')
         else:
             for name in ('facts_property.json', 'facts_spatial.json', 'persona.json'):

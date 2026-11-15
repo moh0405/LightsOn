@@ -2,10 +2,10 @@ import { expect, test, type Page } from "@playwright/test";
 
 const phase = (page: Page) => page.getByTestId("phase").locator("strong");
 
-// The suite's server runs without DEMO_MODE, so this covers normal play: an unprepared hero
-// (Wells Fargo Plaza) is not offered, Esperson and context buildings are, and /admin says how
-// to turn the demo preset on.
-test("wake list hides unprepared heroes; admin shows the demo preset state", async ({ browser, baseURL }) => {
+// The suite's server runs without DEMO_MODE, so this covers normal play: prepared heroes
+// (Esperson, Wells Fargo Plaza) and context buildings are offered, and /admin says how
+// to turn the demo preset on. Unprepared heroes stay hidden (server/tests/test_demo_mode.py).
+test("wake list offers prepared heroes; admin shows the demo preset state", async ({ browser, baseURL }) => {
   const desktop = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
   const mobile = await browser.newContext();
   try {
@@ -25,8 +25,8 @@ test("wake list hides unprepared heroes; admin shows the demo preset state", asy
     await admin.getByRole("button", { name: "Skip phase", exact: true }).click();
     await expect(phase(screen)).toHaveText("EXPLORE");
     await expect(phone.getByRole("button", { name: "Wake building Esperson", exact: true })).toBeVisible();
-    await expect(phone.getByRole("button", { name: "Wake building Wells Fargo Plaza", exact: true })).toHaveCount(0);
-    await expect(phone.getByRole("button", { name: /^Wake building / })).not.toHaveCount(1);
+    await expect(phone.getByRole("button", { name: "Wake building Wells Fargo Plaza", exact: true })).toBeVisible();
+    await expect(phone.getByRole("button", { name: /^Wake building / })).not.toHaveCount(2);
     await expect(admin.getByRole("button", { name: "Skip phase", exact: true })).toBeVisible();
     await expect(admin.getByRole("button", { name: "Reset round", exact: true })).toBeVisible();
     await admin.getByRole("button", { name: "Reset room", exact: true }).click();
