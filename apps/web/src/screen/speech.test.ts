@@ -6,7 +6,7 @@ const effects: (() => void | (() => void))[] = [];
 vi.mock("react", async (original) => ({ ...await original<object>(), useState: (value: unknown) => [value === false ? true : value, vi.fn()],
   useRef: (value: unknown) => ({ current: value === null ? { duck, restore: vi.fn(), revive: vi.fn(), signature: vi.fn(), dispose: vi.fn() } : value }),
   useEffect: (effect: () => void | (() => void)) => effects.push(effect) }));
-import { browserSpeech, speechChunks, useScreenAudio } from "./music";
+import { browserSpeech, budgetLine, speechChunks, useScreenAudio } from "./music";
 class Utterance {
   text: string; voice = null; rate = 1; pitch = 1;
   onend: (() => void) | null = null; onerror: (() => void) | null = null;
@@ -53,7 +53,6 @@ it("serializes both players, dedupes replays, and keeps ducking until each line 
   await flush();
   expect(spoken.map(u => u.text)).toEqual(["Thank you."]);
   expect(duck).toHaveBeenLastCalledWith(true);
-  useGame.setState({ phase: "NEGOTIATE" });
   spoken[0]!.onend!(); await flush();
   expect(spoken[1]!.text).toBe("Please tell me more.");
   expect(duck).toHaveBeenLastCalledWith(true);
@@ -64,14 +63,59 @@ it("serializes both players, dedupes replays, and keeps ducking until each line 
   expect(spoken).toHaveLength(4);
   expect(duck).toHaveBeenLastCalledWith(false);
 });
-it("finishes an active challenge but skips stale queued challenges after a host advances", async () => {
+it("stops challenge speech when the host advances, so it never runs into the next phase", async () => {
   await mount();
   const offer = { line: "Thank you.", counteroffer: "", audio_url: null, fact_ids: ["F_233953_dark_floor_count"] };
   useGame.setState({ phase: "CHALLENGE", counteroffers: { ann: { ...offer, player_id: "ann" }, bo: { ...offer, player_id: "bo" } } });
   await flush();
+  const before = cancel.mock.calls.length;
   useGame.setState({ phase: "VERDICT", verdict: { reason_line: "Welcome." } as NonNullable<typeof initialGame.verdict> });
-  spoken[0]!.onend!(); await flush();
+  await flush();
+  expect(cancel.mock.calls.length).toBeGreaterThan(before);
   expect(spoken.map(u => u.text)).toEqual(["Thank you.", "Welcome."]);
+});
+it("A07: cuts the active challenge at NEGOTIATE and drops the queued one", async () => {
+  await mount();
+  const offer = { line: "Thank you.", counteroffer: "Please listen.", audio_url: null, fact_ids: [] };
+  useGame.setState({ phase: "CHALLENGE", counteroffers: { ann: { ...offer, player_id: "ann" }, bo: { ...offer, player_id: "bo" } } });
+  await flush();
+  const before = cancel.mock.calls.length;
+  useGame.setState({ phase: "NEGOTIATE" }); await flush();
+  expect(cancel.mock.calls.length).toBeGreaterThan(before);
+  spoken[0]!.onend?.(); await flush();
+  expect(spoken.map(u => u.text)).toEqual(["Thank you."]);
+  expect(duck).toHaveBeenLastCalledWith(false);
+});
+it("A07: does not start a challenge first reported during NEGOTIATE", async () => {
+  await mount();
+  useGame.setState({ phase: "NEGOTIATE", counteroffers: { ann: { player_id: "ann", line: "Thank you.", counteroffer: "Please listen.", audio_url: null, fact_ids: [] } } });
+  await flush();
+  expect(spoken).toHaveLength(0);
+});
+it("A07: budgets both players' challenges inside the CHALLENGE window", async () => {
+  await mount();
+  const long = "Thank you for the pitch about the empty upper floors and the lobby. ";
+  const offer = { line: long.repeat(2).trim(), counteroffer: "Please listen. Bring me a tenant for floor nine and a plan for the lobby and the roof.", audio_url: null, fact_ids: [] };
+  useGame.setState({ phase: "CHALLENGE", endsAt: new Date(Date.now() + 10_000).toISOString(),
+    pitches: { ann: { player_id: "ann", text: "a" }, bo: { player_id: "bo", text: "b" } } as unknown as typeof initialGame.pitches,
+    counteroffers: { ann: { ...offer, player_id: "ann" }, bo: { ...offer, player_id: "bo", counteroffer: "Hear me out. Bring me a tenant." } } });
+  await flush();
+  const ann: string[] = [];
+  while (spoken[ann.length] && !spoken[ann.length]!.text.includes("Hear me out")) {
+    const u = spoken[ann.length]!; ann.push(u.text); u.onend!(); await flush();
+  }
+  const count = (texts: string[]) => texts.join(" ").split(" ").length;
+  // ann may use at most half of the 10 s window at ~2.4 words per second.
+  expect(count(ann)).toBeLessThanOrEqual(12);
+  expect(ann.join(" ")).toContain("Please listen.");
+  expect(spoken.length).toBeGreaterThan(ann.length); // bo starts right after ann
+});
+it("keeps a short challenge whole and shortens a long one at a sentence boundary", () => {
+  expect(budgetLine("Thank you.", "Please listen.", 20)).toBe("Thank you. Please listen.");
+  expect(budgetLine("Thank you for this lovely idea about the lobby.", "Please listen. Bring a tenant.", 6)).toBe("Please listen. Bring a tenant.");
+  expect(budgetLine("Thank you.", "Please listen. Bring me a tenant for nine floors today.", 4)).toBe("Please listen.");
+  expect(budgetLine("Thank you.", "Bring me a tenant for nine floors today.", 4)).toBe("Bring me a tenant…");
+  expect(budgetLine("Thank you.", "Bring me a tenant.", 2)).toBe("");
 });
 it("cancels on a new round and does not enqueue the remaining chunks", async () => {
   await mount();

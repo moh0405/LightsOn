@@ -124,6 +124,26 @@ export function speechChunks(text: string): string[] {
   return chunks;
 }
 
+/** Browser voices at rate 1 average roughly 2.5 words per second; stay under it. */
+export const SPOKEN_WORDS_PER_SECOND = 2.4;
+const words = (text: string) => speechChunks(text).join(" ").split(" ").filter(Boolean);
+/** Fit a spoken challenge into `maxWords`. The cards keep the full written
+ * challenge and evidence; the voice keeps the ask (the counteroffer), whole
+ * sentences first. Under four words nothing useful fits, so it says nothing. */
+export function budgetLine(line: string, counteroffer: string, maxWords: number): string {
+  const full = `${line} ${counteroffer}`.trim();
+  if (words(full).length <= maxWords) return full;
+  if (maxWords < 4) return "";
+  const ask = counteroffer.trim() || line.trim();
+  let kept = "";
+  for (const sentence of ask.split(/(?<=[.!?])\s+/)) {
+    const next = `${kept} ${sentence}`.trim();
+    if (words(next).length > maxWords) break;
+    kept = next;
+  }
+  return kept || `${words(ask).slice(0, maxWords).join(" ").replace(/[,;:.!?]+$/, "")}…`;
+}
+
 function browserVoice(persona: PersonaVoice): SpeechSynthesisVoice | null {
   const synth = window.speechSynthesis;
   // Start audio primes discovery. If OS voices are still loading, speak with
@@ -195,6 +215,7 @@ export function useScreenAudio() {
     if (!cityMusic) return;
     let persona = defaultVoice;
     const spoken = new Set<string>();
+    const challenged = new Set<string>();
     const latest = new Map<string, string>();
     let generation = 0;
     let queue = Promise.resolve();
@@ -218,9 +239,9 @@ export function useScreenAudio() {
         .catch(() => { /* Optional persona: default browser voice still speaks the subtitle. */ });
     };
     const speechGroup = (phase: string) => ["INTRO", "PITCH"].includes(phase) ? "intro"
-      : ["CHALLENGE", "NEGOTIATE"].includes(phase) ? "challenge"
+      // A challenge belongs to its own beat: NEGOTIATE is the players' turn.
       : ["VERDICT", "POWER_UP", "REVIVED"].includes(phase) ? "verdict" : phase;
-    const say = (key: string, text: string, url: string | null, mood: Mood) => {
+    const say = (key: string, text: string, url: string | null, mood: Mood, prepare?: () => string) => {
       const identity = `${key}:${text}`;
       if (spoken.has(identity)) return;
       spoken.add(identity);
@@ -231,6 +252,10 @@ export function useScreenAudio() {
       queue = queue.then(async () => {
         // Finish the active line, but never start queued lines from an old phase.
         if (signal.aborted || current !== generation || latest.get(key) !== identity || group !== speechGroup(useGame.getState().phase)) return;
+        // Budget against the time left when this line actually starts.
+        const words = prepare ? prepare() : text;
+        if (!words) return;
+        if (prepare) url = null; // a prepared clip cannot be shortened; speak the budgeted words
         cityMusic.duck(true);
         try {
           // Dynamic provider rendering must never delay a browser voice. Prepared
@@ -239,7 +264,7 @@ export function useScreenAudio() {
           if (!url && !native) {
             try {
               const r = await fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ room, round_id: roundId, text, voice_id: persona.voice_id }), signal: AbortSignal.any([signal, AbortSignal.timeout(5000)]) });
+                body: JSON.stringify({ room, round_id: roundId, text: words, voice_id: persona.voice_id }), signal: AbortSignal.any([signal, AbortSignal.timeout(5000)]) });
               if (!r.ok) throw new Error();
               url = (await r.json() as { audio_url: string | null }).audio_url;
             } catch { if (!signal.aborted) warn("Voice service unavailable. Browser speech and subtitles remain available."); }
@@ -249,7 +274,7 @@ export function useScreenAudio() {
             try { await playAudio(url, signal, native ? 150 : 5000); return; }
             catch { warn("Recorded speech unavailable. Using browser speech."); }
           }
-          if (!signal.aborted && group === speechGroup(useGame.getState().phase)) await browserSpeech(text, persona, mood, signal);
+          if (!signal.aborted && group === speechGroup(useGame.getState().phase)) await browserSpeech(words, persona, mood, signal);
         } catch (error) { if (!signal.aborted) { console.warn(error); warn("Audio unavailable. Follow the subtitles."); } }
         finally { if (current === generation) cityMusic.duck(false); }
       });
@@ -257,14 +282,26 @@ export function useScreenAudio() {
     const sync = (state: GameState, previous?: GameState) => {
       if (!previous || state.buildingId !== previous.buildingId || state.dataMode !== previous.dataMode) loadPersona(state.buildingId);
       if (!previous || state.room !== previous.room || (state.hasState && !previous.hasState) || (state.city?.buildings_revived === 0 && previous.city?.buildings_revived !== 0)) cityMusic.restore(state.city?.song_categories ?? []);
-      if (previous && (state.roundId !== previous.roundId || state.room !== previous.room || state.dataMode !== previous.dataMode)) { cancel(); spoken.clear(); latest.clear(); }
+      if (previous && (state.roundId !== previous.roundId || state.room !== previous.room || state.dataMode !== previous.dataMode)) { cancel(); spoken.clear(); latest.clear(); challenged.clear(); }
+      // A07: challenge speech never runs into NEGOTIATE (or a host skip).
+      if (previous && previous.phase === "CHALLENGE" && state.phase !== "CHALLENGE") cancel();
       if (["INTRO", "PITCH"].includes(state.phase) && state.intro) say("intro", state.intro.text, state.intro.audio_url, state.intro.mood);
-      if (["CHALLENGE", "NEGOTIATE"].includes(state.phase)) {
+      if (state.phase === "CHALLENGE") {
         for (const [player, offer] of Object.entries(state.counteroffers)) {
           // Live-agent catchphrase/thinking updates remain visible as subtitles.
           // Only a completed challenge owns the voice queue.
           if (!offer.counteroffer.trim() && !offer.fact_ids.length) continue;
-          say(`challenge:${player}`, `${offer.line} ${offer.counteroffer}`, offer.audio_url, state.mood);
+          say(`challenge:${player}`, `${offer.line} ${offer.counteroffer}`, offer.audio_url, state.mood, () => {
+            challenged.add(player);
+            const { endsAt, pitches, counteroffers } = useGame.getState();
+            if (!endsAt) return `${offer.line} ${offer.counteroffer}`.trim();
+            // Share what is left of CHALLENGE among this player and everyone
+            // still waiting to be challenged, in arrival order.
+            const waiting = new Set([...Object.keys(pitches), ...Object.keys(counteroffers)]);
+            const pending = Math.max(1, [...waiting].filter(id => id === player || !challenged.has(id)).length);
+            const seconds = (new Date(endsAt).getTime() - Date.now() - 500) / 1000 / pending;
+            return budgetLine(offer.line, offer.counteroffer, Math.floor(seconds * SPOKEN_WORDS_PER_SECOND));
+          });
         }
       }
       if (speechGroup(state.phase) === "verdict" && state.verdict) say("verdict", state.verdict.reason_line, null, state.mood);
