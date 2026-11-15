@@ -1,38 +1,17 @@
 import { useShallow } from "zustand/react/shallow";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useGame } from "../lib/store";
 import { INTRO_DIVE_MS, MEDIA_BEAT_MS, mediaAt, type MediaBeat } from "./effects";
 import { loadMedia } from "./media";
+import { useTours } from "./tours";
+import { TourFrame } from "./TourFrame";
 
-/** Realistic venue Wi-Fi window for the showcase, counted from the start of INTRO. */
-export const MATTERPORT_LOAD_MS = 5000;
+export const INTRO_TOUR_START_MS = 2000;
+export const INTRO_TOUR_DURATION_MS = 6000;
 
-/** Sandboxed external adapter. Mounted (hidden) as soon as INTRO starts so the
- * showcase loads during the dive; shown only during its beat. Slowness is an
- * expected fallback: the source caption stays, with a log and no toast. */
-export function Matterport({ beat, visible }: { beat: MediaBeat; visible: boolean }) {
-  const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
-  const loaded = useRef(false);
-  useEffect(() => {
-    loaded.current = false; setState("loading");
-    const timer = setTimeout(() => {
-      if (!loaded.current) { console.info("Matterport showcase still loading; using caption"); setState("failed"); }
-    }, MATTERPORT_LOAD_MS);
-    return () => clearTimeout(timer);
-  }, [beat.src]);
-  const fail = () => { console.info("Matterport showcase unavailable; using caption"); setState("failed"); };
-  return <figure className="intro-media" data-testid={visible ? "matterport-still" : undefined} aria-hidden={!visible} style={visible ? undefined : { visibility: "hidden", animation: "none" }}>
-    <div className="tour-still"><span aria-hidden="true">◇</span><p>{beat.caption ?? "Interior tour caption unavailable"}</p></div>
-    {state !== "failed" && <iframe title="Matterport interior tour" src={beat.src} sandbox="allow-scripts allow-same-origin allow-pointer-lock" referrerPolicy="no-referrer" onLoad={() => {
-      // Browsers deliberately hide cross-origin iframe failures. Keep the
-      // source caption visible underneath and offer an explicit still fallback.
-      loaded.current = true; setState("ready");
-    }} onError={fail} style={{ opacity: state === "ready" ? 1 : 0 }} />}
-    <figcaption>Matterport · {beat.caption ?? "Caption unavailable"}{state !== "failed" && <button onClick={fail}>Show caption still</button>}</figcaption>
-  </figure>;
-}
 export function IntroMedia({ onError }: { onError: (message: string) => void }) {
   const { buildingId, roundId, dataMode, phase } = useGame(useShallow(s => ({ buildingId: s.buildingId, roundId: s.roundId, dataMode: s.dataMode, phase: s.phase })));
+  const { tours } = useTours(buildingId);
   const [beats, setBeats] = useState<MediaBeat[]>([]);
   const [elapsed, setElapsed] = useState(0);
   // Only embed the third-party tour while the projector page is actually shown.
@@ -53,11 +32,12 @@ export function IntroMedia({ onError }: { onError: (message: string) => void }) 
   }, [buildingId, roundId, dataMode, phase, onError]);
   if (phase !== "INTRO") return null;
   const beat = mediaAt(beats, elapsed);
-  const tour = beats.find((b) => b.kind === "matterport");
-  const aerial = beat?.kind === "aerial" ? beat : null;
+  const tour = tours[0];
+  const showTour = elapsed >= INTRO_TOUR_START_MS && elapsed < INTRO_TOUR_START_MS + INTRO_TOUR_DURATION_MS;
+  const aerial = tour ? (elapsed < INTRO_TOUR_START_MS ? beats.find((b) => b.kind === "aerial") : null) : beat?.kind === "aerial" ? beat : null;
   // Fixed child order keeps the preloading iframe mounted when its beat starts.
   return <>
-    {tour && visible && <Matterport key={tour.src} beat={tour} visible={beat?.kind === "matterport"} />}
+    {tour && visible && <div className="intro-media" data-testid="matterport-still" aria-hidden={!showTour} style={{ visibility: showTour ? "visible" : "hidden" }}><TourFrame key={tour.model_id} tour={tour} /></div>}
     {!beat && elapsed < INTRO_DIVE_MS ? <div className="intro-approach" data-testid="intro-approach">Meet your next investor</div> : null}
     {aerial && <figure className="intro-media" key={aerial.src} data-testid="intro-aerial" style={{ animationDuration: `${MEDIA_BEAT_MS}ms` }}>
       <img src={aerial.src} alt={aerial.caption ?? "Aerial view"} onError={() => { console.warn("Local aerial unavailable; skipping beat"); onError("Aerial image unavailable. Continuing the approach."); setBeats((list) => list.filter((b) => b.src !== aerial.src)); }} />

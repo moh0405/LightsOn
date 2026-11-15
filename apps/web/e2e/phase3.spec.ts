@@ -185,6 +185,7 @@ test("housing impact is explicitly a game estimate and unavailable evidence stay
     const screen = await context.newPage();
     await screen.goto(`${baseURL}/screen`);
     await expect(screen.getByTestId("phase")).toContainText("LOBBY");
+    await expect(screen.getByTestId("field")).toHaveAttribute("data-facts-ready", "true");
     server.go("VERDICT");
     server.emit({ type: "verdict", round_id: "R1", winner_player_id: "p1", scores: [], reason_line: "I'm in.", fact_ids: ["F_233953_occupied_sqft"], category: "housing", desire_met: false, desire_reveal: "", impact: { kind: "housing_estimate", sqft: 94509, units: 83, residents: 158, label: "rough game estimate, not a feasibility claim" } });
     await expect(screen.getByTestId("score-card")).toContainText("83 homes");

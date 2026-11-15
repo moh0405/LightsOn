@@ -11,6 +11,7 @@ async function setup(context: BrowserContext, mode: string, tour: "ready" | "tim
   let socket: WebSocketRoute | undefined;
   await mockSkyline(context);
   await context.route("**/api/buildings/233953", (r) => r.fulfill({ json: dossier }));
+  await context.route("**/api/buildings/233953/tours", (r) => r.fulfill({ json: [{ model_id: "Wtxv2Mp8uQE", name: null, cover_url: null }] }));
   await context.route("https://my.matterport.com/**", (r) => tour === "timeout" ? new Promise<void>(() => {}) : r.fulfill({ contentType: "text/html", body: "<html><body style='background:#202e45;color:#f2c46d;font:40px sans-serif'>Matterport test adapter</body></html>" }));
   await context.route("**/api/rooms", (r) => r.fulfill({ json: { room: "MEDI", join_url: "http://localhost/play?room=MEDI", qr_svg: '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="40" height="40" fill="white"/></svg>' } }));
   await context.routeWebSocket("**/ws/MEDI?*", (ws) => {
@@ -50,7 +51,7 @@ for (const mode of ["kit", "fixtures"]) test(`media approach, instant light-up, 
     await page.screenshot({ animations: "disabled", path: info.outputPath(`INTRO-${mode}.png`) });
     await expect(page.getByTitle("Matterport interior tour")).toBeVisible({ timeout: 6000 });
     // Source captions stay honest when the kit has no caption.
-    await expect(page.getByTestId("matterport-still")).toContainText("Caption unavailable");
+    await expect(page.getByTestId("matterport-still")).toContainText("Tour name unavailable");
     await page.screenshot({ animations: "disabled", path: info.outputPath(`INTRO-tour-${mode}.png`) });
     server.phase("PITCH");
     await expect(page.getByTitle("Matterport interior tour")).toHaveCount(0);
@@ -90,7 +91,7 @@ for (const mode of ["kit", "fixtures"]) test(`media approach, instant light-up, 
   } finally { await context.close(); }
 });
 
-test("Matterport timeout falls back to a caption and never holds the phase; auto-completion is softer", async ({ browser, baseURL }) => {
+test("Matterport timeout falls back quietly and never holds the phase; auto-completion is softer", async ({ browser, baseURL }) => {
   const context = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
   try {
     const server = await setup(context, "fixtures", "timeout");
@@ -100,12 +101,12 @@ test("Matterport timeout falls back to a caption and never holds the phase; auto
     await page.goto(`${baseURL}/screen`);
     await expect(page.getByTestId("field")).toHaveAttribute("data-facts-ready", "true");
     server.emit({ type: "round_started", round_id: "MEDIA1", building_id: "233953", target_floors: [6, 7, 8] }); server.phase("INTRO");
-    // Observe the source caption during its beat, before waiting for the
-    // timeout toast. The visual beat may end while a later assertion polls.
-    await expect(page.getByTestId("matterport-still")).toContainText("Interior tour caption unavailable", { timeout: 7000 });
+    // Observe the source name during its beat before the quiet timeout.
+    // The visual beat may end while a later assertion polls.
+    await expect(page.getByTestId("matterport-still")).toContainText("Tour name unavailable", { timeout: 7000 });
     // A slow tour gets a realistic load window, then falls back silently: a log, no toast.
     const loadStarted = Date.now();
-    await expect(page.locator('iframe[title="Matterport interior tour"]')).toHaveCount(0, { timeout: 7000 });
+    await expect(page.locator('iframe[title="Matterport interior tour"]')).toHaveCount(0, { timeout: 9000 });
     expect(Date.now() - loadStarted).toBeGreaterThan(1500);
     await expect(page.getByRole("alert")).toHaveCount(0);
     server.phase("POWER_UP");

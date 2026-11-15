@@ -5,7 +5,7 @@ export interface RecordedTrace {
 }
 
 const steps = new Set(["research", "property_scout", "spatial_scout", "persona_writer", "complete", "validation", "fallback", "challenge", "verdict", "claim_check", "invalid_schema"]);
-const tools = new Set(["write_todos", "task", "write_file", "read_file", "edit_file", "ls", "glob", "grep", "kit_get_building", "kit_get_floor_status", "kit_get_tenant_history", "kit_get_matterport_models", "vexcel_property", "vexcel_imagery", "vexcel_detect", "matterport_get_model", "validate_persona", "retry", "fake_agent", "bedrock_challenge", "bedrock_verdict", "bedrock_claim_check", "challenge", "verdict", "claim_check"]);
+const tools = new Set(["write_todos", "task", "write_file", "read_file", "edit_file", "ls", "glob", "grep", "kit_get_building", "kit_get_floor_status", "kit_get_tenant_history", "kit_get_matterport_models", "vexcel_property", "vexcel_imagery", "vexcel_detect", "matterport_get_model", "validate_persona", "retry", "fake_agent", "bedrock_challenge", "bedrock_verdict", "bedrock_claim_check", "get_fact", "search_facts", "challenge", "verdict", "claim_check"]);
 const causes = new Set(["budget", "unavailable", "timeout", "invalid_schema", "fact_id", "number_match", "claim_check", "safety"]);
 
 /** Live events contain public metadata; reconstruct summaries rather than trusting free text. */

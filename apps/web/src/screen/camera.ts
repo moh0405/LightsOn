@@ -27,7 +27,7 @@ export function occluders(city: FeatureCollection, lng: number, lat: number): Oc
     if (!pts.length || !Number.isFinite(height)) return;
     const cx = pts.reduce((s, p) => s + p[0], 0) / pts.length, cy = pts.reduce((s, p) => s + p[1], 0) / pts.length;
     const dx = (cx - lng) * mx, dy = (cy - lat) * my, distance = Math.hypot(dx, dy);
-    if (distance < 8 || distance > RANGE_M) return;
+    if (distance > RANGE_M) return;
     const radius = Math.max(...pts.map((p) => Math.hypot((p[0] - cx) * mx, (p[1] - cy) * my)));
     result.push({ index, distance, azimuth: ((Math.atan2(dx, dy) * 180) / Math.PI + 360) % 360, height, radius });
   });
@@ -43,6 +43,12 @@ const halfAngle = (o: Occluder, heroRadius: number, base: number) =>
 const excess = (o: Occluder, targetM: number, pitch: number, heroRadius: number) =>
   o.height - (targetM + Math.max(0, o.distance - heroRadius - (o.radius ?? 0)) * Math.tan(((90 - pitch) * Math.PI) / 180));
 
+/** Blockers for an already chosen bearing, including overlapping footprints. */
+export function fadedOccluders(near: Occluder[], bearing: number, targetM: number, pitch = ROUND_PITCH, heroRadius = 0): number[] {
+  const side = (bearing + 180) % 360;
+  return near.filter((o) => o.distance <= heroRadius + (o.radius ?? 0) || (angleDiff(o.azimuth, side) <= halfAngle(o, heroRadius, FADE_SECTOR_DEG) && excess(o, targetM, pitch, heroRadius) > 0)).map((o) => o.index);
+}
+
 /**
  * Pick the bearing whose camera side is most open, so lit floors at `targetM` stay in view,
  * and list the context buildings that would still block that view (to fade during the round).
@@ -56,8 +62,7 @@ export function planCamera(near: Occluder[], targetM: number, pitch = ROUND_PITC
     // Ties keep the bearing nearest north, the city's default framing.
     if (score < best.score - 1e-6 || (Math.abs(score - best.score) <= 1e-6 && angleDiff(bearing, 0) < angleDiff(best.bearing, 0))) best = { bearing, score };
   }
-  const side = (best.bearing + 180) % 360;
-  const faded = near.filter((o) => angleDiff(o.azimuth, side) <= halfAngle(o, heroRadius, FADE_SECTOR_DEG) && excess(o, targetM, pitch, heroRadius) > 0).map((o) => o.index);
+  const faded = fadedOccluders(near, best.bearing, targetM, pitch, heroRadius);
   return { bearing: best.bearing, faded };
 }
 
@@ -78,4 +83,66 @@ export function footprint(floors: FeatureCollection, buildingId: string): { cent
   const center: Point = [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2];
   const mx = 111320 * Math.cos((center[1] * Math.PI) / 180), my = 110540;
   return { center, radius: Math.max(...pts.map((p) => Math.hypot((p[0] - center[0]) * mx, (p[1] - center[1]) * my))) };
+}
+
+export interface FrameVolume { center: Point; radius: number; top: number }
+export interface FramedCamera { center: Point; zoom: number; pitch: number; bearing: number }
+
+/** A conservative cylinder enclosing the exported footprint and every roof. No story-height guesses. */
+export function frameVolume(collections: FeatureCollection[], buildingId?: string): FrameVolume | null {
+  const features = collections.flatMap(c => c.features).filter(f => buildingId === undefined || String(f.properties?.building_id) === buildingId);
+  const pts = features.flatMap(ring).filter(p => p.every(Number.isFinite));
+  if (!pts.length) return null;
+  let west = Infinity, east = -Infinity, south = Infinity, north = -Infinity;
+  for (const [x, y] of pts) { west = Math.min(west, x); east = Math.max(east, x); south = Math.min(south, y); north = Math.max(north, y); }
+  const center: Point = [(west + east) / 2, (south + north) / 2];
+  const meters = 40075016.68557849 * Math.cos(center[1] * Math.PI / 180);
+  const mercY = (lat: number) => (1 - Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360)) / Math.PI) / 2;
+  let radius = 0, top = 0;
+  for (const p of pts) radius = Math.max(radius, Math.hypot((p[0] - center[0]) / 360, mercY(p[1]) - mercY(center[1])) * meters);
+  for (const f of features) { const height = Number(f.properties?.height_m); if (Number.isFinite(height)) top = Math.max(top, height); }
+  return { center, radius, top };
+}
+
+/**
+ * Fit the entire 3D volume, not its ground bounds. At pitch p, a vertex (x,y,z)
+ * projects to f*(x, -cos(p)*y-sin(p)*z)/(distance+sin(p)*y-cos(p)*z).
+ * Solve those four viewport inequalities for distance, including perspective.
+ * A cylinder's enclosing square works for every bearing, including the overview orbit.
+ */
+export function frameCamera(volume: FrameVolume, width: number, height: number, bearing: number, pitch = ROUND_PITCH, fov = 36.86989764584402, bottomInset = 0): FramedCamera {
+  const p = pitch * Math.PI / 180, sin = Math.sin(p), cos = Math.cos(p);
+  const f = Math.max(1, height) / (2 * Math.tan(fov * Math.PI / 360));
+  const halfW = Math.max(1, width * 0.38);
+  const upper = -Math.max(1, height * 0.38), lower = Math.max(1, height * 0.38 - bottomInset);
+  const { radius: r, top } = volume;
+  const distanceAt = (offset: number) => {
+    let distance = 1;
+    for (const y of [-r - offset, r - offset]) for (const z of [0, top]) {
+      const depth = sin * y - cos * z;
+      distance = Math.max(distance, f * r / halfW - depth, f * (-cos * y - sin * z) / ((-cos * y - sin * z) < 0 ? upper : lower) - depth, 1 - depth);
+    }
+    return distance;
+  };
+  // The maximum of affine inequalities is convex. Minimize distance by moving
+  // the ground center towards the roof's screen position, then balance the frame.
+  let low = -top * Math.tan(p) - r, high = top * Math.tan(p) + r;
+  for (let i = 0; i < 50; i++) {
+    const a = (2 * low + high) / 3, b = (low + 2 * high) / 3;
+    if (distanceAt(a) < distanceAt(b)) high = b; else low = a;
+  }
+  let distance = distanceAt((low + high) / 2) * 1.02;
+  low = -top * Math.tan(p) - r; high = top * Math.tan(p) + r;
+  for (let i = 0; i < 50; i++) {
+    const offset = (low + high) / 2;
+    const ys = [-r - offset, r - offset].flatMap(y => [0, top].map(z => f * (-cos * y - sin * z) / (distance + sin * y - cos * z)));
+    if (Math.min(...ys) + Math.max(...ys) > upper + lower) high = offset; else low = offset;
+  }
+  const offset = (low + high) / 2, b = bearing * Math.PI / 180;
+  // Balancing can make the near face wider in a narrow viewport; recheck all constraints.
+  distance = Math.max(distance, distanceAt(offset)) * 1.01;
+  const meters = 40075016.68557849 * Math.cos(volume.center[1] * Math.PI / 180);
+  const centerY = (1 - Math.log(Math.tan(Math.PI / 4 + volume.center[1] * Math.PI / 360)) / Math.PI) / 2 - offset * Math.cos(b) / meters;
+  const center: Point = [volume.center[0] + offset * Math.sin(b) / meters * 360, Math.atan(Math.sinh(Math.PI * (1 - 2 * centerY))) * 180 / Math.PI];
+  return { center, zoom: Math.min(22, Math.log2(f * meters / (512 * distance))), bearing, pitch };
 }

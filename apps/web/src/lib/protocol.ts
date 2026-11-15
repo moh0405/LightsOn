@@ -47,6 +47,7 @@ export interface RoomStateMsg {
 
 export type ServerMessage =
   | RoomStateMsg
+  | { type: "tour_requested"; building_id: string | null; model_id: string | null; open: boolean }
   | ({ type: "agent_step" } & AgentStep)
   | ({ type: "building_intro" } & Intro)
   | ({ type: "pitch_received" } & PitchView)

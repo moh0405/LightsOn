@@ -127,6 +127,12 @@ def building(property_id: str, provider: DataProvider = Depends(get_provider)) -
     return dossier
 
 
+@app.get('/api/buildings/{property_id}/tours')
+def building_tours(property_id: str, provider: DataProvider = Depends(get_provider)) -> list[dict]:
+    from .data.matterport import get_tours
+    return get_tours(building(property_id, provider))
+
+
 @app.get('/api/buildings/{property_id}/persona')
 def building_persona(property_id: str, provider: DataProvider = Depends(get_provider)) -> dict:
     dossier = building(property_id, provider)

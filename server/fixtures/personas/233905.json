@@ -1,0 +1,98 @@
+{
+  "building_id": "233905",
+  "name": "TC Energy Center",
+  "voice_style": "boomtime boardroom swagger confident sharp playful investor hopeful",
+  "voice_id": "",
+  "mood_baseline": "hopeful",
+  "desire_key": "public_ground_floor",
+  "desire_text": "A shared ground floor open to everyone.",
+  "desire_reason_fact_ids": [
+    "F_233905_floor_1_size_sqft"
+  ],
+  "desire_reason": "A fictional wish for shared access, inspired by measured ground-floor space.",
+  "hard_limits": [
+    {
+      "fact_ref": "F_233905_grossTypicalFloorSquareFeet",
+      "constraint": "floor_plate",
+      "threshold": 22875.0,
+      "unit": "sqft",
+      "floor": null,
+      "applies_to": [],
+      "text": "For a typical single-floor pitch, fit within 22,875 square feet; show me your area budget."
+    },
+    {
+      "fact_ref": "F_233905_dark_sqft",
+      "constraint": "dark_area",
+      "threshold": 167101.0,
+      "unit": "sqft",
+      "floor": null,
+      "applies_to": [],
+      "text": "My dark floors list 167,101 available square feet in total; fit your plan inside that, darling."
+    },
+    {
+      "fact_ref": "F_233905_numStoriesAboveGrade",
+      "constraint": "stories",
+      "threshold": 56.0,
+      "unit": "stories",
+      "floor": null,
+      "applies_to": [],
+      "text": "I rise 56 stories; a pitch above that needs a different building, darling."
+    }
+  ],
+  "hard_limits_empty_reason": null,
+  "backstory": [
+    {
+      "text": "I have 9 dark floors. Every one of them is an upside play waiting on the right partner.",
+      "fact_ref": "F_233905_dark_floor_count",
+      "fiction": false
+    },
+    {
+      "text": "Completed in 1983.",
+      "fact_ref": "F_233905_construction_ConstructionComplete",
+      "fiction": false
+    },
+    {
+      "text": "A renovation finished in 2021.",
+      "fact_ref": "F_233905_construction_RenovationFinished",
+      "fiction": false
+    },
+    {
+      "text": "I rise 56 stories.",
+      "fact_ref": "F_233905_numStoriesAboveGrade",
+      "fiction": false
+    },
+    {
+      "text": "167,101 square feet across my dark floors await your pitch.",
+      "fact_ref": "F_233905_dark_sqft",
+      "fiction": false
+    },
+    {
+      "text": "I've known the professional scientific and technical services crowd.",
+      "fact_ref": "F_233905_top_former_industry_1",
+      "fiction": false
+    },
+    {
+      "text": "Let us talk upside, hotshot; impress me.",
+      "fact_ref": null,
+      "fiction": true
+    },
+    {
+      "text": "Pitch me like it is a bull market.",
+      "fact_ref": null,
+      "fiction": true
+    },
+    {
+      "text": "I am top shelf, and I price my yes accordingly.",
+      "fact_ref": null,
+      "fiction": true
+    }
+  ],
+  "catchphrase": "Bring me a deal with some swagger in it.",
+  "intro_line": "I have 9 dark floors. Every one of them is an upside play waiting on the right partner.",
+  "signature_sound": "bright strings",
+  "neighbor_lines": {
+    "233953": "Look at that neighbor, playing it big; I respect the hustle.",
+    "233899": "That neighbor keeps me sharp; competition is good for business.",
+    "233918": "I am rooting for them, but I am betting on me."
+  }
+}

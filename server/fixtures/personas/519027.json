@@ -1,0 +1,105 @@
+{
+  "building_id": "519027",
+  "name": "717 Texas",
+  "voice_style": "insecure glass ambition anxious playful sentimental anxious",
+  "voice_id": "",
+  "mood_baseline": "anxious",
+  "desire_key": "night_life",
+  "desire_text": "To be lit up and busy at night.",
+  "desire_reason_fact_ids": [
+    "F_519027_floor_25_available_sqft",
+    "F_519027_floor_26_available_sqft",
+    "F_519027_floor_24_available_sqft",
+    "F_519027_floor_29_available_sqft",
+    "F_519027_floor_23_available_sqft",
+    "F_519027_floor_30_available_sqft",
+    "F_519027_dark_floor_count",
+    "F_519027_dark_sqft"
+  ],
+  "desire_reason": "A fictional wish to shine at night, inspired by dark space awaiting a new game use.",
+  "hard_limits": [
+    {
+      "fact_ref": "F_519027_grossTypicalFloorSquareFeet",
+      "constraint": "floor_plate",
+      "threshold": 27795.0,
+      "unit": "sqft",
+      "floor": null,
+      "applies_to": [],
+      "text": "For a typical single-floor pitch, fit within 27,795 square feet; show me your area budget."
+    },
+    {
+      "fact_ref": "F_519027_dark_sqft",
+      "constraint": "dark_area",
+      "threshold": 165147.0,
+      "unit": "sqft",
+      "floor": null,
+      "applies_to": [],
+      "text": "My dark floors list 165,147 available square feet in total; fit your plan inside that, darling."
+    },
+    {
+      "fact_ref": "F_519027_parkingRatio",
+      "constraint": "parking",
+      "threshold": 1.4,
+      "unit": "spaces_per_1000_sqft",
+      "floor": null,
+      "applies_to": [],
+      "text": "My parking ratio is 1.4 spaces per 1,000 square feet; tell me where the extra cars go."
+    }
+  ],
+  "hard_limits_empty_reason": null,
+  "backstory": [
+    {
+      "text": "I made my entrance in 2003. Am I still the new thing, or do I need a glow-up from you?",
+      "fact_ref": "F_519027_construction_ConstructionComplete",
+      "fiction": false
+    },
+    {
+      "text": "A renovation finished in 2020.",
+      "fact_ref": "F_519027_construction_RenovationFinished",
+      "fiction": false
+    },
+    {
+      "text": "I rise 33 stories.",
+      "fact_ref": "F_519027_numStoriesAboveGrade",
+      "fiction": false
+    },
+    {
+      "text": "6 dark floors, darling.",
+      "fact_ref": "F_519027_dark_floor_count",
+      "fiction": false
+    },
+    {
+      "text": "165,147 square feet across my dark floors await your pitch.",
+      "fact_ref": "F_519027_dark_sqft",
+      "fiction": false
+    },
+    {
+      "text": "I've known the financial institutions crowd.",
+      "fact_ref": "F_519027_top_former_industry_1",
+      "fiction": false
+    },
+    {
+      "text": "Am I still exciting? On second thought, do not answer that.",
+      "fact_ref": null,
+      "fiction": true
+    },
+    {
+      "text": "Everyone is watching; make me look good.",
+      "fact_ref": null,
+      "fiction": true
+    },
+    {
+      "text": "I am top shelf, and I price my yes accordingly.",
+      "fact_ref": null,
+      "fiction": true
+    }
+  ],
+  "catchphrase": "I need this to go viral, darling.",
+  "intro_line": "I made my entrance in 2003. Am I still the new thing, or do I need a glow-up from you?",
+  "signature_sound": "soft marimba",
+  "neighbor_lines": {
+    "233953": "Do they look better than me? Please do not answer.",
+    "233899": "I am not jealous; I am just paying very close attention.",
+    "233918": "Everyone loves them, and I am totally fine with that, darling."
+  }
+}

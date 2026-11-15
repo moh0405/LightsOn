@@ -18,6 +18,7 @@ from pydantic import BaseModel, ConfigDict, TypeAdapter
 from ..city import housing_impact
 from ..models import Challenge, Pitch, VerdictProposal
 from . import fake_agent
+from .knowledge import FactTools, knowledge_dossier
 from .grounding import ClaimChecks, check_line, fallback_line, name_players, repair_citations
 from .prompts import CachedPrompt, build_prompt, challenge_prompt, persona_for, pitch_data, safe_facts
 from .spend import MeteredClient, SpendUnavailable
@@ -138,9 +139,85 @@ class Bedrock:
         raise ValueError('Missing structured answer')
 
 
+MAX_TOKENS = {'challenge': 300, 'verdict': 800, 'claim_check': 300}
+# Leave enough of the step budget for the forced answer after any lookups.
+ANSWER_RESERVE_S = {'challenge': 3.0, 'verdict': 5.0, 'claim_check': 0}
+
+
+class LangChainBedrock:
+    """Live steps through LangChain ChatBedrockConverse, metered by spend.py.
+
+    The model may call get_fact(id) and search_facts(query) over this building's
+    dossier for up to max_rounds rounds, then must return the structured `answer`
+    tool. Tool results are read-only dossier rows; only the server publishes.
+    """
+    uses_tools = True
+
+    def __init__(self, chat_factory=None, max_rounds=1, client=None):
+        self.chat_factory = chat_factory or self.chat
+        self.max_rounds, self.client = max_rounds, client
+        self._chats: dict[tuple, object] = {}
+
+    def chat(self, step, timeout):
+        from .spend import CappedBedrockConverse
+        model = (os.getenv('BEDROCK_SMART_MODEL_ID' if step == 'verdict' else 'BEDROCK_FAST_MODEL_ID')
+                 or (SMART if step == 'verdict' else FAST))
+        read = max(1, int(timeout + .999))
+        key = (step, model, read)
+        if key not in self._chats:
+            extra = {'client': self.client} if self.client is not None else {}
+            # No SDK retries and bounded sockets; AWS default credential chain only.
+            self._chats[key] = CappedBedrockConverse(
+                model_id=model, region_name=os.getenv('AWS_REGION', 'us-east-1'), temperature=0,
+                max_tokens=MAX_TOKENS.get(step, 300), disable_streaming=True,
+                config=Config(connect_timeout=1, read_timeout=read, retries={'total_max_attempts': 1}), **extra)
+        return self._chats[key]
+
+    async def __call__(self, step, system, content, schema, timeout, *, dossier=None, on_tool=None):
+        from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
+        deadline = monotonic() + timeout
+        chat = self.chat_factory(step, timeout)
+        if isinstance(system, CachedPrompt):
+            blocks = [{'type': 'text', 'text': system.shared}, {'cachePoint': {'type': 'default'}}]
+            blocks += [{'type': 'text', 'text': system.specific}] if system.specific else []
+        else:
+            blocks = [{'type': 'text', 'text': str(system)}]
+        messages = [SystemMessage(content=blocks), HumanMessage(content=content)]
+        answer = {'type': 'function', 'function': {'name': 'answer', 'description': 'Return the structured game proposal.',
+                                                   'parameters': schema.model_json_schema()}}
+        tools = FactTools(dossier) if dossier is not None and step != 'claim_check' else None
+        for round_ in range(self.max_rounds + 1):
+            final = (tools is None or round_ == self.max_rounds
+                     or deadline - monotonic() < ANSWER_RESERVE_S.get(step, 0))
+            bound = chat.bind_tools([answer] if final else [*FactTools.SPECS, answer],
+                                    tool_choice='answer' if final else 'any')
+            reply = await bound.ainvoke(messages)
+            if (getattr(reply, 'response_metadata', None) or {}).get('stopReason') == 'max_tokens':
+                raise ValueError('Structured response reached max_tokens')
+            calls = list(getattr(reply, 'tool_calls', None) or [])
+            for item in calls:
+                if item.get('name') == 'answer':
+                    return item.get('args')
+            if final or not calls:
+                raise ValueError('Missing structured answer')
+            messages.append(reply)
+            # Bedrock requires one toolResult per toolUse; unknown tools get an error row.
+            for item in calls:
+                started = monotonic()
+                result = tools.run(item.get('name'), item.get('args'))
+                messages.append(ToolMessage(content=json.dumps(result, ensure_ascii=False), tool_call_id=item.get('id')))
+                if on_tool and item.get('name') in ('get_fact', 'search_facts'):
+                    await on_tool(item['name'], started)
+        raise ValueError('Missing structured answer')
+
+
+def calls_tools(model) -> bool:
+    return bool(getattr(model, 'uses_tools', False))
+
+
 class LiveAgent:
     def __init__(self, model=None, emit=None, challenge_timeout=8, verdict_timeout=12, on_challenge=None):
-        self.model = model or Bedrock()
+        self.model = model or LangChainBedrock()
         self.emit = emit
         self.on_challenge = on_challenge
         self.challenge_latencies: dict[str, float] = {}
@@ -152,6 +229,7 @@ class LiveAgent:
         self.fallback_player_causes: dict[str, str] = {}
         self.schema_failures = 0
         self.last_grounded_at: float | None = None
+        self.dossier: dict | None = None  # This step's knowledge dossier, for the lookup tools.
 
     async def event(self, step, tool, started, *, cause=None):
         if self.emit:
@@ -166,7 +244,12 @@ class LiveAgent:
                 raise TimeoutError('Live step deadline')
             started = monotonic()
             try:
-                if inspect.iscoroutinefunction(self.model):
+                if calls_tools(self.model):
+                    async def on_tool(tool, at, step=step):
+                        await self.event(step, tool, at)
+                    raw = await asyncio.wait_for(self.model(step, system, content, schema, remaining,
+                                                            dossier=self.dossier, on_tool=on_tool), remaining)
+                elif inspect.iscoroutinefunction(self.model) or inspect.iscoroutinefunction(getattr(self.model, '__call__', None)):
                     raw = await asyncio.wait_for(self.model(step, system, content, schema, remaining), remaining)
                 else:
                     raw = await asyncio.wait_for(asyncio.to_thread(self.model, step, system, content, schema, remaining), remaining)
@@ -261,6 +344,7 @@ class LiveAgent:
     async def challenge(self, pitches: list[Pitch], dossier: dict, city=None, mood='hopeful', memory='',
                         names: dict[str, str] | None = None) -> list[Challenge]:
         names = names or {}
+        dossier = self.dossier = knowledge_dossier(dossier)
         self.challenge_latencies = {}
         self.fallback_player_ids.clear()
         self.fallback_player_causes.clear()
@@ -275,7 +359,7 @@ class LiveAgent:
                 candidate = Challenge(player_id=p.player_id, line=INJECTION if reason == 'injection' else REFUSAL,
                     fact_ids=[], counteroffer='Offer a kind, original idea for this space.', category_guess='wildcard')
             else:
-                system = challenge_prompt(dossier, mood, pitches=[p])
+                system = challenge_prompt(dossier, mood, pitches=[p], city=city, memory=memory)
                 content = pitch_data([p], names)
                 cause = 'unavailable'
                 try:
@@ -337,6 +421,7 @@ class LiveAgent:
                               impact_sqft=None, names: dict[str, str] | None = None):
         started = monotonic()
         deadline = started + self.verdict_timeout
+        dossier = self.dossier = knowledge_dossier(dossier)
         # A revision alone is not an entry: actions.py requires an original pitch.
         eligible = {p.player_id for p in originals}
         revisions = [p for p in revisions if p.player_id in eligible]

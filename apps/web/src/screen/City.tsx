@@ -11,14 +11,14 @@ import { useGame } from "../lib/store";
 import { HoverCard } from "./overlays/HoverCard";
 import { Sparks } from "./Sparks";
 import { FLASH_MS, firstFloorAt, INTRO_DIVE_MS, lightUpDuration } from "./effects";
-import { footprint, occluders, planCamera, ROUND_PITCH, targetHeight } from "./camera";
+import { fadedOccluders, frameCamera, frameVolume, occluders, planCamera, ROUND_PITCH } from "./camera";
 
-declare global { interface Window { __lightsOnMap?: CityMap } }
+declare global { interface Window { __lightsOnMap?: CityMap; __lightsOnFrameBuilding?: (id: string) => void } }
 const CENTER: [number, number] = [-95.3650891, 29.7588018];
 const FLOOR_COLOR = floorColorExpression({});
 interface Hover { player: string; building: string; color: string }
 
-export function City() {
+export function City({ onHover }: { onHover?: (id: string | null) => void }) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<CityMap | null>(null);
   const { phase, buildingId, revivedColors, revival, dataMode, hasState } = useGame(useShallow(s => ({ phase: s.phase, buildingId: s.buildingId, revivedColors: s.revivedColors, revival: s.revival, dataMode: s.dataMode, hasState: s.hasState })));
@@ -31,6 +31,9 @@ export function City() {
   const [hovers, setHovers] = useState<Hover[]>([]);
   const [error, setError] = useState<string | null>(null);
   const geo = useRef<{ city?: FeatureCollection; floors?: FeatureCollection }>({});
+  const reframe = useRef<(duration?: number) => void>(() => {});
+  const testFrame = useRef(false);
+  const overview = useRef<ReturnType<typeof frameVolume>>(null);
   const factError = useCallback(() => setError("Building facts are unavailable. You can still aim and wake a building."), []);
 
   useEffect(() => {
@@ -76,20 +79,27 @@ export function City() {
           map.addLayer({ id: "floors", type: "fill-extrusion", source: "floors", paint: {
             "fill-extrusion-base": ["get", "base_m"], "fill-extrusion-height": ["get", "height_m"], "fill-extrusion-color": FLOOR_COLOR,
           } });
+          map.addLayer({ id: "floors-faded", type: "fill-extrusion", source: "floors", filter: ["in", ["get", "building_id"], ["literal", []]], paint: {
+            "fill-extrusion-base": ["get", "base_m"], "fill-extrusion-height": ["get", "height_m"], "fill-extrusion-color": FLOOR_COLOR, "fill-extrusion-opacity": 0.12,
+          } });
         }
         // Context towers between the round camera and the hero are drawn after the floors as glass,
         // so the light-up stays visible (filters are set per hero below).
         if (city.status === "fulfilled") map.addLayer({ id: "context-faded", type: "fill-extrusion", source: "city", filter: ["in", ["get", "_i"], ["literal", []]], paint: { "fill-extrusion-color": "#3a4560", "fill-extrusion-height": ["get", "height_m"], "fill-extrusion-opacity": 0.12 } });
         if (city.status === "rejected" || floors.status === "rejected") setError("Skyline data is unavailable. Use the Wake buttons on your phone.");
+        overview.current = frameVolume([geo.current.city, geo.current.floors].filter((g): g is FeatureCollection => !!g));
         setReady(true);
       });
     });
-    const resize = new ResizeObserver(() => map.resize());
+    const resize = new ResizeObserver(() => { map.resize(); reframe.current(0); });
     resize.observe(container.current!);
     let last = performance.now();
     const orbit = setInterval(() => {
       const now = performance.now();
-      if (["EXPLORE", "LOBBY"].includes(current.current.phase) && !map.isMoving()) map.jumpTo({ bearing: map.getBearing() + (now - last) * 0.0015 });
+      if (["EXPLORE", "LOBBY"].includes(current.current.phase) && !testFrame.current && !map.isMoving() && overview.current) {
+        const canvas = map.getCanvas();
+        map.jumpTo(frameCamera(overview.current, canvas.clientWidth, canvas.clientHeight, map.getBearing() + (now - last) * 0.0015, ROUND_PITCH, map.getVerticalFieldOfView()));
+      }
       last = now;
     }, 100);
     return () => {
@@ -102,26 +112,46 @@ export function City() {
   useEffect(() => {
     const map = mapRef.current;
     if (!ready || !map) return;
-    const fade = (indexes: number[]) => {
+    const fade = (indexes: number[], floorIds: string[] = []) => {
       if (!map.getLayer("context") || !map.getLayer("context-faded")) return;
       map.setFilter("context", indexes.length ? ["!", ["in", ["get", "_i"], ["literal", indexes]]] : null);
       map.setFilter("context-faded", ["in", ["get", "_i"], ["literal", indexes]]);
-    };
-    if (buildingId) {
-      const building = buildings.find((b) => String(b.id) === buildingId);
-      if (building?.lng != null && building.lat != null) {
-        const { city, floors } = geo.current;
-        const shape = floors ? footprint(floors, buildingId) : null;
-        const center = shape?.center ?? [building.lng, building.lat];
-        const plan = city ? planCamera(occluders(city, center[0], center[1]), floors ? targetHeight(floors, buildingId) : 0, ROUND_PITCH, shape?.radius ?? 0) : { bearing: 0, faded: [] };
-        fade(plan.faded);
-        map.flyTo({ center, zoom: 17.5, pitch: ROUND_PITCH, bearing: plan.bearing, duration: INTRO_DIVE_MS, essential: true });
+      if (map.getLayer("floors-faded")) {
+        map.setFilter("floors", floorIds.length ? ["!", ["in", ["get", "building_id"], ["literal", floorIds]]] : null);
+        map.setFilter("floors-faded", ["in", ["get", "building_id"], ["literal", floorIds]]);
       }
-    } else if (phase === "EXPLORE" || phase === "LOBBY") {
-      fade([]);
-      map.flyTo({ center: CENTER, zoom: 15.5, pitch: 60, duration: INTRO_DIVE_MS, essential: true });
-    }
-  }, [buildingId, buildings, ready, phase === "EXPLORE" || phase === "LOBBY"]);
+    };
+    const dive = (id: string, duration = INTRO_DIVE_MS, settle = false) => {
+      const { city, floors } = geo.current;
+      const volume = floors ? frameVolume([floors], id) : null;
+      if (!volume) return;
+      // Protect the base as well as the lowest available floor. Keep the open-side bearing.
+      const plan = city ? planCamera(occluders(city, ...volume.center), 0, ROUND_PITCH, volume.radius) : { bearing: 0, faded: [] };
+      // Wakeable neighbors also have floor geometry, independent of the city layer.
+      // Fade both representations without changing the open-side bearing.
+      const floorIds = floors ? [...new Set(fadedOccluders(occluders(floors, ...volume.center), plan.bearing, 0, ROUND_PITCH, volume.radius)
+        .map(index => String(floors.features[index]?.properties?.building_id)).filter(other => other !== id))] : [];
+      fade(plan.faded, floorIds);
+      const canvas = map.getCanvas();
+      const camera = frameCamera(volume, canvas.clientWidth, canvas.clientHeight, plan.bearing, ROUND_PITCH, map.getVerticalFieldOfView(), Math.min(220, canvas.clientHeight * 0.34));
+      if (settle) map.easeTo({ ...camera, zoom: camera.zoom - 0.15, duration, essential: true });
+      else map.flyTo({ ...camera, duration, essential: true });
+    };
+    const update = (duration = INTRO_DIVE_MS) => {
+      if (buildingId) dive(buildingId, duration);
+      else if ((phase === "EXPLORE" || phase === "LOBBY") && overview.current) {
+        fade([]);
+        const canvas = map.getCanvas();
+        map.flyTo({ ...frameCamera(overview.current, canvas.clientWidth, canvas.clientHeight, map.getBearing(), ROUND_PITCH, map.getVerticalFieldOfView()), duration, essential: true });
+      }
+    };
+    testFrame.current = false;
+    reframe.current = update;
+    if (import.meta.env.DEV || import.meta.env.MODE === "test") window.__lightsOnFrameBuilding = id => { testFrame.current = true; dive(id); };
+    update();
+    const timer = revival ? setTimeout(() => dive(revival.building_id, 1800, true), Math.max(0, revival.at + lightUpDuration(revival.floors) - Date.now())) : undefined;
+    return () => { clearTimeout(timer); reframe.current = () => {}; delete window.__lightsOnFrameBuilding; };
+  }, [buildingId, ready, phase === "EXPLORE" || phase === "LOBBY", revival]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -159,16 +189,20 @@ export function City() {
     return () => { unsubscribe(); map.off("render", update); };
   }, [ready]);
 
+  useEffect(() => { onHover?.(hovers[0]?.building ?? null); }, [hovers, onHover]);
+
   useEffect(() => {
     const map = mapRef.current;
     if (!ready || !map?.getLayer("floors")) return;
     map.setPaintProperty("floors", "fill-extrusion-color-transition", { duration: 0 });
+    map.setPaintProperty("floors-faded", "fill-extrusion-color-transition", { duration: 0 });
     let frame = 0;
     const paint = () => {
       // Paint and scheduling must share one clock read so the final frame
       // cannot be dropped when the deadline is crossed during setPaintProperty.
       const now = Date.now();
       map.setPaintProperty("floors", "fill-extrusion-color", floorColorExpression(revivedColors, revival ? { ...revival, at: firstFloorAt(revival.at) } : undefined, now));
+      map.setPaintProperty("floors-faded", "fill-extrusion-color", floorColorExpression(revivedColors, revival ? { ...revival, at: firstFloorAt(revival.at) } : undefined, now));
       if (revival && now - revival.at < lightUpDuration(revival.floors)) frame = requestAnimationFrame(paint);
     };
     paint();
@@ -187,12 +221,6 @@ export function City() {
     return () => { map.off("move", project); };
   }, [buildingId, revival, ready, buildings]);
 
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!revival || !ready || !map) return;
-    const timer = setTimeout(() => map.easeTo({ zoom: 17, pitch: ROUND_PITCH, duration: 1800 }), lightUpDuration(revival.floors));
-    return () => clearTimeout(timer);
-  }, [revival, ready]);
 
   return <>
     {error && <div role="alert" style={{ padding: 10, background: "#5a3b00" }}>{error}</div>}

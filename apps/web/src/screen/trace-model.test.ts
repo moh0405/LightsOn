@@ -11,6 +11,11 @@ it("projects safe live tool metadata and only known fallback causes", () => {
   expect(publicStep({ ...step, duration_ms: -1 })).toBeNull();
 });
 
+it("shows the live judge's dossier lookups without their free-text arguments", () => {
+  expect(publicStep({ ...step, tool: "get_fact", summary: "challenge: get_fact(F_1)" })?.summary).toBe("challenge: get_fact");
+  expect(publicStep({ ...step, step: "verdict", tool: "search_facts", summary: "private query" })?.summary).toBe("verdict: search_facts");
+});
+
 it("bounds live history and clears it when a new round starts or resets", () => {
   const history = Array.from({ length: 120 }, () => step);
   expect(appendStep(history, step)).toHaveLength(120);

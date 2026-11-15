@@ -6,6 +6,7 @@ import { createRoom } from "../lib/api";
 import { safeGet, safeSet, useGame, useRoomSocket } from "../lib/store";
 import { IntroMedia } from "./IntroMedia";
 import "./screen.css";
+import { WalkInside } from "./WalkInside";
 import { ConnBanner, ErrorToast, PhaseBadge, page } from "../lib/ui";
 import { useScreenAudio } from "./music";
 import { TracePanel } from "./overlays/TracePanel";
@@ -30,7 +31,27 @@ export function ScreenApp() {
   const onMediaError = useCallback((message: string) => setMediaError(message), []);
   const [failed, setFailed] = useState(false);
   useRoomSocket(room, "screen");
-  const { players, buildingId, hasState, dataMode } = useGame(useShallow(s => ({ players: s.players, buildingId: s.buildingId, hasState: s.hasState, dataMode: s.dataMode })));
+  const { players, buildingId, hasState, dataMode, heroIds, tourRequest, phase } = useGame(useShallow(s => ({ players: s.players, buildingId: s.buildingId, hasState: s.hasState, dataMode: s.dataMode, heroIds: s.heroIds, tourRequest: s.tourRequest, phase: s.phase })));
+  const [hovered, setHovered] = useState<string | null>(null);
+  const [walk, setWalk] = useState<{ buildingId: string; modelId: string | null } | null>(null);
+  const target = buildingId ?? hovered ?? heroIds[0] ?? null;
+  const closeTour = useCallback(() => setWalk(null), []);
+  const toggleTour = useCallback(() => setWalk((current) => current ? null : target ? { buildingId: target, modelId: null } : null), [target]);
+  useEffect(() => {
+    if (tourRequest) setWalk(tourRequest.open && tourRequest.buildingId ? { buildingId: tourRequest.buildingId, modelId: tourRequest.modelId } : null);
+  }, [tourRequest]);
+  useEffect(() => {
+    const key = (event: KeyboardEvent) => {
+      if (event.target instanceof HTMLElement && (event.target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName))) return;
+      if (event.repeat) return;
+      if (event.key === "Escape") closeTour();
+      if (event.key.toLowerCase() === "m") { event.preventDefault(); toggleTour(); }
+    };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  }, [closeTour, toggleTour]);
+  // Keep the light-up moment visible even if a host left a tour open.
+  useEffect(() => { if (phase === "POWER_UP" || phase === "REVIVED") closeTour(); }, [phase, closeTour]);
   const buildingName = useBuildingName(buildingId);
 
   useEffect(() => {
@@ -51,14 +72,15 @@ export function ScreenApp() {
 
   return (
     <><TracePanel />
-    <main className="projector" style={{ ...page, display: "grid", gridTemplateColumns: "minmax(0, 1fr) 390px", gap: 16, height: "100vh", boxSizing: "border-box", overflow: "hidden" }}>
+    <main className={`projector${walk ? " walking" : ""}`} style={{ ...page, display: "grid", gridTemplateColumns: "minmax(0, 1fr) 390px", gap: 16, height: "100vh", boxSizing: "border-box", overflow: "hidden" }}>
       <section className="screen-stage">
         <ConnBanner /><ErrorToast />
         {failed && <p role="alert">Could not reach the server.</p>}
-        <header className="screen-heading"><h1>Lights On</h1>{!audio.ready && <button onClick={() => void audio.start()}>Start audio</button>}<span>Your city needs you.</span></header>
+        <header className="screen-heading"><h1>Lights On</h1>{!audio.ready && <button onClick={() => void audio.start()}>Start audio</button>}<button disabled={!target} onClick={toggleTour}>Walk inside · M</button><span>Your city needs you.</span></header>
         {audio.error && <p role="alert">{audio.error}</p>}
         <div className="screen-status"><PhaseBadge />{dataMode === "fixtures" && <span className="data-badge" data-testid="data-mode-badge">Fixture data · offline</span>}{buildingId && <p className="building-label" data-testid="building-label">Waking {buildingName ?? "a building"}</p>}</div>
-        <div className="city-stage"><City /><IntroMedia onError={onMediaError} /><RoundOverlays /></div>
+        <div className="city-stage"><City onHover={setHovered} /><IntroMedia onError={onMediaError} /><RoundOverlays /></div>
+        {walk && <WalkInside key={walk.buildingId} buildingId={walk.buildingId} modelId={walk.modelId} close={closeTour} />}
         {mediaError && <div className="screen-toast" role="alert">{mediaError}<button aria-label="Dismiss media notice" onClick={() => setMediaError(null)}>×</button></div>}
       </section>
       <style>{`[data-testid="qr"] svg { display: block; width: 100%; height: auto; }`}</style>

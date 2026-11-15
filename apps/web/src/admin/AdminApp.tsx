@@ -14,7 +14,7 @@ const ACTIONS: { action: string; label: string }[] = [
 export function demoPresetText(demoMode: boolean | null): string {
   if (demoMode === null) return "Demo preset: unknown (server health unavailable)";
   return demoMode
-    ? "Demo preset ON: pitch 20 s, negotiate 15 s, wake list Esperson only"
+    ? "Demo preset ON: pitch 20 s, negotiate 15 s, wake list Esperson and Wells Fargo Plaza (once prepared)"
     : "Demo preset off: normal timers. Restart the server with DEMO_MODE=1 for the demo round.";
 }
 
@@ -23,7 +23,7 @@ export function AdminApp() {
   const [active, setActive] = useState<string | null>(room.length === 4 ? room.toUpperCase() : null);
   const [pin, setPin] = useState<string>(safeGet("lo.pin", "session") ?? "");
   const sock = useRoomSocket(active, "admin");
-  const { dataMode, dataModeScope, players, conn } = useGame();
+  const { dataMode, dataModeScope, players, conn, buildingId, heroIds } = useGame();
   const [demoMode, setDemoMode] = useState<boolean | null>(null);
   useEffect(() => {
     let live = true;
@@ -62,6 +62,8 @@ export function AdminApp() {
           <PhaseBadge />
           <p>Room {active} · {conn} · {Object.keys(players).length} players · data mode: {dataMode} ({dataModeScope === "process" ? "all rooms" : ""})</p>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button style={button} disabled={!pin || !(buildingId ?? heroIds[0])} onClick={() => void run({ action: "walk_inside", building_id: buildingId ?? heroIds[0], open: true })}>Walk inside</button>
+            <button style={button} disabled={!pin} onClick={() => void run({ action: "walk_inside", open: false })}>Close interior tour</button>
             {ACTIONS.map((a) => (
               <button key={a.action} style={button} disabled={!pin} onClick={() => void run({ action: a.action })}>{a.label}</button>
             ))}

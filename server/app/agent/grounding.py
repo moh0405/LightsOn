@@ -158,7 +158,8 @@ def quoted_numbers(texts: list[str] | None) -> set[tuple[float, str | None]]:
 def fact_number_matches(value: float, unit: str | None, fact: dict) -> bool:
     expected = fact['value']
     exact = (fact['key'].startswith('construction_') or fact['key'] in
-             {'yearBuilt', 'yearRenovated', 'numStoriesAboveGrade', 'dark_floor_count'})
+             {'yearBuilt', 'yearRenovated', 'numStoriesAboveGrade', 'dark_floor_count',
+              'neighbor_dark_floor_count', 'matterport_tour_count'})
     fact_unit = fact['unit'] or {'numStoriesAboveGrade': 'stories', 'parkingRatio': 'spaces_per_1000_sqft'}.get(fact['key'])
     return (type(expected) in (int, float) and (unit is None or unit == fact_unit)
             and math.isclose(value, expected, rel_tol=0 if exact else .001, abs_tol=0 if exact else .005))

@@ -84,8 +84,9 @@ async def test_original_revision_alias_ambiguity_and_duplicate_nicknames(dossier
 
 async def test_fake_bedrock_full_round_publishes_intro_challenges_recorded_verdict(dossier, monkeypatch, tmp_path):
     import json
-    from app.agent.live_agent import Bedrock
+    from app.agent.live_agent import LangChainBedrock as Bedrock
     from app.rooms import Room, Conn
+    monkeypatch.setattr(Bedrock, 'uses_tools', False)  # This scripted model never looks up facts.
 
     monkeypatch.setenv('AGENT_MODE', 'live')
     monkeypatch.setenv('DEMO_MODE', '1')
