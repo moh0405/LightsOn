@@ -14,7 +14,7 @@ const ACTIONS: { action: string; label: string }[] = [
 export function demoPresetText(demoMode: boolean | null): string {
   if (demoMode === null) return "Demo preset: unknown (server health unavailable)";
   return demoMode
-    ? "Demo preset ON: pitch 20 s, negotiate 15 s, wake list Esperson only"
+    ? "Demo preset ON: pitch 20 s, negotiate 15 s, wake list Esperson and Wells Fargo Plaza (once prepared)"
     : "Demo preset off: normal timers. Restart the server with DEMO_MODE=1 for the demo round.";
 }
 
