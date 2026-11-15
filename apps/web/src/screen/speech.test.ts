@@ -130,3 +130,13 @@ it("allows a real challenge to replace the live agent's preliminary line", async
   useGame.setState({ counteroffers: { ann: { ...offer, line: "Thank you." } } }); await flush();
   expect(spoken.map(u => u.text)).toEqual(["Please wait.", "Thank you."]);
 });
+it("does not start a stale line after a delayed TTS response", async () => {
+  await mount();
+  let release!: (value: Response) => void;
+  vi.mocked(fetch).mockReturnValueOnce(new Promise<Response>(resolve => { release = resolve; }));
+  useGame.setState({ intro: { text: "Thank you.", audio_url: null, mood: "proud", analyst_line: "" } }); await flush();
+  useGame.setState({ phase: "VERDICT" });
+  release({ ok: true, json: async () => ({ audio_url: null }) } as Response); await flush();
+  expect(spoken).toHaveLength(0);
+  expect(duck).toHaveBeenLastCalledWith(false);
+});

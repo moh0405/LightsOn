@@ -241,12 +241,12 @@ export function useScreenAudio() {
               url = (await r.json() as { audio_url: string | null }).audio_url;
             } catch { if (!signal.aborted) warn("Voice service unavailable. Browser speech and subtitles remain available."); }
           }
-          if (signal.aborted) return;
+          if (signal.aborted || group !== speechGroup(useGame.getState().phase)) return;
           if (url) {
             try { await playAudio(url, signal); return; }
             catch { warn("Recorded speech unavailable. Using browser speech."); }
           }
-          if (!signal.aborted) await browserSpeech(text, persona, mood, signal);
+          if (!signal.aborted && group === speechGroup(useGame.getState().phase)) await browserSpeech(text, persona, mood, signal);
         } catch (error) { if (!signal.aborted) { console.warn(error); warn("Audio unavailable. Follow the subtitles."); } }
         finally { if (current === generation) cityMusic.duck(false); }
       });
