@@ -76,3 +76,6 @@ A screenshot or a 10-second phone video helps. Never paste `.env` contents or ke
 - [ ] Light-up visible from the back of the room; audio audible
 - [ ] Skip, reset round and reset room all work
 - [ ] Bugs pasted into Claude Code
+
+## Note: demo mode runs out after 4 rounds
+In `DEMO_MODE=1` only Esperson can be woken, and its dark floors are used up after about 4 rounds. Before the next run (and before judging) open `/admin` and press **Reset room** to bring every floor back.
