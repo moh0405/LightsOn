@@ -9,6 +9,7 @@ import { WalkInside } from "./WalkInside";
 import { ConnBanner, ErrorToast, PhaseBadge, page } from "../lib/ui";
 import { useScreenAudio } from "./music";
 import { TracePanel } from "./overlays/TracePanel";
+import { HostControls } from "./overlays/HostControls";
 import { getDossier } from "../lib/buildings";
 
 /** The waking building's name from its dossier; the internal id never reaches the projector. */
@@ -29,7 +30,7 @@ export function ScreenApp() {
   const [mediaError, setMediaError] = useState<string | null>(null);
   const onMediaError = useCallback((message: string) => setMediaError(message), []);
   const [failed, setFailed] = useState(false);
-  useRoomSocket(room, "screen");
+  const sock = useRoomSocket(room, "screen");
   const { players, buildingId, hasState, dataMode, heroIds, tourRequest, phase } = useGame();
   const [hovered, setHovered] = useState<string | null>(null);
   const [walk, setWalk] = useState<{ buildingId: string; modelId: string | null } | null>(null);
@@ -79,6 +80,7 @@ export function ScreenApp() {
         {audio.error && <p role="alert">{audio.error}</p>}
         <div className="screen-status"><PhaseBadge />{dataMode === "fixtures" && <span className="data-badge" data-testid="data-mode-badge">Fixture data · offline</span>}{buildingId && <p className="building-label" data-testid="building-label">Waking {buildingName ?? "a building"}</p>}</div>
         <div className="city-stage"><City onHover={setHovered} /><IntroMedia onError={onMediaError} /><RoundOverlays /></div>
+        <HostControls sock={sock} />
         {walk && <WalkInside key={walk.buildingId} buildingId={walk.buildingId} modelId={walk.modelId} close={closeTour} />}
         {mediaError && <div className="screen-toast" role="alert">{mediaError}<button aria-label="Dismiss media notice" onClick={() => setMediaError(null)}>×</button></div>}
       </section>

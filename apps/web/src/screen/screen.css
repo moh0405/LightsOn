@@ -113,3 +113,9 @@
   .trace-columns { grid-template-columns: minmax(0, 1fr) !important; flex: none !important; }
   .trace-columns > * { max-height: none; }
 }
+.host-controls { position: absolute; top: 72px; right: 8px; z-index: 20; width: min(560px, calc(100% - 16px)); background: #171e2df8; border: 1px solid #f2c46d; border-radius: 16px; padding: 16px; display: grid; gap: 8px; box-shadow: 0 6px 24px #0008; }
+.host-controls header { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.host-controls p { margin: 0; }
+.host-controls input { font: inherit; padding: 6px 10px; border-radius: 8px; border: 1px solid #6b7891; background: #10131c; color: #eee; }
+.host-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.host-actions [aria-pressed="true"] { border-color: #7bd88f; color: #7bd88f; }
