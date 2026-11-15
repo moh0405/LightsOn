@@ -60,7 +60,7 @@ Work built or reviewed by a fallback agent (Antigravity, Grok, a cheaper model) 
 both once they are available. Fallback agents never give the final review.
 Findings become follow-up PRs, not direct pushes to main.
 
-Codex model: workers on the second Codex account (rishi) use `--model gpt-6-astra` (user choice, 2026-11-14 evening).
+Codex model: all Codex workers use `--model gpt-6.1-sol --effort high` (user choice, 2026-11-14 late; replaces gpt-6-astra).
 Other listed models: gpt-6.1-sol, gpt-6.1-terra, gpt-6-sol, gpt-6-luna.
 
 Dispatch from Claude Code:
