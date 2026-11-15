@@ -630,9 +630,11 @@ All commands go through `CommandService.handle(cmd, origin)` where `origin` is `
 | `revise_pitch` | NEGOTIATE | `{text}` | Stores one revision per player |
 | `contribute_energy` | POWER\_UP | `{nonce}` | +25% charge, rate-limited |
 | `link_phone` | any | `{phone_e164, consent: true}` | P1 Photon |
-| `host_action` | any | `{action: skip_phase / reset_round / reset_room / set_data_mode}` | Requires `HOST_PIN` |
+| `host_action` | any | `{action: skip_phase / reset_round / reset_room / set_data_mode / walk_inside}`; `walk_inside` adds `{building_id?, model_id?, open: bool}` | Requires `HOST_PIN`; `walk_inside` requires host origin, validates dossier/model IDs, and only requests screen presentation (no timer, phase, round or persistence changes) |
 
 Voice: `POST /api/rooms/{room}/pitch_audio` (multipart `audio`, `player_id`, `phase`) → STT → `submit_pitch` or `revise_pitch`.
+
+Public tour metadata: `GET /api/buildings/{id}/tours` returns `[{model_id, name: string|null, cover_url: string|null}]` for dossier model IDs only, with the source-named lobby first. The server reads the public Matterport player API with a 3 s timeout and a five-minute cache, including failures; unavailable metadata returns the kit IDs with null names/covers. No SDK credentials or contact fields reach the client. `/screen` opens the public `https://my.matterport.com/show/?m=<id>` embed from **Walk inside**, **M**, or the host request; **Esc/M** and **Back to city** close it. The INTRO lobby beat lasts about six seconds, and an eight-second iframe load timeout falls back to its cover with **Tour unavailable**, without a toast. Tours are presentation only: round timers, subtitles, negotiation and charging continue, and POWER_UP/REVIVED close the walk-in to show the light-up moment.
 
 ### Events (server → clients)
 
@@ -652,6 +654,7 @@ Voice: `POST /api/rooms/{room}/pitch_audio` (multipart `audio`, `player_id`, `ph
 | `neighborhood_updated` | screen | `{needs, most_needed}` |
 | `building_reaction` | screen | `{building_id, line, audio_url}` (P2) |
 | `agent_step` | screen | `{step, tool, summary, duration_ms}` |
+| `tour_requested` | screen | `{building_id: string|null, model_id: string|null, open: bool}`; presentation only, not persisted |
 | `error` | sender | `{code, message}` |
 
 `target_floors` is chosen by the server at `wake`: the lowest contiguous `dark` floors, up to 4, with verified sq ft (or `game_assumed` floors when vacancy is building-level only).

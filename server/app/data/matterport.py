@@ -81,3 +81,55 @@ def get_model(model_id: str) -> dict[str, Any] | None:
 
 # Deepagent tool alias
 matterport_get_model = get_models
+
+# Public Showcase metadata only. Never initialize the SDK or read an SDK key.
+# Keep this separate from the agent tools above: tours are presentation, not facts.
+import re
+import time
+from concurrent.futures import ThreadPoolExecutor
+from functools import lru_cache
+from urllib.parse import urlsplit
+
+import httpx
+
+
+def _cover_url(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    parsed = urlsplit(value)
+    return value if parsed.scheme == 'https' and (parsed.hostname or '').endswith('.matterport.com') else None
+
+
+@lru_cache(maxsize=512)
+def _public_metadata(model_id: str, window: int) -> dict:
+    """Bounded five-minute cache, including failures; never retain contact fields."""
+    fallback = {'name': None, 'cover_url': None}
+    try:
+        response = httpx.get(f'https://my.matterport.com/api/v1/player/models/{model_id}/', timeout=3.0)
+        response.raise_for_status()
+        data = response.json()
+        if not isinstance(data, dict) or data.get('is_public') is not True:
+            raise ValueError('Model is not public')
+        name = data.get('name')
+        return {'name': name.strip() if isinstance(name, str) and name.strip() else None,
+                'cover_url': _cover_url(data.get('image'))}
+    except (httpx.HTTPError, ValueError, TypeError):
+        # Exceptions can carry request URLs; log only the kit model id, no payload.
+        logger.warning('Matterport public metadata unavailable for %s', model_id)
+        return fallback
+
+
+def get_tours(dossier: dict) -> list[dict]:
+    """Only dossier-allowlisted model IDs; concurrent, bounded external requests."""
+    ids = sorted({m['model_id'] for m in (dossier.get('media') or {}).get('matterport', [])
+                  if isinstance(m, dict) and isinstance(m.get('model_id'), str)
+                  and re.fullmatch(r'[A-Za-z0-9]{11}', m['model_id'])})
+    if not ids:
+        return []
+    window = int(time.monotonic() // 300)
+    def tour(model_id):
+        return {'model_id': model_id, **_public_metadata(model_id, window)}
+    with ThreadPoolExecutor(max_workers=min(8, len(ids))) as pool:
+        tours = list(pool.map(tour, ids))
+    # Prefer the lobby when the source actually calls it a lobby; never invent a label.
+    return sorted(tours, key=lambda t: ('lobby' not in (t['name'] or '').casefold(), t['model_id']))
