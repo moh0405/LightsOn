@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Map as CityMap, setWorkerUrl } from "maplibre-gl";
+import { Map as CityMap, MercatorCoordinate, setWorkerUrl } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
 setWorkerUrl(workerUrl);
@@ -17,7 +17,53 @@ import { facadeBands, floorHalos, groundGrid, roofEdges, smoothFlight, stickyHit
 declare global { interface Window { __lightsOnMap?: CityMap; __lightsOnFrameBuilding?: (id: string) => void } }
 const CENTER: [number, number] = [-95.3650891, 29.7588018];
 const FLOOR_COLOR = floorColorExpression({});
-interface Hover { player: string; building: string; color: string; floor: number | null }
+interface Bounds { left: number; right: number; top: number; bottom: number }
+interface Hover { player: string; building: string; color: string; floor: number | null; bounds: Bounds | null }
+
+/** Project the complete exported building volume, including its roof, locally. */
+function projectedBounds(map: CityMap, floors: FeatureCollection, id: string): Bounds | null {
+  const matrix = map._camera.transform.getProjectionDataForCustomLayer(true).mainMatrix;
+  const { clientWidth: width, clientHeight: height } = map.getCanvas();
+  const points: { x: number; y: number }[] = [];
+  for (const feature of floors.features) {
+    if (String(feature.properties?.building_id) !== id) continue;
+    const geometry = feature.geometry;
+    const polygons = geometry.type === "Polygon" ? [geometry.coordinates] : geometry.type === "MultiPolygon" ? geometry.coordinates : [];
+    for (const polygon of polygons) for (const position of polygon[0] ?? []) {
+      const lng = position[0], lat = position[1], roof = Number(feature.properties?.height_m);
+      if (lng === undefined || lat === undefined || !Number.isFinite(roof)) continue;
+      for (const altitude of [0, roof]) {
+        const point = MercatorCoordinate.fromLngLat([lng, lat], altitude);
+        const vector = [point.x, point.y, point.z, 1];
+        const clip = [0, 1, 2, 3].map(row => vector.reduce((sum, value, col) => sum + value * matrix[col * 4 + row]!, 0));
+        if (clip[3]! > 0) points.push({ x: (clip[0]! / clip[3]! + 1) * width / 2, y: (1 - clip[1]! / clip[3]!) * height / 2 });
+      }
+    }
+  }
+  return points.length ? { left: Math.min(...points.map(p => p.x)), right: Math.max(...points.map(p => p.x)), top: Math.min(...points.map(p => p.y)), bottom: Math.max(...points.map(p => p.y)) } : null;
+}
+
+const LABEL_WIDTH = 160, LABEL_HEIGHT = 32, LABEL_GAP = 16;
+function PointerMarker({ x, y, color, nickname, bounds, width, height }: { x: number; y: number; color: string; nickname: string; bounds: Bounds | null; width: number; height: number }) {
+  const clamp = (value: number, max: number) => Math.max(8, Math.min(value, max - 8));
+  let left = clamp(x + LABEL_GAP, width - LABEL_WIDTH), top = clamp(y + LABEL_GAP, height - LABEL_HEIGHT);
+  if (bounds) {
+    if (bounds.right + LABEL_GAP + LABEL_WIDTH <= width - 8) left = bounds.right + LABEL_GAP;
+    else if (bounds.left - LABEL_GAP - LABEL_WIDTH >= 8) left = bounds.left - LABEL_GAP - LABEL_WIDTH;
+    else if (bounds.top - LABEL_GAP - LABEL_HEIGHT >= 8) top = bounds.top - LABEL_GAP - LABEL_HEIGHT;
+    else top = bounds.bottom + LABEL_GAP;
+  }
+  const endX = Math.max(left, Math.min(x, left + LABEL_WIDTH));
+  const endY = Math.max(top, Math.min(y, top + LABEL_HEIGHT));
+  const distance = Math.hypot(endX - x, endY - y) || 1;
+  return <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+    {bounds && <svg aria-hidden="true" width="100%" height="100%" style={{ position: "absolute", inset: 0 }}>
+      <line x1={x + (endX - x) * 7 / distance} y1={y + (endY - y) * 7 / distance} x2={endX} y2={endY} stroke={color} strokeWidth={1} opacity={0.6} />
+    </svg>}
+    <div data-testid="dot" style={{ position: "absolute", left: x, top: y, width: 12, height: 12, transform: "translate(-50%, -50%)", boxSizing: "border-box", border: `2px solid ${color}`, borderRadius: "50%", background: "transparent", transition: "left 60ms linear, top 60ms linear" }} />
+    <span data-testid="pointer-label" style={{ position: "absolute", left, top, width: LABEL_WIDTH, height: LABEL_HEIGHT, boxSizing: "border-box", padding: "2px 8px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 20, lineHeight: "28px", color, background: "#101b2be6", borderRadius: 6 }}>{nickname}</span>
+  </div>;
+}
 
 export function City({ onHover }: { onHover?: (id: string | null) => void }) {
   const container = useRef<HTMLDivElement>(null);
@@ -191,7 +237,7 @@ export function City({ onHover }: { onHover?: (id: string | null) => void }) {
       lastQuery = now;
       const next: Hover[] = [];
       for (const [player, p] of Object.entries(current.current.pointers)) {
-        // The visible beam is 22 px wide. A small hit area keeps its edge
+        // A small hit area keeps the hollow ring responsive at its edge
         // responsive while the attract camera orbits and touch rounds pixels.
         const x = p.x * map.getCanvas().clientWidth, y = p.y * map.getCanvas().clientHeight;
         const feature = map.queryRenderedFeatures([[x - 6, y - 6], [x + 6, y + 6]], { layers: ["floors"] })[0];
@@ -212,7 +258,7 @@ export function City({ onHover }: { onHover?: (id: string | null) => void }) {
           map.setFilter(`${layer}-floor`, ["all", ["==", ["get", "building_id"], building ?? ""], ["==", ["get", "floor_number"], hit?.floor ?? -1]]);
           outlined.set(layer, key);
         }
-        if (building) next.push({ player, building, color: p.color, floor: hit?.floor ?? null });
+        if (building) next.push({ player, building, color: p.color, floor: hit?.floor ?? null, bounds: geo.current.floors ? projectedBounds(map, geo.current.floors, building) : null });
       }
       for (const player of hits.keys()) if (!current.current.pointers[player]) hits.delete(player);
       for (const layer of outlined.keys()) {
@@ -277,9 +323,10 @@ export function City({ onHover }: { onHover?: (id: string | null) => void }) {
         <div className="skyline-legend"><span><i style={{ background: "#1a1d2b" }} />Dark</span><span><i style={{ background: "#4a4636" }} />Partial</span><span><i style={{ background: "#f2c46d" }} />Occupied</span><span><i style={{ background: "#3a3f52" }} />Unknown</span></div>
       </div>}
       <Sparks target={flashPoint} />
-      {Object.entries(pointers).map(([id, p]) => <div key={id} data-testid="dot" style={{ pointerEvents: "none", position: "absolute", left: `${p.x * 100}%`, top: `${p.y * 100}%`, width: 22, height: 22, marginLeft: -11, marginTop: -11, borderRadius: "50%", background: p.color, boxShadow: `0 0 16px 6px ${p.color}`, transition: "left 60ms linear, top 60ms linear" }}>
-        <span style={{ position: "absolute", top: 26, fontSize: 28 }}>{players[id]?.nickname}</span>
-      </div>)}
+      {mapRef.current && Object.entries(pointers).map(([id, p]) => <PointerMarker key={id}
+        x={p.x * mapRef.current!.getCanvas().clientWidth} y={p.y * mapRef.current!.getCanvas().clientHeight}
+        width={mapRef.current!.getCanvas().clientWidth} height={mapRef.current!.getCanvas().clientHeight}
+        color={p.color} nickname={players[id]?.nickname ?? ""} bounds={hovers.find(h => h.player === id)?.bounds ?? null} />)}
       <div style={{ position: "absolute", left: 16, top: 16, display: "flex", flexWrap: "wrap", alignItems: "start", gap: 8, pointerEvents: "none", right: 16 }}>
         {hovers.map((h) => <HoverCard key={`${dataMode}-${h.player}-${h.building}`} id={h.building} floor={h.floor} color={h.color} onError={factError} />)}
       </div>
