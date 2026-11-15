@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { factDescription, cachedDossier, wholeNumbers, getDossier, type Dossier } from "../../lib/buildings";
 
-export function HoverCard({ id, color, onError }: { id: string; color: string; onError: () => void }) {
+export function HoverCard({ id, floor, color, onError }: { id: string; floor?: number | null; color: string; onError: () => void }) {
   const [data, setData] = useState<Dossier | null>(() => cachedDossier(id));
   useEffect(() => {
     let active = true;
@@ -14,12 +14,14 @@ export function HoverCard({ id, color, onError }: { id: string; color: string; o
     ? floors.reduce((sum, f) => sum + (f.available_sqft ?? 0), 0) : null;
   const said = data?.facts?.find((f) => f.key === "available_sqft")?.say_as;
   const spoken = said ? wholeNumbers(said) : null;
-  return <article data-testid="hover-card" style={{ border: `2px solid ${color}`, borderRadius: 12, padding: 16, background: "#10131cef", fontSize: 28 }}>
+  return <article data-testid="hover-card" className="hover-card" style={{ border: `2px solid ${color}`, borderRadius: 12, padding: 16, background: "#10131cef", fontSize: 28, boxShadow: `0 8px 36px #0006, 0 0 24px ${color}25` }}>
     <strong>{data?.name ?? "Building"}</strong>
+    {floor != null && <div style={{ color }}>Floor {floor} · under your beam</div>}
     {data?.stories != null && <div>{data.stories} stories</div>}
     {floors && <div>{floors.filter((f) => f.source_status === "dark").length} dark floors</div>}
     {(spoken || available !== null) && <div>{spoken ?? `${available?.toLocaleString()} sq ft available`}</div>}
     {data?.facts?.filter((fact) => fact.source === "vexcel+vision").map((fact) => <div key={fact.id}>{factDescription(fact)}</div>)}
     {!data && <div>Loading facts…</div>}
+    <div className="wake-affordance" style={{ borderColor: color }}>Wake on your phone ↗</div>
   </article>;
 }
