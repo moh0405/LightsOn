@@ -8,10 +8,12 @@ const FADE_SECTOR_DEG = 35;
 export interface Occluder { index: number; distance: number; azimuth: number; height: number; radius?: number }
 export interface CameraPlan { bearing: number; faded: number[] }
 
-function ring(feature: Feature): Position[] {
+type Point = [number, number];
+const points = (positions: Position[]): Point[] => positions.map((p) => [p[0] ?? NaN, p[1] ?? NaN]);
+function ring(feature: Feature): Point[] {
   const g = feature.geometry;
-  if (g?.type === "Polygon") return g.coordinates[0] ?? [];
-  if (g?.type === "MultiPolygon") return g.coordinates.flatMap((p) => p[0] ?? []);
+  if (g?.type === "Polygon") return points(g.coordinates[0] ?? []);
+  if (g?.type === "MultiPolygon") return g.coordinates.flatMap((p) => points(p[0] ?? []));
   return [];
 }
 const angleDiff = (a: number, b: number) => Math.abs(((a - b + 540) % 360) - 180);
@@ -69,11 +71,11 @@ export function targetHeight(floors: FeatureCollection, buildingId: string): num
 }
 
 /** The hero's footprint centre and radius (m) from floors.geojson; the dossier point can sit off the footprint. */
-export function footprint(floors: FeatureCollection, buildingId: string): { center: [number, number]; radius: number } | null {
+export function footprint(floors: FeatureCollection, buildingId: string): { center: Point; radius: number } | null {
   const pts = floors.features.filter((f) => String(f.properties?.building_id) === buildingId).flatMap(ring);
   if (!pts.length) return null;
   const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
-  const center: [number, number] = [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2];
+  const center: Point = [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2];
   const mx = 111320 * Math.cos((center[1] * Math.PI) / 180), my = 110540;
   return { center, radius: Math.max(...pts.map((p) => Math.hypot((p[0] - center[0]) * mx, (p[1] - center[1]) * my))) };
 }
