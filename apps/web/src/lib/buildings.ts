@@ -11,6 +11,11 @@ export interface DossierFact {
 export function wholeNumbers(text: string): string {
   return text.replace(/(\d)\.0+(?![\d.])/g, "$1");
 }
+/** Hover-card line: the dossier's listed available space, labelled so it is not read as building size. */
+export function availableSpaceLine(sayAs: string | null | undefined, sqft: number | null): string | null {
+  if (sayAs) return `Available space: ${wholeNumbers(sayAs)}`;
+  return sqft === null ? null : `Available space: ${sqft.toLocaleString("en-US")} sq ft`;
+}
 export function factDescription(fact: DossierFact): string {
   return `${fact.kind === "estimate" ? "Estimate · " : ""}${fact.say_as == null ? "Source text unavailable" : wholeNumbers(fact.say_as)}`;
 }

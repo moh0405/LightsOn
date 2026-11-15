@@ -6,8 +6,10 @@ import { loadMedia } from "./media";
 import { useTours } from "./tours";
 import { TourFrame } from "./TourFrame";
 
-export const INTRO_TOUR_START_MS = 2000;
-export const INTRO_TOUR_DURATION_MS = 6000;
+// The client hears INTRO up to ~0.5 s after the server starts its 8 s timer;
+// a 1 s lead-in keeps the preloaded tour on screen for at least six seconds.
+export const INTRO_TOUR_START_MS = 1000;
+export const INTRO_TOUR_DURATION_MS = 7000;
 
 export function IntroMedia({ onError }: { onError: (message: string) => void }) {
   const { buildingId, roundId, dataMode, phase } = useGame(useShallow(s => ({ buildingId: s.buildingId, roundId: s.roundId, dataMode: s.dataMode, phase: s.phase })));
@@ -38,7 +40,7 @@ export function IntroMedia({ onError }: { onError: (message: string) => void }) 
   // Fixed child order keeps the preloading iframe mounted when its beat starts.
   return <>
     {tour && visible && <div className="intro-media" data-testid="matterport-still" aria-hidden={!showTour} style={{ visibility: showTour ? "visible" : "hidden" }}><TourFrame key={tour.model_id} tour={tour} /></div>}
-    {!beat && elapsed < INTRO_DIVE_MS ? <div className="intro-approach" data-testid="intro-approach">Meet your next investor</div> : null}
+    {!beat && !aerial && elapsed < INTRO_DIVE_MS ? <div className="intro-approach" data-testid="intro-approach">Meet your next investor</div> : null}
     {aerial && <figure className="intro-media" key={aerial.src} data-testid="intro-aerial" style={{ animationDuration: `${MEDIA_BEAT_MS}ms` }}>
       <img src={aerial.src} alt={aerial.caption ?? "Aerial view"} onError={() => { console.warn("Local aerial unavailable; skipping beat"); onError("Aerial image unavailable. Continuing the approach."); setBeats((list) => list.filter((b) => b.src !== aerial.src)); }} />
       <figcaption>{aerial.caption}{aerial.captureDate ? ` · Captured ${aerial.captureDate}` : ""}</figcaption>

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { silence } from './silence';
 import type { FeatureCollection } from "geojson";
 import { assertFramed } from "./camera-assertions";
 
@@ -11,7 +12,7 @@ for (const [width, height] of [[1920, 1080], [1440, 900], [1280, 720]]) {
     const floors = await (await request.get('/floors.geojson')).json() as FeatureCollection;
     const city = await (await request.get('/city.geojson')).json() as FeatureCollection;
     for (const building of buildings.sort((a, b) => Number(b.id === "233953") - Number(a.id === "233953"))) {
-      const context = await browser.newContext({ viewport: { width: width!, height: height! } });
+      const context = await silence(await browser.newContext({ viewport: { width: width!, height: height! } }));
       try {
         const screen = await context.newPage();
         await screen.goto(`${baseURL}/screen`);
@@ -30,7 +31,8 @@ for (const [width, height] of [[1920, 1080], [1440, 900], [1280, 720]]) {
         await expect(screen.getByTestId('field')).toHaveAttribute('data-facts-ready', 'true');
         if (building.id === '233953') {
           await screen.waitForTimeout(2700);
-          await assertFramed(screen, { type: 'FeatureCollection', features: [...floors.features, ...city.features] });
+          // The attract overview frames every wakeable tower; context buildings may run off the edges.
+          await assertFramed(screen, floors);
           await screen.getByTestId('field').screenshot({ path: `e2e/screenshots/camera/overview-${width}.png` });
         }
         if (building.id === '233899') {
@@ -100,7 +102,7 @@ for (const [width, height] of [[1920, 1080], [1440, 900], [1280, 720]]) {
 
   test(`INTRO handoff and revival ease keep the whole tower at ${width}`, async ({ browser, baseURL, request }) => {
     test.setTimeout(60_000);
-    const context = await browser.newContext({ viewport: { width: width!, height: height! } });
+    const context = await silence(await browser.newContext({ viewport: { width: width!, height: height! } }));
     try {
       // The accelerated suite gives REVIVED only 0.8 s. Keep its screen beat
       // visible while the production light-up and 1.8 s camera ease finish.

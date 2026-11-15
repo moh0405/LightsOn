@@ -6,6 +6,8 @@ import { ConceptCard } from "./ConceptCard";
 import { useAnimatedNumber } from "../animated";
 import type { Need } from "../../lib/protocol";
 const card: CSSProperties = { background: "#171e2de8", border: "1px solid #39455a", borderRadius: 16, padding: 20 };
+// Short projector headings; the full criterion name stays in the accessible label.
+const SCORE_COLUMNS = [["Player", "Player"], ["Data", "Data fit"], ["Local", "Neighborhood fit"], ["Ideas", "Creativity"], ["Charm", "Charm"], ["Bonus", "Needs bonus"], ["Total", "Total"]] as const;
 const labels: Record<Need, string> = { housing: "Housing", food_retail: "Food and retail", entertainment: "Entertainment", community: "Community" };
 
 export function Subtitles() {
@@ -52,8 +54,9 @@ export function ScoreCard() {
   return <section data-testid="score-card" style={card}>
     <h2 style={{ color: players[verdict.winner_player_id]?.color }}>{players[verdict.winner_player_id]?.nickname ?? "Player"} wins · {verdict.category.replaceAll("_", " ")}</h2>
     <p>{verdict.reason_line}</p><p>{verdict.desire_reveal}</p>
-    <div style={{ overflowX: "auto" }}><table style={{ width: "100%", textAlign: "left", borderSpacing: "12px" }}><thead><tr>{["Player", "Data fit", "Neighborhood fit", "Creativity", "Charm", "Needs bonus", "Total"].map((label) => <th key={label}>{label}</th>)}</tr></thead>
-      <tbody>{verdict.scores.map((s) => <tr key={s.player_id}><th>{players[s.player_id]?.nickname ?? "Player"}</th><td>{s.data_fit}/10</td><td>{s.neighborhood_fit}/10</td><td>{s.creativity}/10</td><td>{s.charm}/10</td><td>+{s.needs_bonus ?? 0} (included)</td><td>{s.total ?? "—"}/40</td></tr>)}</tbody></table></div>
+    <div style={{ overflowX: "auto" }}><table className="score-table"><thead><tr>{SCORE_COLUMNS.map(([label, full]) => <th key={label} scope="col" title={full} aria-label={full}>{label}</th>)}</tr></thead>
+      <tbody>{verdict.scores.map((s) => <tr key={s.player_id}><th scope="row">{players[s.player_id]?.nickname ?? "Player"}</th><td>{s.data_fit}</td><td>{s.neighborhood_fit}</td><td>{s.creativity}</td><td>{s.charm}</td><td>+{s.needs_bonus ?? 0}</td><td><strong>{s.total ?? "—"}</strong></td></tr>)}</tbody></table></div>
+    <p className="score-note"><small>Criteria out of 10 · total out of 40 · needs bonus included in total</small></p>
     <Evidence ids={verdict.fact_ids} />
     <footer>Game character. Not a feasibility assessment.</footer>
     {verdict.category === "housing" && impact?.kind === "housing_estimate" && <p>{typeof impact.units === "number" ? impact.units : "—"} homes · {typeof impact.residents === "number" ? impact.residents : "—"} residents — rough game estimate, not a feasibility claim</p>}
