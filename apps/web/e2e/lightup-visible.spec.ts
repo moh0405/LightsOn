@@ -1,4 +1,5 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
+import { silence } from "./silence";
 
 // PRD protected moment 3: after the wake dive, the hero's lit floors must be on screen and not
 // hidden behind a context tower. The suite runs phase timers at 0.1x, so REVIVED would last
@@ -10,7 +11,7 @@ const SLIVER_PX = Number(process.env.LO_LIGHTUP_MIN_PX ?? 2000);
 const phase = (page: Page) => page.getByTestId("phase").locator("strong");
 
 async function changedPixels(browser: Browser, a: Buffer, b: Buffer): Promise<number> {
-  const context = await browser.newContext();
+  const context = await silence(await browser.newContext());
   try {
     const page = await context.newPage();
     return await page.evaluate(async ([x, y]) => {
@@ -36,8 +37,8 @@ async function changedPixels(browser: Browser, a: Buffer, b: Buffer): Promise<nu
 
 test("hero's lit floors are visible after the dive", async ({ browser, baseURL }) => {
   test.setTimeout(90_000);
-  const desktop = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
-  const mobile = await browser.newContext();
+  const desktop = await silence(await browser.newContext({ viewport: { width: 1920, height: 1080 } }));
+  const mobile = await silence(await browser.newContext());
   try {
     let revived = false;
     await desktop.routeWebSocket(/\/ws\/.*role=screen/, (socket) => {
