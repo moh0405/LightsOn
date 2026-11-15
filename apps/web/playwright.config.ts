@@ -21,7 +21,7 @@ export default defineConfig({
   fullyParallel: false,
   reporter: "list",
   globalTeardown: "./e2e/teardown.ts",
-  use: { baseURL: webURL, trace: "retain-on-failure", launchOptions: { args: ["--use-gl=swiftshader", "--enable-unsafe-swiftshader"] } },
+  use: { baseURL: webURL, trace: "retain-on-failure", launchOptions: { args: ["--use-gl=swiftshader", "--enable-unsafe-swiftshader", ...(process.env.AUDIO_AUTOPLAY_DIAG ? ["--autoplay-policy=no-user-gesture-required"] : [])] } },
   projects: [{ name: "chromium", use: { browserName: "chromium" } }],
   webServer: [
     {
@@ -29,7 +29,7 @@ export default defineConfig({
       cwd: "../../server",
       url: `${apiURL}/api/health`,
       reuseExistingServer: false,
-      env: { AGENT_MODE: "fake", STATE_DIR: stateDir, HOST_PIN: "1234", PHASE_DURATIONS_SCALE: "0.1", PUBLIC_BASE_URL: "", DATA_MODE: "kit" },
+      env: { AGENT_MODE: "fake", STATE_DIR: stateDir, HOST_PIN: "1234", PHASE_DURATIONS_SCALE: process.env.PHASE_DURATIONS_SCALE ?? "0.1", PUBLIC_BASE_URL: "", DATA_MODE: "kit" },
     },
     {
       command: `pnpm dev --host 127.0.0.1 --port ${webPort} --strictPort`,
