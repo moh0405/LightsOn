@@ -58,7 +58,7 @@ async def test_live_verdict_publishes_nicknames_not_aliases(monkeypatch, mode):
                pitch('A single-floor arcade', 'bbbb2222')]
     async def model(step, system, content, schema, timeout):
         if step == 'claim_check':
-            return {'checks': [{'supported': True, 'reason': ''} for _ in json.loads(content)]}
+            return {'checks': [{'index': row['index'], 'supported': True, 'reason': ''} for row in json.loads(content)]}
         assert 'nickname="Ann"' in content and 'nickname="Bo"' in content
         proposal = fake_agent.verdict([p.model_copy(update={'player_id': f'candidate_{i}'})
                                        for i, p in enumerate(pitches)], dossier, City())

@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 import math
+from decimal import Decimal
 import re
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from .prompts import safe_facts
 from .persona import fact_line
@@ -13,7 +14,7 @@ NUMBER_WORDS = dict(zero=0, one=1, two=2, three=3, four=4, five=5, six=6, seven=
                     eight=8, nine=9, ten=10, eleven=11, twelve=12, thirteen=13, fourteen=14, fifteen=15,
                     sixteen=16, seventeen=17, eighteen=18, nineteen=19, twenty=20, thirty=30, forty=40,
                     fifty=50, sixty=60, seventy=70, eighty=80, ninety=90,
-                    hundred=100, thousand=1000, million=1000000)
+                    hundred=100, thousand=1000, million=1000000, billion=1000000000)
 _WORD = '(?:' + '|'.join(sorted(NUMBER_WORDS, key=len, reverse=True)) + ')'
 # Unit words that may follow a hyphenated number: "twenty-seven-story", "nine-million-square-foot".
 _HYPHEN_UNIT = r'(?:square|sq\b|stor(?:y|ey|ies|eys)\b|floors?\b|foot\b|feet\b|ft\b|years?\b|percent\b)'
@@ -26,13 +27,32 @@ UNITS = {'sqft': r'(?:sq\.?\s*ft\.?|square\s+feet|square\s+foot)', 'ft': r'(?:ft
 
 class ClaimCheck(BaseModel):
     model_config = ConfigDict(extra='forbid', strict=True)
+    index: int = Field(ge=0)
     supported: bool
     reason: str
 
 
 class ClaimChecks(BaseModel):
-    model_config = ConfigDict(extra='forbid', strict=True)
-    checks: list[ClaimCheck]
+    # Malformed/missing entries are unsupported claims, not a malformed verdict.
+    model_config = ConfigDict(extra='ignore', strict=True)
+    checks: list[ClaimCheck] = Field(default_factory=list)
+
+    @field_validator('checks', mode='before')
+    @classmethod
+    def parse_entries(cls, rows):
+        if not isinstance(rows, list):
+            return []
+        parsed = []
+        for row in rows:
+            try:
+                parsed.append(ClaimCheck.model_validate(row))
+            except ValidationError:
+                # Keep an identifiable malformed result so a duplicate valid one
+                # cannot hide it. Unidentifiable entries cannot support any claim.
+                index = row.get('index') if isinstance(row, dict) else None
+                if type(index) is int and index >= 0:
+                    parsed.append(ClaimCheck(index=index, supported=False, reason='Unparsed claim result'))
+        return parsed
 
 
 def number_value(text: str) -> float:
@@ -79,6 +99,27 @@ def hyphen_numbers(line: str) -> str:
     return re.sub(r'\bsquare-(foot|feet)\b', r'square \1', line, flags=re.I)
 
 
+MAGNITUDES = {'k': 1000, 'm': 1000000, 'b': 1000000000,
+              'thousand': 1000, 'million': 1000000, 'billion': 1000000000}
+# Uppercase M/B are magnitude suffixes; lowercase m may mean meters.
+MAGNITUDE = re.compile(
+    rf'(?<![\w.])(?P<amount>[-+]?(?:\d{{1,3}}(?:,\d{{3}})+|\d+)(?:\.\d+)?|'
+    rf'half(?:\s+a)?|{_WORD}(?:[ -]+{_WORD})*)'
+    r'(?:(?:[ -]+)(?P<word>thousand|million|billion)|(?P<suffix>(?-i:[kKMB])))\b', re.I)
+
+
+def normalize_magnitudes(line: str) -> str:
+    """Expand whole quantities before any per-word or per-number checks."""
+    def expand(match):
+        amount = match['amount'].casefold()
+        value = (Decimal('.5') if amount.startswith('half') else
+                 Decimal(amount.replace(',', '')) if re.match(r'[-+]?\d', amount) else
+                 Decimal(words_value(amount)))
+        scale = MAGNITUDES[(match['word'] or match['suffix']).casefold()]
+        return format(value * scale, 'f')
+    return MAGNITUDE.sub(expand, hyphen_numbers(line))
+
+
 SCORE_MAX = 40  # four 0-10 scores; the server clamps and totals them
 
 
@@ -106,7 +147,7 @@ def quoted_numbers(texts: list[str] | None) -> set[tuple[float, str | None]]:
     """(value, unit) pairs written in player pitches, normalized like dialogue."""
     found = set()
     for text in texts or []:
-        text = hyphen_numbers(text)
+        text = normalize_magnitudes(text)
         text = re.sub(r'\b(' + '|'.join(NUMBER_WORDS) + r')\b', lambda m: str(NUMBER_WORDS[m[0].lower()]), text, flags=re.I)
         text = re.sub(r'(\d[\d,]*(?:\.\d+)?)\s+(1000|1000000)\b',
                       lambda m: str(float(m[1].replace(',', '')) * float(m[2])), text)
@@ -114,10 +155,56 @@ def quoted_numbers(texts: list[str] | None) -> set[tuple[float, str | None]]:
     return found
 
 
+def fact_number_matches(value: float, unit: str | None, fact: dict) -> bool:
+    expected = fact['value']
+    exact = (fact['key'].startswith('construction_') or fact['key'] in
+             {'yearBuilt', 'yearRenovated', 'numStoriesAboveGrade', 'dark_floor_count'})
+    fact_unit = fact['unit'] or {'numStoriesAboveGrade': 'stories', 'parkingRatio': 'spaces_per_1000_sqft'}.get(fact['key'])
+    return (type(expected) in (int, float) and (unit is None or unit == fact_unit)
+            and math.isclose(value, expected, rel_tol=0 if exact else .001, abs_tol=0 if exact else .005))
+
+
+def repair_citations(line: str, fact_ids: list[str], dossier: dict, quoted: list[str]) -> list[str]:
+    """Append only unambiguous number+unit evidence; never replace invalid IDs.
+
+    Existing citations resolve ambiguity. Pitch quantities are not building evidence,
+    and unitless labels cannot acquire citations by guessing. All checks still run.
+    """
+    refs = list(fact_ids)
+    facts = safe_facts(dossier)
+    pitched = quoted_numbers(quoted)
+    for value, unit in sorted(quoted_numbers([line]), key=lambda pair: (pair[0], pair[1] or '')):
+        if unit is None or (value, unit) in pitched:
+            continue
+        matches = [f['id'] for f in facts if fact_number_matches(value, unit, f)]
+        if any(fid in refs for fid in matches):
+            continue
+        if len(matches) == 1:
+            refs.append(matches[0])
+    return refs
+
+
+def pitch_quantity(value: float, unit: str | None, pitched: set[tuple[float, str | None]], before: str, after: str) -> bool:
+    # A missing unit may borrow the player's unit; an explicit wrong unit may not.
+    if not any(value == v and u is not None and (unit is None or unit == u) for v, u in pitched):
+        return False
+    # An unrecognized explicit unit (cars, meters, etc.) is not an omitted unit.
+    if unit is None and not re.match(
+            r"(?:\s*$|\s*[,.;:!?—–)]|\s+(?:is|are|was|were|would|could|should|will|won.t|can.t|seems?|looks?|sounds?|feels?|on|onto|into|for)\b)",
+            after, re.I):
+        return False
+    clause = re.split(r'[.!?;:\u2014\u2013]', before)[-1]
+    # Quoting a player never establishes building dimensions or inventory.
+    return not re.search(r"\b(?:(?:my|our|this building.s)\s+(?:typical\s+)?(?:floor|building|height|area|space|capacity)|"
+                         r"(?:i|we|this building)\s+(?:have|has|offer|contain|stand|rise|give))\b", clause, re.I)
+
+
 def check_line(line: str, fact_ids: list[str], dossier: dict, impact: dict | None = None,
                quoted: list[str] | None = None) -> str | None:
-    """quoted: this round's pitch texts. A verdict may restate a player's own number with its unit
-    ("a nine-million-square-foot restaurant"); that quotes the pitch, it is not a building fact."""
+    """quoted: relevant pitch texts (only this player for a challenge).
+    Dialogue may repeat a pitched quantity with its unit or borrow an omitted unit;
+    the pitch never supplies evidence of building dimensions or capacity.
+    """
     facts = {f['id']: f for f in safe_facts(dossier)}
     if any(fid not in facts or facts[fid]['value'] is None for fid in fact_ids):
         return 'Unknown or null fact ID'
@@ -136,6 +223,7 @@ def check_line(line: str, fact_ids: list[str], dossier: dict, impact: dict | Non
         return 'Estimate must say looks like'
     # Quantified physical claims use number words; conversational "one idea" or
     # "two of you" is game dialogue, left to the semantic claim check.
+    line = normalize_magnitudes(line)
     def spoken_number(match):
         after = line[match.end():]
         before = line[:match.start()]
@@ -144,15 +232,17 @@ def check_line(line: str, fact_ids: list[str], dossier: dict, impact: dict | Non
         asserted = re.search(r'\b(?:i|we|this building)\s+(?:have|has|had|own|contain|offer|rise|stand)\b', clause, re.I)
         # "a restaurant on one floor" restates a pitch's plan, like "fits one floor".
         placed = re.search(r'\b(?:on|onto|into)\s+$', before, re.I)
+        pilot = (re.search(r'\ba\s+$', before, re.I)
+                 and re.match(r'\s+floor\s+pilot\b', after, re.I))
         if (match[0].casefold() == 'one' and re.match(r'\s+floor\b', after, re.I)
-                and (hypothetical or placed) and not asserted):
+                and (hypothetical or placed or pilot) and not asserted):
             return match[0]  # "start on one floor" proposes a plan, not an existing floor count
         physical = (number_unit(after) is not None
                     or re.match(r'\s+(?:dark\s+)?(?:floors?|trees?|cars?|entries|spaces?|thousand|million)\b', after, re.I)
                     or re.search(r'\bfloor\s*$', before, re.I))
         return str(NUMBER_WORDS[match[0].lower()]) if physical else match[0]
     normalized = re.sub(r'\b(' + '|'.join(NUMBER_WORDS) + r')\b',
-                        spoken_number, hyphen_numbers(line), flags=re.I)
+                        spoken_number, line, flags=re.I)
     normalized = re.sub(r'(\d[\d,]*(?:\.\d+)?)\s+(1000|1000000)\b',
                         lambda m: str(float(m[1].replace(',', '')) * float(m[2])), normalized)
     pitched = quoted_numbers(quoted)
@@ -161,14 +251,8 @@ def check_line(line: str, fact_ids: list[str], dossier: dict, impact: dict | Non
         unit = number_unit(normalized[match.end():])
         supported = False
         for fact in cited:
-            expected = fact['value']
-            exact = (fact['key'].startswith('construction_') or fact['key'] in
-                     {'yearBuilt', 'yearRenovated', 'numStoriesAboveGrade', 'dark_floor_count'})
-            if type(expected) in (int, float) and math.isclose(value, expected,
-                    rel_tol=0 if exact else .001, abs_tol=0 if exact else .005):
-                fact_unit = fact['unit'] or {'numStoriesAboveGrade': 'stories', 'parkingRatio': 'spaces_per_1000_sqft'}.get(fact['key'])
-                if unit is None or unit == fact_unit:
-                    supported = True
+            if fact_number_matches(value, unit, fact):
+                supported = True
             # Floor IDs are labels only in floor context, never arbitrary counts.
             floor = re.match(r'floor_(-?\d+)_', fact['key'])
             if unit is None and floor and value == int(floor[1]) and (
@@ -183,7 +267,7 @@ def check_line(line: str, fact_ids: list[str], dossier: dict, impact: dict | Non
                 supported = True
             if value == 1000 and fact['key'] == 'parkingRatio' and re.search(r'per\s*$', normalized[:match.start()], re.I):
                 supported = True
-        if unit is not None and (value, unit) in pitched:
+        if pitch_quantity(value, unit, pitched, normalized[:match.start()], normalized[match.end():]):
             supported = True
         if game_number(normalized, match.start(), match.end(), value, unit):
             supported = True

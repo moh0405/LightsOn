@@ -346,7 +346,8 @@ class Room:
         async def trace(event):
             if (self.round_id, self._round_seq, self.phase) == token:
                 await self.broadcast('agent_step', event, to='screen')
-                if event['step'] == 'fallback':
+                # Ordinary judge fallback is diagnostic; unexpected room errors remain visible.
+                if event['step'] == 'fallback' and event['tool'] == 'room':
                     await self.broadcast('error', {'code': 'agent_fallback',
                         'message': 'The building is using its offline judge for this step.'})
         published: set[str] = set()
