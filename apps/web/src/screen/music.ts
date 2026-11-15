@@ -152,6 +152,9 @@ export async function browserSpeech(text: string, persona: PersonaVoice, _mood: 
       speech.voice = voice; speech.lang = voice?.lang ?? "en-US";
       // Mood belongs in the words; keep the building's voice intelligible.
       speech.rate = 1; speech.pitch = 1;
+      // Automated browsers (Playwright sets navigator.webdriver) must stay silent: the OS speech engine
+      // plays through the real speakers even when the browser is headless.
+      if (navigator.webdriver) speech.volume = 0;
       let settled = false;
       const finish = (error?: string) => {
         if (settled) return;
