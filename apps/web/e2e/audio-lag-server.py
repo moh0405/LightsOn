@@ -19,8 +19,13 @@ from app.models import Pitch
 from app.rooms import DEFAULT_DURATIONS, utcnow
 
 # Host drives transitions after the native voice completes; no phase is shortened.
-for phase in DEFAULT_DURATIONS:
-    DEFAULT_DURATIONS[phase] = 600
+# AUDIO_LAG_REALTIME=1 keeps the demo preset's real timers instead (no host skips).
+REALTIME = bool(os.environ.get('AUDIO_LAG_REALTIME'))
+if REALTIME:
+    os.environ.update(DEMO_MODE='1', PHASE_DURATIONS_SCALE='1')
+else:
+    for phase in DEFAULT_DURATIONS:
+        DEFAULT_DURATIONS[phase] = 600
 
 def forbidden(*args, **kwargs):
     raise AssertionError('Audio measurements forbid paid provider/prep calls')
@@ -55,7 +60,8 @@ if os.environ.get('AUDIO_LAG_AGENT') == 'recorded':
     # Let the actual preliminary line reach the screen before replay completes.
     original_call = live_agent.LiveAgent.call
     async def delayed_call(self, *args, **kwargs):
-        await asyncio.sleep(.15)
+        # Realtime runs model a slow live turn so the thinking line and the timer race are real.
+        await asyncio.sleep(float(os.environ.get('AUDIO_LAG_AGENT_DELAY', '.15')))
         return await original_call(self, *args, **kwargs)
     live_agent.LiveAgent.call = delayed_call
 else:

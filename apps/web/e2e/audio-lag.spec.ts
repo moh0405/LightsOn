@@ -7,7 +7,9 @@ type Entry = { ms: number; event: string; id?: number; type?: string; text?: str
 
 // Opt in: this uses actual OS voices and takes several minutes, unlike speech mocks.
 test.skip(!process.env.AUDIO_LAG_MEASURE, 'Native audio measurement is opt-in');
-const ids = process.env.AUDIO_LAG_AGENT === 'recorded' ? ['233953'] : ['233899', '233905', '233918', '233928', '233935', '233953', '519027'];
+// Demo path: the demo preset's real phase timers, no host skips (Esperson only).
+const realtime = !!process.env.AUDIO_LAG_REALTIME;
+const ids = realtime || process.env.AUDIO_LAG_AGENT === 'recorded' ? ['233953'] : ['233899', '233905', '233918', '233928', '233935', '233953', '519027'];
 for (const mode of (process.env.AUDIO_LAG_DATA ? [process.env.AUDIO_LAG_DATA] : ['kit'])) for (const building of ids) {
   test(`native audio ${mode} ${building} ${process.env.AUDIO_LAG_AGENT ?? 'fake'}`, async ({ browser, baseURL }, info) => {
     const context = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
@@ -28,6 +30,7 @@ for (const mode of (process.env.AUDIO_LAG_DATA ? [process.env.AUDIO_LAG_DATA] : 
             if (new URL(url, location.href).searchParams.get('role') !== 'screen') return;
             this.addEventListener('message', e => {
               const raw = JSON.parse(String(e.data));
+              if (raw.type === 'phase_changed') log('phase', { value: raw.phase });
               const m = raw.type === 'room_state' && raw.phase === 'VERDICT' && raw.verdict ? { ...raw.verdict, type: 'verdict' } : raw;
               if (['building_intro', 'counteroffer', 'verdict'].includes(m.type)) {
                 const text = clean(m.text ?? (m.reason_line ?? `${m.line} ${m.counteroffer}`));
@@ -56,7 +59,9 @@ for (const mode of (process.env.AUDIO_LAG_DATA ? [process.env.AUDIO_LAG_DATA] : 
         synth.speak = u => {
           const id = utterance++;
           const text = clean(u.text);
-          const line = lines.find(l => clean(l.text.slice(l.consumed.length)).startsWith(text));
+          // A budgeted challenge speaks a part of its line; match that by containment.
+          const line = lines.find(l => clean(l.text.slice(l.consumed.length)).startsWith(text))
+            ?? lines.find(l => l.key.startsWith('counteroffer:') && !l.consumed && l.text.includes(text.replace(/…$/, '')));
           if (line) line.consumed += `${line.consumed ? ' ' : ''}${text}`;
           const data = { id, line: line?.id, text, speaking: synth.speaking, pending: synth.pending };
           log('speak', data);
@@ -125,7 +130,7 @@ for (const mode of (process.env.AUDIO_LAG_DATA ? [process.env.AUDIO_LAG_DATA] : 
         };
         ws.addEventListener('message', receive); ws.send(JSON.stringify({ ...data, nonce }));
       }), data);
-      const host = async (action = 'skip_phase', extra = {}) => command({ type: 'host_action', room, pin: '1234', action, ...extra });
+      const host = async (action = 'skip_phase', extra = {}) => { if (!realtime || action !== 'skip_phase') await command({ type: 'host_action', room, pin: '1234', action, ...extra }); };
       if (mode !== 'kit') await host('set_data_mode', { data_mode: mode });
       const phones: Page[] = [];
       for (const name of ['Ann', 'Bo']) {
@@ -144,6 +149,7 @@ for (const mode of (process.env.AUDIO_LAG_DATA ? [process.env.AUDIO_LAG_DATA] : 
       await phones[0]!.getByRole('button', { name: `Wake building ${name}`, exact: true }).click();
       const timeline = () => screen.evaluate(() => Reflect.get(window, 'audioLag') as Entry[]);
       const waitSpeech = async (type: string, minLines: number) => {
+        if (realtime) return;
         await expect.poll(async () => (await timeline()).filter(e => e.event === 'message' && e.type === type && e.value !== 'preliminary').length, { timeout: 20000 }).toBeGreaterThanOrEqual(minLines);
         await expect.poll(async () => {
           const entries = await timeline();
@@ -157,7 +163,7 @@ for (const mode of (process.env.AUDIO_LAG_DATA ? [process.env.AUDIO_LAG_DATA] : 
       };
       await waitSpeech('building_intro', 1); console.log(`${building}: intro completed`);
       await host();
-      await expect(screen.getByTestId('phase')).toContainText('PITCH');
+      await expect(screen.getByTestId('phase')).toContainText('PITCH', { timeout: 60000 });
       for (const [i, phone] of phones.entries()) {
         await phone.getByLabel('Your pitch').fill(i === 0 ? 'gym' : 'A public art studio');
         await phone.getByRole('button', { name: 'Submit pitch', exact: true }).click();
@@ -166,18 +172,18 @@ for (const mode of (process.env.AUDIO_LAG_DATA ? [process.env.AUDIO_LAG_DATA] : 
       await waitSpeech('counteroffer', 2);
       console.log(`${building}: counteroffers completed`);
       await host();
-      await expect(screen.getByTestId('phase')).toContainText('NEGOTIATE');
+      await expect(screen.getByTestId('phase')).toContainText('NEGOTIATE', { timeout: 60000 });
       await phones[0]!.getByLabel('Your revision').fill('A public gym welcoming everyone at night');
       await phones[0]!.getByRole('button', { name: 'Send revision', exact: true }).click();
       await host();
       await waitSpeech('verdict', 1); console.log(`${building}: verdict completed`);
       await host();
-      await expect(screen.getByTestId('phase')).toContainText('POWER_UP');
+      await expect(screen.getByTestId('phase')).toContainText('POWER_UP', { timeout: 60000 });
       for (let i = 0; i < 2; i++) {
         for (const phone of phones) await phone.getByRole('button', { name: 'Tap to charge', exact: true }).click();
         if (i === 0) await screen.waitForTimeout(650);
       }
-      await expect(screen.getByTestId('phase')).toContainText('REVIVED');
+      await expect(screen.getByTestId('phase')).toContainText('REVIVED', { timeout: 60000 });
       await screen.waitForTimeout(2500);
       if (cdp) {
         const done = new Promise<{ stream: string }>(resolve => cdp.once('Tracing.tracingComplete', resolve));
@@ -204,8 +210,28 @@ for (const mode of (process.env.AUDIO_LAG_DATA ? [process.env.AUDIO_LAG_DATA] : 
       await info.attach('native timeline', { path, contentType: 'application/json' });
       if (process.env.AUDIO_LAG_OUTPUT) { mkdirSync(process.env.AUDIO_LAG_OUTPUT, { recursive: true }); writeFileSync(join(process.env.AUDIO_LAG_OUTPUT, `${mode}-${building}-${report.agent}.json`), JSON.stringify(report, null, 2)); }
       expect(errors).toEqual([]);
-      expect(entries.filter(e => e.event === 'error')).toEqual([]);
-      if (process.env.AUDIO_LAG_ASSERT) {
+      if (!realtime) expect(entries.filter(e => e.event === 'error')).toEqual([]);
+      if (realtime) {
+        await screen.screenshot({ path: info.outputPath('demo-revived.png') });
+        const phaseAt = (phase: string) => entries.find(e => e.event === 'phase' && e.value === phase)?.ms ?? Infinity;
+        const challenges = metrics.rows.filter(r => r.type === 'counteroffer');
+        const spoken = entries.filter(e => e.event === 'start' && challenges.some(r => r.id === e.line));
+        const summary = { firstWord: Object.fromEntries(['building_intro', 'counteroffer', 'verdict'].map(t => [t, metrics.rows.find(r => r.type === t)?.firstWord])),
+          challengeStarts: spoken.map(e => ({ line: e.line, afterChallenge: e.ms - phaseAt('CHALLENGE'), text: e.text })),
+          lastChallengeEndBeforeNegotiate: phaseAt('NEGOTIATE') - Math.max(...entries.filter(e => e.event === 'end' && challenges.some(r => r.id === e.line)).map(e => e.ms)),
+          cancels: entries.filter(e => e.event === 'cancel').map(e => e.ms), interrupted: entries.filter(e => e.event === 'error').map(e => `${e.error}: ${e.text}`),
+          phases: entries.filter(e => e.event === 'phase').map(e => `${e.value}@${Math.round(e.ms)}`), maxChunkGap: metrics.maxChunkGap, maxLongTask: metrics.maxLongTask };
+        console.log(`${building} demo-path: ${JSON.stringify(summary)}`);
+        if (process.env.AUDIO_LAG_ASSERT) {
+          for (const type of ['building_intro', 'counteroffer', 'verdict']) expect(summary.firstWord[type], `${type} first word`).toBeLessThanOrEqual(300);
+          // A07: both players are challenged aloud, and every spoken challenge ends inside CHALLENGE.
+          expect(new Set(spoken.map(e => e.line)).size, 'each challenge is spoken').toBe(2);
+          expect(summary.lastChallengeEndBeforeNegotiate, 'challenge speech ends before NEGOTIATE').toBeGreaterThanOrEqual(0);
+          expect(metrics.maxChunkGap).toBeLessThanOrEqual(250);
+          expect(metrics.longTasksOver100).toBe(0);
+          expect(metrics.provisionalSpoken).toBe(0);
+        }
+      } else if (process.env.AUDIO_LAG_ASSERT) {
         for (const [i, row] of metrics.rows.entries()) {
           expect(row.completed, `${row.type} completed`).toBe(true);
           expect(row.subtitle, `${row.type} subtitle available`).not.toBeNull();

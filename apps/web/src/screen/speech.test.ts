@@ -6,7 +6,7 @@ const effects: (() => void | (() => void))[] = [];
 vi.mock("react", async (original) => ({ ...await original<object>(), useState: (value: unknown) => [value === false ? true : value, vi.fn()],
   useRef: (value: unknown) => ({ current: value === null ? { duck, restore: vi.fn(), revive: vi.fn(), signature: vi.fn(), dispose: vi.fn() } : value }),
   useEffect: (effect: () => void | (() => void)) => effects.push(effect) }));
-import { browserSpeech, budgetLine, speechChunks, useScreenAudio } from "./music";
+import { browserSpeech, budgetLine, speechChunks, spokenWords, useScreenAudio } from "./music";
 class Utterance {
   text: string; voice = null; rate = 1; pitch = 1;
   onend: (() => void) | null = null; onerror: (() => void) | null = null;
@@ -63,28 +63,52 @@ it("serializes both players, dedupes replays, and keeps ducking until each line 
   expect(spoken).toHaveLength(4);
   expect(duck).toHaveBeenLastCalledWith(false);
 });
-it("stops challenge speech when the host advances, so it never runs into the next phase", async () => {
+it("never cuts a challenge sentence when the host advances; the rest is dropped and the verdict follows", async () => {
   await mount();
-  const offer = { line: "Thank you.", counteroffer: "", audio_url: null, fact_ids: ["F_233953_dark_floor_count"] };
+  const offer = { line: "Thank you.", counteroffer: "Please listen.", audio_url: null, fact_ids: ["F_233953_dark_floor_count"] };
   useGame.setState({ phase: "CHALLENGE", counteroffers: { ann: { ...offer, player_id: "ann" }, bo: { ...offer, player_id: "bo" } } });
   await flush();
-  const before = cancel.mock.calls.length;
   useGame.setState({ phase: "VERDICT", verdict: { reason_line: "Welcome." } as NonNullable<typeof initialGame.verdict> });
   await flush();
-  expect(cancel.mock.calls.length).toBeGreaterThan(before);
+  expect(cancel).not.toHaveBeenCalled();
+  expect(spoken.map(u => u.text)).toEqual(["Thank you."]);
+  spoken[0]!.onend!(); await flush();
   expect(spoken.map(u => u.text)).toEqual(["Thank you.", "Welcome."]);
 });
-it("A07: cuts the active challenge at NEGOTIATE and drops the queued one", async () => {
+it("A07: the sentence in the air at NEGOTIATE finishes; later sentences and the queued player are dropped", async () => {
   await mount();
   const offer = { line: "Thank you.", counteroffer: "Please listen.", audio_url: null, fact_ids: [] };
   useGame.setState({ phase: "CHALLENGE", counteroffers: { ann: { ...offer, player_id: "ann" }, bo: { ...offer, player_id: "bo" } } });
   await flush();
-  const before = cancel.mock.calls.length;
   useGame.setState({ phase: "NEGOTIATE" }); await flush();
-  expect(cancel.mock.calls.length).toBeGreaterThan(before);
+  expect(cancel).not.toHaveBeenCalled();
   spoken[0]!.onend?.(); await flush();
   expect(spoken.map(u => u.text)).toEqual(["Thank you."]);
   expect(duck).toHaveBeenLastCalledWith(false);
+});
+it("A07: budgets a live challenge that arrives before the server arms the CHALLENGE timer", async () => {
+  await mount();
+  const offer = { line: "Dollface, 150,365 square feet across my dark floors await your pitch.", counteroffer: "What footprint would your shared space need? Give your community space a reason to buzz after sunset.", audio_url: null, fact_ids: ["F_233953_dark_floor_count"] };
+  useGame.setState({ phase: "CHALLENGE", endsAt: null,
+    pitches: { ann: { player_id: "ann", text: "a" }, bo: { player_id: "bo", text: "b" } } as unknown as typeof initialGame.pitches,
+    counteroffers: { ann: { ...offer, player_id: "ann" } } });
+  await flush();
+  // Half of the 10 s window: the ask fits, the 18-spoken-word fact line does not.
+  expect(spoken.map(u => u.text)).toEqual(["What footprint would your shared space need?"]);
+  spoken[0]!.onend!(); await flush();
+  expect(spoken).toHaveLength(1);
+});
+it("skips a stalled sentence and continues with the next one, without an error", async () => {
+  vi.useFakeTimers(); await mount();
+  let failed = false;
+  const promise = browserSpeech("Thank you. Please listen.", { voice_style: "", voice_id: "" }, "hopeful", new AbortController().signal).catch(() => { failed = true; });
+  await flush();
+  (spoken[0] as Utterance & { onstart?: () => void }).onstart?.();
+  await vi.advanceTimersByTimeAsync(3100); // two words: 1 s expected + 2 s grace
+  expect(cancel).toHaveBeenCalledTimes(1);
+  expect(spoken.map(u => u.text)).toEqual(["Thank you.", "Please listen."]);
+  spoken[1]!.onend!(); await promise;
+  expect(failed).toBe(false);
 });
 it("A07: does not start a challenge first reported during NEGOTIATE", async () => {
   await mount();
@@ -116,15 +140,27 @@ it("keeps a short challenge whole and shortens a long one at a sentence boundary
   expect(budgetLine("Thank you.", "Please listen. Bring me a tenant for nine floors today.", 4)).toBe("Please listen.");
   expect(budgetLine("Thank you.", "Bring me a tenant for nine floors today.", 4)).toBe("Bring me a tenant…");
   expect(budgetLine("Thank you.", "Bring me a tenant.", 2)).toBe("");
+  // Numbers are read out digit group by digit group: "150,365" costs eight words.
+  expect(spokenWords("150,365 square feet")).toBe(9);
+  expect(budgetLine("I have 150,365 square feet.", "Tell me more.", 8)).toBe("Tell me more.");
 });
-it("cancels on a new round and does not enqueue the remaining chunks", async () => {
+it("a new round lets the sentence in the air finish and does not enqueue the remaining chunks", async () => {
   await mount();
   useGame.setState({ intro: { text: "Thank you. Please listen.", audio_url: null, mood: "hopeful", analyst_line: "" } });
   await flush();
   useGame.setState({ roundId: null, phase: "EXPLORE", intro: null }); await flush();
-  expect(cancel).toHaveBeenCalledTimes(1);
+  expect(cancel).not.toHaveBeenCalled();
+  spoken[0]!.onend!(); await flush();
   expect(spoken).toHaveLength(1);
   expect(duck).toHaveBeenLastCalledWith(false);
+});
+it("a room change (reset) is the only thing that interrupts a sentence", async () => {
+  await mount();
+  useGame.setState({ intro: { text: "Thank you. Please listen.", audio_url: null, mood: "hopeful", analyst_line: "" } });
+  await flush();
+  useGame.setState({ room: "other", roundId: null, phase: "LOBBY", intro: null }); await flush();
+  expect(cancel).toHaveBeenCalledTimes(1);
+  expect(spoken).toHaveLength(1);
 });
 it("uses a natural English voice immediately, not a novelty voice", async () => {
   await mount();
@@ -159,7 +195,9 @@ it("does not impose a 20-second limit on an entire multi-sentence line", async (
   const promise = browserSpeech("Thank you. Please listen. Welcome.", { voice_style: "", voice_id: "" }, "anxious", new AbortController().signal);
   await flush();
   for (let index = 0; index < 3; index++) {
-    await vi.advanceTimersByTimeAsync(9000); spoken[index]!.onend!(); await flush();
+    // A slow voice that keeps reporting word boundaries is alive, not stalled.
+    for (let tick = 0; tick < 9; tick++) { await vi.advanceTimersByTimeAsync(1000); (spoken[index] as Utterance & { onboundary?: () => void }).onboundary?.(); }
+    spoken[index]!.onend!(); await flush();
   }
   await promise; expect(cancel).not.toHaveBeenCalled(); expect(spoken).toHaveLength(3);
 });

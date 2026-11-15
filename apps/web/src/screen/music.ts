@@ -127,21 +127,31 @@ export function speechChunks(text: string): string[] {
 /** Browser voices at rate 1 average roughly 2.5 words per second; stay under it. */
 export const SPOKEN_WORDS_PER_SECOND = 2.4;
 const words = (text: string) => speechChunks(text).join(" ").split(" ").filter(Boolean);
+/** Spoken length in words: "150,365" is read as eight words, not one. */
+export const spokenWords = (text: string) => words(text).reduce((n, word) => {
+  const digits = word.replace(/\D/g, "").length;
+  return n + (digits > 1 ? digits + 1 : 1);
+}, 0);
+/** The server's CHALLENGE window. A live challenge can arrive before its timer is armed. */
+const CHALLENGE_WINDOW_MS = 10_000;
 /** Fit a spoken challenge into `maxWords`. The cards keep the full written
  * challenge and evidence; the voice keeps the ask (the counteroffer), whole
  * sentences first. Under four words nothing useful fits, so it says nothing. */
 export function budgetLine(line: string, counteroffer: string, maxWords: number): string {
   const full = `${line} ${counteroffer}`.trim();
-  if (words(full).length <= maxWords) return full;
+  if (spokenWords(full) <= maxWords) return full;
   if (maxWords < 4) return "";
   const ask = counteroffer.trim() || line.trim();
   let kept = "";
   for (const sentence of ask.split(/(?<=[.!?])\s+/)) {
     const next = `${kept} ${sentence}`.trim();
-    if (words(next).length > maxWords) break;
+    if (spokenWords(next) > maxWords) break;
     kept = next;
   }
-  return kept || `${words(ask).slice(0, maxWords).join(" ").replace(/[,;:.!?]+$/, "")}…`;
+  if (kept) return kept;
+  const head: string[] = [];
+  for (const word of words(ask)) { if (spokenWords([...head, word].join(" ")) > maxWords) break; head.push(word); }
+  return head.length ? `${head.join(" ").replace(/[,;:.!?]+$/, "")}…` : "";
 }
 
 function browserVoice(persona: PersonaVoice): SpeechSynthesisVoice | null {
@@ -157,28 +167,40 @@ function browserVoice(persona: PersonaVoice): SpeechSynthesisVoice | null {
     ?? natural.sort((a, b) => a.name.localeCompare(b.name))[0] ?? null;
 }
 
-export async function browserSpeech(text: string, persona: PersonaVoice, _mood: Mood, signal: AbortSignal): Promise<void> {
+/** Speaks sentence by sentence. `proceed` is asked before every sentence after
+ * the first: a line that lost its turn finishes the sentence it is on and drops
+ * the rest. Only `signal` (reset, unmount) interrupts a sentence. */
+export async function browserSpeech(text: string, persona: PersonaVoice, _mood: Mood, signal: AbortSignal, proceed?: () => boolean): Promise<void> {
   if (!window.speechSynthesis || typeof SpeechSynthesisUtterance === "undefined") throw new Error("speech unavailable");
+  const synth = window.speechSynthesis;
   const voice = browserVoice(persona);
-  for (const chunk of speechChunks(text)) {
-    if (signal.aborted) return;
+  for (const [index, chunk] of speechChunks(text).entries()) {
+    if (signal.aborted || (index > 0 && proceed && !proceed())) return;
     await new Promise<void>((resolve, reject) => {
       const speech = new SpeechSynthesisUtterance(chunk);
       speech.voice = voice; speech.lang = voice?.lang ?? "en-US";
       // Mood belongs in the words; keep the building's voice intelligible.
       speech.rate = 1; speech.pitch = 1;
       let settled = false;
+      let watchdog: ReturnType<typeof setTimeout> | undefined;
       const finish = (error?: string) => {
         if (settled) return;
-        settled = true; clearTimeout(timeout); signal.removeEventListener("abort", abort);
-        speech.onend = null; speech.onerror = null;
+        settled = true; clearTimeout(watchdog); clearInterval(keepAlive); signal.removeEventListener("abort", abort);
+        speech.onstart = null; speech.onboundary = null; speech.onend = null; speech.onerror = null;
         if (error && !signal.aborted) reject(new Error(`speech unavailable: ${error}`)); else resolve();
       };
-      const abort = () => { finish(); window.speechSynthesis.cancel(); };
-      const timeout = setTimeout(() => { finish("timeout"); window.speechSynthesis.cancel(); }, 20_000);
+      const abort = () => { finish(); synth.cancel(); };
+      // Chrome can silently stall an utterance (long text, tab focus change).
+      // Skip just the stalled sentence and carry on with the next one.
+      const stalled = () => { console.warn("Speech stalled; continuing with the next sentence."); finish(); synth.cancel(); };
+      const expected = spokenWords(chunk) / 2 * 1000 + 2000;
+      const arm = (ms: number) => { clearTimeout(watchdog); watchdog = setTimeout(stalled, ms); };
+      const keepAlive = setInterval(() => { try { if (synth.speaking) synth.resume(); } catch { /* optional */ } }, 5000);
       signal.addEventListener("abort", abort, { once: true });
+      speech.onstart = () => arm(expected); speech.onboundary = () => arm(expected);
       speech.onend = () => finish(); speech.onerror = (event) => finish(event.error);
-      try { window.speechSynthesis.speak(speech); } catch { finish("speak failed"); }
+      arm(expected + 3000);
+      try { synth.speak(speech); } catch { finish("speak failed"); }
     });
   }
 }
@@ -222,6 +244,9 @@ export function useScreenAudio() {
     let controller = new AbortController();
     let personaRequest = new AbortController();
     const warn = (message: string) => { console.warn(message); setError(message); };
+    // A new round lets the sentence in the air finish; nothing queued after it starts.
+    const retire = () => { generation++; };
+    // Reset, room change and unmount are the only things that interrupt a sentence.
     const cancel = () => {
       generation++; controller.abort(); controller = new AbortController(); queue = Promise.resolve(); cityMusic.duck(false);
     };
@@ -274,17 +299,20 @@ export function useScreenAudio() {
             try { await playAudio(url, signal, native ? 150 : 5000); return; }
             catch { warn("Recorded speech unavailable. Using browser speech."); }
           }
-          if (!signal.aborted && group === speechGroup(useGame.getState().phase)) await browserSpeech(words, persona, mood, signal);
+          if (!signal.aborted && group === speechGroup(useGame.getState().phase)) await browserSpeech(words, persona, mood, signal, () => current === generation && group === speechGroup(useGame.getState().phase));
         } catch (error) { if (!signal.aborted) { console.warn(error); warn("Audio unavailable. Follow the subtitles."); } }
-        finally { if (current === generation) cityMusic.duck(false); }
+        finally { if (!signal.aborted) cityMusic.duck(false); }
       });
     };
     const sync = (state: GameState, previous?: GameState) => {
       if (!previous || state.buildingId !== previous.buildingId || state.dataMode !== previous.dataMode) loadPersona(state.buildingId);
       if (!previous || state.room !== previous.room || (state.hasState && !previous.hasState) || (state.city?.buildings_revived === 0 && previous.city?.buildings_revived !== 0)) cityMusic.restore(state.city?.song_categories ?? []);
-      if (previous && (state.roundId !== previous.roundId || state.room !== previous.room || state.dataMode !== previous.dataMode)) { cancel(); spoken.clear(); latest.clear(); challenged.clear(); }
-      // A07: challenge speech never runs into NEGOTIATE (or a host skip).
-      if (previous && previous.phase === "CHALLENGE" && state.phase !== "CHALLENGE") cancel();
+      if (previous && (state.roundId !== previous.roundId || state.room !== previous.room || state.dataMode !== previous.dataMode)) {
+        if (state.room !== previous.room || state.dataMode !== previous.dataMode) cancel(); else retire();
+        spoken.clear(); latest.clear(); challenged.clear();
+      }
+      // A07: challenges are budgeted to end inside CHALLENGE. A sentence still in
+      // the air at NEGOTIATE finishes; the sentences and lines behind it are dropped.
       if (["INTRO", "PITCH"].includes(state.phase) && state.intro) say("intro", state.intro.text, state.intro.audio_url, state.intro.mood);
       if (state.phase === "CHALLENGE") {
         for (const [player, offer] of Object.entries(state.counteroffers)) {
@@ -294,12 +322,12 @@ export function useScreenAudio() {
           say(`challenge:${player}`, `${offer.line} ${offer.counteroffer}`, offer.audio_url, state.mood, () => {
             challenged.add(player);
             const { endsAt, pitches, counteroffers } = useGame.getState();
-            if (!endsAt) return `${offer.line} ${offer.counteroffer}`.trim();
             // Share what is left of CHALLENGE among this player and everyone
             // still waiting to be challenged, in arrival order.
             const waiting = new Set([...Object.keys(pitches), ...Object.keys(counteroffers)]);
             const pending = Math.max(1, [...waiting].filter(id => id === player || !challenged.has(id)).length);
-            const seconds = (new Date(endsAt).getTime() - Date.now() - 500) / 1000 / pending;
+            // Live challenges arrive before the server arms the timer (endsAt is null).
+            const seconds = ((endsAt ? new Date(endsAt).getTime() - Date.now() : CHALLENGE_WINDOW_MS) - 500) / 1000 / pending;
             return budgetLine(offer.line, offer.counteroffer, Math.floor(seconds * SPOKEN_WORDS_PER_SECOND));
           });
         }
