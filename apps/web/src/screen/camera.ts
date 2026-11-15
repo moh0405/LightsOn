@@ -2,7 +2,8 @@ import type { Feature, FeatureCollection, Position } from "geojson";
 
 export const ROUND_PITCH = 60;
 const SECTOR_DEG = 22;
-const RANGE_M = 450;
+// A side-on round camera (City HERO_PITCH) has a shallow sight line, so tall towers block from farther away.
+const RANGE_M = 900;
 const FADE_SECTOR_DEG = 35;
 
 export interface Occluder { index: number; distance: number; azimuth: number; height: number; radius?: number }
