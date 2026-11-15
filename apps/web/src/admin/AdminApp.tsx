@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { fetchHealth } from "../lib/api";
 import { CommandError } from "../lib/ws";
 import { safeGet, safeSet, useGame, useRoomSocket } from "../lib/store";
-import { ConnBanner, PhaseBadge, button, input, page } from "../lib/ui";
+import { ConnBanner, ErrorToast, PhaseBadge, button, input, page } from "../lib/ui";
 
 const ACTIONS: { action: string; label: string }[] = [
   { action: "skip_phase", label: "Skip phase" },
@@ -22,7 +22,6 @@ export function AdminApp() {
   const [room, setRoom] = useState<string>(safeGet("lo.room") ?? "");
   const [active, setActive] = useState<string | null>(room.length === 4 ? room.toUpperCase() : null);
   const [pin, setPin] = useState<string>(safeGet("lo.pin", "session") ?? "");
-  const [msg, setMsg] = useState<string | null>(null);
   const sock = useRoomSocket(active, "admin");
   const { dataMode, dataModeScope, players, conn } = useGame();
   const [demoMode, setDemoMode] = useState<boolean | null>(null);
@@ -35,18 +34,22 @@ export function AdminApp() {
   }, []);
 
   const run = async (extra: Record<string, unknown>) => {
-    setMsg(null);
     safeSet("lo.pin", pin, "session");
     try {
       await sock.current?.send({ type: "host_action", pin, ...extra });
     } catch (e) {
-      setMsg(e instanceof CommandError ? e.message : "Failed.");
+      // One toast surface for both server rejections and local transport failures.
+      useGame.setState({ lastError: {
+        code: e instanceof CommandError ? e.code : "host_action_failed",
+        message: e instanceof CommandError ? e.message : "Failed.",
+        at: Date.now(),
+      } });
     }
   };
 
   return (
     <main style={page}>
-      <ConnBanner />
+      <ConnBanner /><ErrorToast />
       <h1>Lights On: admin</h1>
       <p data-testid="demo-preset" style={{ fontWeight: 600, color: demoMode ? "#7bd88f" : undefined }}>{demoPresetText(demoMode)}</p>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
@@ -70,7 +73,6 @@ export function AdminApp() {
           </div>
         </>
       )}
-      {msg && <p role="alert">{msg}</p>}
     </main>
   );
 }

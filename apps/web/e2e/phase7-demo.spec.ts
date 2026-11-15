@@ -35,3 +35,82 @@ test("wake list hides unprepared heroes; admin shows the demo preset state", asy
     await Promise.all([desktop.close(), mobile.close()]);
   }
 });
+
+for (const mode of ["kit", "fixtures"] as const) test(`admin shows broadcast and unmatched error toasts (${mode})`, async ({ browser, baseURL }) => {
+  const context = await browser.newContext();
+  try {
+    let emit: ((event: object) => void) | undefined;
+    await context.routeWebSocket(/\/ws\/.*role=admin/, socket => {
+      const server = socket.connectToServer();
+      server.onMessage(message => socket.send(message));
+      emit = event => socket.send(JSON.stringify(event));
+    });
+    const screen = await context.newPage();
+    await screen.goto(`${baseURL}/screen`);
+    await expect(screen.getByTestId("qr")).toBeVisible();
+    const admin = await context.newPage();
+    await admin.goto(`${baseURL}/admin`);
+    await admin.getByLabel("Host PIN").fill("1234");
+    await admin.getByRole("button", { name: `Data: ${mode}`, exact: true }).click();
+    await expect(admin.getByText(new RegExp(`data mode: ${mode}`))).toBeVisible();
+    // Exercise the real server's no-pitches broadcast by skipping through the empty round.
+    for (let i = 0; i < 4; i++) await admin.getByRole("button", { name: "Skip phase", exact: true }).click();
+    await expect(admin.getByRole("alert")).toContainText("No pitches");
+    emit!({ type: "error", code: "invalid_command", message: "Unmatched command rejected", nonce: "unmatched" });
+    await expect(admin.getByRole("alert")).toContainText("Unmatched command rejected");
+  } finally { await context.close(); }
+});
+
+for (const mode of ["kit", "fixtures"] as const) test(`phone keeps tap selection without exposing ids while names load (${mode})`, async ({ browser, baseURL }) => {
+  const desktop = await browser.newContext();
+  const mobile = await browser.newContext();
+  let releaseNames: (() => void) | undefined;
+  const namesGate = new Promise<void>(resolve => { releaseNames = resolve; });
+  try {
+    const screen = await desktop.newPage();
+    await screen.goto(`${baseURL}/screen`);
+    await expect(screen.getByTestId("qr")).toBeVisible();
+    const join = (await screen.locator("aside p").filter({ hasText: "/play?room=" }).innerText()).trim();
+    const admin = await desktop.newPage();
+    await admin.goto(`${baseURL}/admin`);
+    await admin.getByLabel("Host PIN").fill("1234");
+    await admin.getByRole("button", { name: `Data: ${mode}`, exact: true }).click();
+    await expect(admin.getByText(new RegExp(`data mode: ${mode}`))).toBeVisible();
+    await mobile.route("**/api/buildings", async route => { await namesGate; await route.continue(); });
+    const phone = await mobile.newPage();
+    await phone.goto(join);
+    await phone.getByLabel("Nickname").fill("Ann");
+    await phone.getByRole("button", { name: "Join", exact: true }).click();
+    await admin.getByRole("button", { name: "Skip phase", exact: true }).click();
+    await expect(phase(phone)).toHaveText("EXPLORE");
+    await expect(phone.getByRole("button", { name: "Wake building Building 1", exact: true })).toBeVisible();
+    await expect(phone.locator("body")).not.toContainText(/233953|F_[A-Za-z0-9_]+/);
+    await phone.getByRole("button", { name: "Wake building Building 1", exact: true }).click();
+    await expect(phase(screen)).toHaveText(/INTRO|PITCH/);
+    await expect(screen.getByTestId("building-label")).toHaveText("Waking Esperson");
+    releaseNames!();
+    await admin.getByRole("button", { name: "Reset round", exact: true }).click();
+    await expect(phone.getByRole("button", { name: "Wake building Esperson", exact: true })).toBeVisible();
+  } finally { releaseNames!(); await Promise.all([desktop.close(), mobile.close()]); }
+});
+
+test("admin reports a command timeout once when no server error event arrives", async ({ browser, baseURL }) => {
+  const context = await browser.newContext();
+  let dropCommands = false;
+  try {
+    await context.routeWebSocket(/\/ws\/.*role=admin/, socket => {
+      const server = socket.connectToServer();
+      socket.onMessage(message => { if (!dropCommands) server.send(message); });
+    });
+    const screen = await context.newPage();
+    await screen.goto(`${baseURL}/screen`);
+    await expect(screen.getByTestId("qr")).toBeVisible();
+    const admin = await context.newPage();
+    await admin.goto(`${baseURL}/admin`);
+    await expect(admin.getByText(/· open ·/)).toBeVisible();
+    await admin.getByLabel("Host PIN").fill("1234");
+    dropCommands = true;
+    await admin.getByRole("button", { name: "Skip phase", exact: true }).click();
+    await expect(admin.getByRole("alert")).toHaveText("The server did not answer.", { timeout: 10000 });
+  } finally { await context.close(); }
+});
