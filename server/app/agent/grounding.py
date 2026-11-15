@@ -114,10 +114,51 @@ def quoted_numbers(texts: list[str] | None) -> set[tuple[float, str | None]]:
     return found
 
 
+def fact_number_matches(value: float, unit: str | None, fact: dict) -> bool:
+    expected = fact['value']
+    exact = (fact['key'].startswith('construction_') or fact['key'] in
+             {'yearBuilt', 'yearRenovated', 'numStoriesAboveGrade', 'dark_floor_count'})
+    fact_unit = fact['unit'] or {'numStoriesAboveGrade': 'stories', 'parkingRatio': 'spaces_per_1000_sqft'}.get(fact['key'])
+    return (type(expected) in (int, float) and (unit is None or unit == fact_unit)
+            and math.isclose(value, expected, rel_tol=0 if exact else .001, abs_tol=0 if exact else .005))
+
+
+def repair_citations(line: str, fact_ids: list[str], dossier: dict, quoted: list[str]) -> list[str]:
+    """Append only unambiguous number+unit evidence; never replace invalid IDs.
+
+    Existing citations resolve ambiguity. Pitch quantities are not building evidence,
+    and unitless labels cannot acquire citations by guessing. All checks still run.
+    """
+    refs = list(fact_ids)
+    facts = safe_facts(dossier)
+    pitched = quoted_numbers(quoted)
+    for value, unit in sorted(quoted_numbers([line]), key=lambda pair: (pair[0], pair[1] or '')):
+        if unit is None or (value, unit) in pitched:
+            continue
+        matches = [f['id'] for f in facts if fact_number_matches(value, unit, f)]
+        if any(fid in refs for fid in matches):
+            continue
+        if len(matches) == 1:
+            refs.append(matches[0])
+    return refs
+
+
+def pitch_quantity(value: float, unit: str | None, pitched: set[tuple[float, str | None]], before: str) -> bool:
+    # A missing unit may borrow the player's unit; an explicit wrong unit may not.
+    if not any(value == v and u is not None and (unit is None or unit == u) for v, u in pitched):
+        return False
+    clause = re.split(r'[.!?;:\u2014\u2013]', before)[-1]
+    # Quoting a player never establishes building dimensions or inventory.
+    return not re.search(r"\b(?:(?:my|our|this building.s)\s+(?:typical\s+)?(?:floor|building|height|area|space|capacity)|"
+                         r"(?:i|we|this building)\s+(?:have|has|offer|contain|stand|rise|give))\b", clause, re.I)
+
+
 def check_line(line: str, fact_ids: list[str], dossier: dict, impact: dict | None = None,
                quoted: list[str] | None = None) -> str | None:
-    """quoted: this round's pitch texts. A verdict may restate a player's own number with its unit
-    ("a nine-million-square-foot restaurant"); that quotes the pitch, it is not a building fact."""
+    """quoted: relevant pitch texts (only this player for a challenge).
+    Dialogue may repeat a pitched quantity with its unit or borrow an omitted unit;
+    the pitch never supplies evidence of building dimensions or capacity.
+    """
     facts = {f['id']: f for f in safe_facts(dossier)}
     if any(fid not in facts or facts[fid]['value'] is None for fid in fact_ids):
         return 'Unknown or null fact ID'
@@ -161,14 +202,8 @@ def check_line(line: str, fact_ids: list[str], dossier: dict, impact: dict | Non
         unit = number_unit(normalized[match.end():])
         supported = False
         for fact in cited:
-            expected = fact['value']
-            exact = (fact['key'].startswith('construction_') or fact['key'] in
-                     {'yearBuilt', 'yearRenovated', 'numStoriesAboveGrade', 'dark_floor_count'})
-            if type(expected) in (int, float) and math.isclose(value, expected,
-                    rel_tol=0 if exact else .001, abs_tol=0 if exact else .005):
-                fact_unit = fact['unit'] or {'numStoriesAboveGrade': 'stories', 'parkingRatio': 'spaces_per_1000_sqft'}.get(fact['key'])
-                if unit is None or unit == fact_unit:
-                    supported = True
+            if fact_number_matches(value, unit, fact):
+                supported = True
             # Floor IDs are labels only in floor context, never arbitrary counts.
             floor = re.match(r'floor_(-?\d+)_', fact['key'])
             if unit is None and floor and value == int(floor[1]) and (
@@ -183,7 +218,7 @@ def check_line(line: str, fact_ids: list[str], dossier: dict, impact: dict | Non
                 supported = True
             if value == 1000 and fact['key'] == 'parkingRatio' and re.search(r'per\s*$', normalized[:match.start()], re.I):
                 supported = True
-        if unit is not None and (value, unit) in pitched:
+        if pitch_quantity(value, unit, pitched, normalized[:match.start()]):
             supported = True
         if game_number(normalized, match.start(), match.end(), value, unit):
             supported = True

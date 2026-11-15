@@ -972,3 +972,119 @@ async def test_live_verdict_may_cite_this_rounds_housing_estimate(dossier):
     batches = await agent.verdict_batches([p], [], dossier, City(), [])
     assert batches[0][0].reason_line != line and agent.fallback_causes == {'number_match': 1}
     assert check_line(f"{impact['units']} homes.", ['F_233953_dark_sqft'], dossier, impact)
+
+# Exact rejected dialogue from /tmp/lights-live-smoke/state/live_agent.jsonl,
+# 2026-11-15 00:13 UTC. Facts remain sourced from the real/fixture dossier.
+SMOKE_PITCH = 'A 40,000 sq ft single-floor restaurant with room for a giant indoor picnic.'
+SMOKE_ATLAS = 'My typical floor gives you 22,189 square feet—40,000 is too big, kid. Pick a floor.'
+SMOKE_PIXEL = "Floor 7 has 31,503 listed available square feet—that's too big for a cozy studio, kid."
+
+
+@pytest.mark.parametrize('line,offer,refs,text', [
+    (SMOKE_ATLAS, "Fit your restaurant on one of my lower dark floors, light it up at night, and I'll talk.",
+     ['F_233953_grossTypicalFloorSquareFeet'], SMOKE_PITCH),
+    (SMOKE_ATLAS, 'Show me a restaurant that lights up nightly on one of my dark floors, and we talk.',
+     ['F_233953_grossTypicalFloorSquareFeet'], SMOKE_PITCH),
+    (SMOKE_PIXEL, "Pitch me a single floor under 22,189 sqft and I'll light it up nightly for your players.",
+     ['F_233953_floor_7_available_sqft'], 'A public community gaming studio open at night, with cozy cooperative games and a neighborhood leaderboard.'),
+    ('My typical floor gives you 22,189 square feet.', 'Could your studio welcome neighbors at night?', [], 'A gaming studio'),
+])
+async def test_smoke_challenges_ground_without_regeneration(dossier, line, offer, refs, text):
+    candidate = dict(player_id='p1', line=line, counteroffer=offer, fact_ids=refs, category_guess='wildcard')
+    model = Model([{'challenges': [candidate]}, {'checks': [{'supported': True, 'reason': ''}]}])
+    agent = LiveAgent(model=model)
+    result = await agent.challenge([pitch(text)], dossier)
+    assert not agent.fallbacks
+    assert result[0].line == line and result[0].counteroffer == offer
+    assert 'F_233953_grossTypicalFloorSquareFeet' in result[0].fact_ids
+    assert [s for s, _ in model.calls] == ['challenge', 'claim_check']
+
+
+@pytest.mark.parametrize('line', [
+    'Your 40,000 square feet is too big.', 'Your 40,000 is too big.',
+])
+def test_challenge_quotes_own_quantity(dossier, line):
+    assert check_line(line, [], dossier, quoted=[SMOKE_PITCH]) is None
+
+
+@pytest.mark.parametrize('line', [
+    'Your 40,001 is too big.', 'Your 40,000 feet is too tall.',
+    'My typical floor gives you 40,000 square feet.', 'I have 40,000 square feet.',
+])
+def test_pitch_quantity_cannot_support_building_claim(dossier, line):
+    assert check_line(line, ['F_233953_grossTypicalFloorSquareFeet'], dossier, quoted=[SMOKE_PITCH])
+
+
+async def test_ordinary_fallback_stays_in_trace_not_error(dossier, monkeypatch, tmp_path):
+    from app.rooms import Room, Conn
+    monkeypatch.setenv('AGENT_MODE', 'live')
+    async def fallback(self, pitches, *args, **kwargs):
+        await self.fallback('challenge', 0, 'number_match')
+        return [fake_agent.challenge(p, dossier) for p in pitches]
+    monkeypatch.setattr(LiveAgent, 'challenge', fallback)
+    room = Room(code='TEST', hero_ids=['233953'], state_dir=tmp_path, durations={})
+    events = []
+    async def send(event): events.append(event)
+    room.conns.append(Conn('screen', send))
+    player = room.add_player('Ann')
+    room.round_id, room.building_id, room.dossier = 'TEST-1', '233953', dossier
+    room.pitches[player.id] = pitch(player=player.id)
+    try:
+        await room.set_phase('CHALLENGE')
+        await room._agent_task
+        assert any(e['type'] == 'agent_step' and e['step'] == 'fallback' for e in events)
+        assert not any(e['type'] == 'error' for e in events)
+    finally:
+        room.close()
+
+
+def test_citation_repair_unique_units_tolerance_and_ambiguity(dossier):
+    from app.agent.grounding import repair_citations
+    fact = next(f for f in dossier['facts'] if f['key'] == 'grossTypicalFloorSquareFeet')
+    refs = [fact['id']]
+    assert repair_citations('22,189 square feet', [], dossier, []) == refs
+    assert repair_citations('22,190 square feet', [], dossier, []) == refs  # existing numeric tolerance
+    for line in ['22,189 feet', '22,189', '40,000 square feet']:
+        assert repair_citations(line, [], dossier, []) == []
+    # Several real floor facts share this area; never guess which one is intended.
+    assert repair_citations('31,503 square feet', [], dossier, []) == []
+    cited = ['F_233953_floor_7_available_sqft']
+    assert repair_citations('31,503 square feet', cited, dossier, []) == cited
+    assert repair_citations('40,000 square feet', [], dossier, [SMOKE_PITCH]) == []
+    assert repair_citations('22,189 square feet', ['missing'], dossier, []) == ['missing', *refs]
+    null_dossier = copy.deepcopy(dossier)
+    next(f for f in null_dossier['facts'] if f['id'] == fact['id'])['value'] = None
+    assert repair_citations('22,189 square feet', [], null_dossier, []) == []
+
+
+async def test_smoke_unitless_floor_labels_do_not_repair(dossier):
+    candidate = dict(player_id='p1', category_guess='wildcard', fact_ids=[],
+        line='A public gaming studio open at night—sounds lit. But cozy cooperative play needs floor space. Show me your sqft.',
+        counteroffer="Light up Floor 7 or 8 after dark with tournaments that draw the neighborhood in. That's the glow I'm after.")
+    agent = LiveAgent(model=Model([{'challenges': [candidate]}, {'challenges': [candidate]}]))
+    await agent.challenge([pitch()], dossier)
+    assert agent.challenge_fallback_causes == {'fact_id': 1}
+
+
+async def test_challenge_cannot_borrow_another_players_quantity(dossier):
+    def model(step, system, content, schema, timeout):
+        if step == 'claim_check':
+            return {'checks': [{'supported': True, 'reason': ''}]}
+        player = re.search(r'player="([^"]+)"', content)[1]
+        return {'challenges': [dict(player_id=player, line=SMOKE_ATLAS,
+            counteroffer='Could your restaurant welcome neighbors?',
+            fact_ids=['F_233953_grossTypicalFloorSquareFeet'], category_guess='wildcard')]}
+    agent = LiveAgent(model=model)
+    await agent.challenge([pitch(SMOKE_PITCH), pitch(player='p2')], dossier)
+    assert agent.fallback_player_ids == {'p2'}
+    assert agent.challenge_fallback_causes == {'number_match': 1}
+
+
+def test_challenge_prompt_lists_source_wording_beside_ids(dossier):
+    from app.agent.prompts import challenge_prompt
+    prompt = challenge_prompt(dossier, 'hopeful', pitches=[pitch(SMOKE_PITCH)])
+    assert "Cite the fact id for every building number; you may repeat the player's own numbers" in prompt
+    rows = [json.loads(line) for line in prompt.splitlines() if line.startswith('["F_')]
+    facts = {f['id']: f for f in dossier['facts']}
+    assert rows
+    assert all(row[1] == facts[row[0]]['say_as'] for row in rows)

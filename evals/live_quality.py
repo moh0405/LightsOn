@@ -80,7 +80,7 @@ async def evaluate(plan):
                 fallback_cause=cause, from_model=c.player_id in agent.challenge_latencies,
                 seconds=agent.challenge_latencies.get(c.player_id),
                 publication_seconds=published[c.player_id], round_seconds=elapsed,
-                ground_error=check_line(c.line + ' ' + c.counteroffer, c.fact_ids, dossier)))
+                ground_error=check_line(c.line + ' ' + c.counteroffer, c.fact_ids, dossier, quoted=[row['text']])))
         ready = [published[pid] for pid in agent.challenge_latencies]
         output['rounds'].append(dict(building=bid, first_model_seconds=min(ready) if ready else None,
                                     full_seconds=elapsed))
