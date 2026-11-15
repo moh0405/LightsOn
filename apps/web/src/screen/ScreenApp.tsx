@@ -8,6 +8,18 @@ import "./screen.css";
 import { ConnBanner, ErrorToast, PhaseBadge, page } from "../lib/ui";
 import { useScreenAudio } from "./music";
 import { TracePanel } from "./overlays/TracePanel";
+import { getDossier } from "../lib/buildings";
+
+/** The waking building's name from its dossier; the internal id never reaches the projector. */
+function useBuildingName(id: string | null): string | null {
+  const [name, setName] = useState<{ id: string; name: string | null } | null>(null);
+  useEffect(() => {
+    let active = true;
+    if (id) void getDossier(id).then((d) => { if (active) setName({ id, name: d.name }); }).catch(() => { if (active) setName({ id, name: null }); });
+    return () => { active = false; };
+  }, [id]);
+  return name && name.id === id ? name.name : null;
+}
 
 export function ScreenApp() {
   const audio = useScreenAudio();
@@ -18,6 +30,7 @@ export function ScreenApp() {
   const [failed, setFailed] = useState(false);
   useRoomSocket(room, "screen");
   const { players, buildingId, hasState } = useGame();
+  const buildingName = useBuildingName(buildingId);
 
   useEffect(() => {
     let cancelled = false;
@@ -43,7 +56,7 @@ export function ScreenApp() {
         {failed && <p role="alert">Could not reach the server.</p>}
         <header className="screen-heading"><h1>Lights On</h1>{!audio.ready && <button onClick={() => void audio.start()}>Start audio</button>}<span>Your city needs you.</span></header>
         {audio.error && <p role="alert">{audio.error}</p>}
-        <div className="screen-status"><PhaseBadge />{buildingId && <p className="building-label">Waking building {buildingId}</p>}</div>
+        <div className="screen-status"><PhaseBadge />{buildingId && <p className="building-label" data-testid="building-label">Waking {buildingName ?? "a building"}</p>}</div>
         <div className="city-stage"><City /><IntroMedia onError={onMediaError} /><RoundOverlays /></div>
         {mediaError && <div className="screen-toast" role="alert">{mediaError}<button aria-label="Dismiss media notice" onClick={() => setMediaError(null)}>×</button></div>}
       </section>

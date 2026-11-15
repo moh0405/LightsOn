@@ -67,6 +67,7 @@ test("hero's lit floors are visible after the dive", async ({ browser, baseURL }
     await expect(phase(screen)).toHaveText("EXPLORE");
     await phone.getByRole("button", { name: "Wake building Esperson", exact: true }).click();
     await expect(phase(screen)).toHaveText(/INTRO|PITCH/);
+    await expect(screen.getByTestId("building-label")).toHaveText("Waking Esperson");
     await phone.getByLabel("Your pitch").fill("A public community gaming studio open at night");
     await phone.getByRole("button", { name: "Submit pitch", exact: true }).click();
     await expect(phase(screen)).toHaveText("NEGOTIATE", { timeout: 15000 });
