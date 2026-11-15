@@ -1,3 +1,4 @@
+import { useShallow } from "zustand/react/shallow";
 import { useCallback, useEffect, useState } from "react";
 import { CityMeter, RoundOverlays } from "./overlays/RoundOverlays";
 import { City } from "./City";
@@ -31,7 +32,7 @@ export function ScreenApp() {
   const onMediaError = useCallback((message: string) => setMediaError(message), []);
   const [failed, setFailed] = useState(false);
   const sock = useRoomSocket(room, "screen");
-  const { players, buildingId, hasState, dataMode, heroIds, tourRequest, phase } = useGame();
+  const { players, buildingId, hasState, dataMode, heroIds, tourRequest, phase } = useGame(useShallow(s => ({ players: s.players, buildingId: s.buildingId, hasState: s.hasState, dataMode: s.dataMode, heroIds: s.heroIds, tourRequest: s.tourRequest, phase: s.phase })));
   const [hovered, setHovered] = useState<string | null>(null);
   const [walk, setWalk] = useState<{ buildingId: string; modelId: string | null } | null>(null);
   const target = buildingId ?? hovered ?? heroIds[0] ?? null;

@@ -56,7 +56,7 @@ export function City({ onHover }: { onHover?: (id: string | null) => void }) {
     let map: CityMap;
     try {
       map = new CityMap({ container: container.current!, center: CENTER, zoom: 15.5, pitch: 60,
-        attributionControl: false, interactive: false,
+        attributionControl: false, interactive: false, fadeDuration: 0,
         pixelRatio: Math.min(window.devicePixelRatio, 1.5),
         style: { version: 8, light: { anchor: "viewport", color: "#f6f8ff", position: [1.5, 205, 58], intensity: 0.45 },
           sky: { "sky-color": "#070d1c", "horizon-color": "#354363", "fog-color": "#17243a", "sky-horizon-blend": 0.75, "horizon-fog-blend": 0.65 },

@@ -1,3 +1,4 @@
+import { useShallow } from "zustand/react/shallow";
 import { useEffect, useState } from "react";
 import { useGame } from "../lib/store";
 import { INTRO_DIVE_MS, MEDIA_BEAT_MS, mediaAt, type MediaBeat } from "./effects";
@@ -11,7 +12,7 @@ export const INTRO_TOUR_START_MS = 1000;
 export const INTRO_TOUR_DURATION_MS = 7000;
 
 export function IntroMedia({ onError }: { onError: (message: string) => void }) {
-  const { buildingId, roundId, dataMode, phase } = useGame();
+  const { buildingId, roundId, dataMode, phase } = useGame(useShallow(s => ({ buildingId: s.buildingId, roundId: s.roundId, dataMode: s.dataMode, phase: s.phase })));
   const { tours } = useTours(buildingId);
   const [beats, setBeats] = useState<MediaBeat[]>([]);
   const [elapsed, setElapsed] = useState(0);
