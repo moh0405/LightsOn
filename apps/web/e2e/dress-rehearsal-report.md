@@ -138,3 +138,21 @@ No embedded-player `ApolloError: Failed to fetch` occurred in these four rounds.
 Audio main check: **PR #44 remained open and unmerged; origin/main was still `0563529` at 04:52 EST.** No incoming main change was available to pull during the measured runs.
 
 🤖 Generated with Codex, coordinated by Claude Code
+
+## Fix round — pointer and speech (2026-11-15, 05:04–05:12 EST)
+
+**Pointer PASS. Speech phase discipline PASS on current main (`85859ce`, including audio PR #44).** The pointer is now a 12 px hollow ring; its nickname sits 16 px outside the selected building's projected bounds with a thin leader line. Projection and feedback use local map geometry. The new `pointer-label.spec.ts` independently projects Esperson's complete exported floor volume and asserts that its nickname box does not intersect that volume; it passes with both kit and fixtures at 1920×1080. Evidence: [before](screenshots/dress/fix-pointer-before.png), [after](screenshots/dress/fix-pointer-after.png).
+
+Two complete fake rounds, then exactly one live-mode round used Esperson, `DEMO_MODE=1`, `DATA_MODE=kit`, a 1920×1080 projector, two independent phone contexts, typed pitches/revision, natural timers, and manual tap charging. No host skips or clock mocks. All contexts used `silence.ts` and Chromium `--mute-audio`; native speech ran at volume zero. The original rehearsal instrumentation recorded incoming events plus `speak/start/boundary/end/error/cancel`. API/web ports were 22012/19082; data, environment, media and prep traces used the requested main-checkout paths. Raw logs and harness remain in `/tmp/lights-pointer-speech/`. One preliminary attempt stopped at an unrelated INTRO screenshot assertion; the second fake round was rerun with that media-only assertion removed.
+
+| Completed run | Verdict native start / first word after line arrival | Last challenge ended before VERDICT | Utterances started / ended | Placeholder utterances | Phase discipline |
+|---|---:|---:|---:|---:|---|
+| Fake 1 | 5 / 399 ms | 18,056 ms | 7 / 7 | 0 | PASS |
+| Fake 2 | 6 / 73 ms | 18,411 ms | 7 / 7 | 0 | PASS |
+| Live mode, budget fallbacks | 4 / 72 ms | 18,312 ms | 7 / 7 | 0 (two preliminary lines received) | PASS |
+
+Line arrival means the earliest server event carrying the line, including `room_state` before the dedicated verdict event. **The strict ≤300 ms first-word check has one FAIL observation (399 ms); the other two pass.** Its native `start` was 5 ms, followed by 394 ms inside the OS voice; the application queue did not delay it. Per coordinator direction, retain this outlier explicitly and leave the already-fixed speech queue unchanged. Thinking updates remained subtitle-only, were never repeated in speech, and no challenge was playing at VERDICT. All 21 started utterances ended; no cancellation or speech error occurred, so no sentence was cut by phase retirement. Every completed projector round had zero console/uncaught errors, and both phones had zero uncaught errors. These are browser callback measurements, not acoustic measurements.
+
+**Live-model challenge/verdict timing remains unverified by this run.** Both challenges and the verdict used the existing `budget` fallback. This worker held its cap at $3.277311225 (the initially observed $3.177311225 + $0.10), below the $3.40 abort ceiling. At round setup the shared ledger temporarily held $3.344597135 in total charges/reservations and later reconciled to $3.259816835; the coordinator confirmed concurrent user play-testing on the main server. Consequently that shared-ledger delta is not this worker's spend. No second live attempt was made, preserving the user's remaining budget.
+
+Validation: `pnpm -r test` PASS (104 web tests plus messaging typecheck); `pnpm --dir apps/web build` PASS; pointer Playwright regression PASS in kit and fixtures. No server, phase-duration, model, event, command, or fact-display code changed.
