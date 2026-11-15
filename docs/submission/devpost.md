@@ -67,7 +67,7 @@ real constraints, and leasing events, where a building with available floors pit
   tightened the grounding rules until the paid check went from 2 of 2 verdict fallbacks to 0 of 2.
 - **Latency for a party game.** We batch challenges, show a persona "thinking" line instantly and keep physical
   feedback off the AI path. Measured model-only time to a grounded challenge: p50 2.39 s, p90 4.08 s.
-- **"Available" isn't "vacant".** Floor status needed a careful rule built from active listings and current tenancies,
+- **"Listed as available" isn't "empty".** Floor status needed a careful rule built from active listings and current tenancies,
   with "unknown" when floor-level data is missing.
 - **Budget.** A hard Bedrock spend ledger, cached prep, and a free fixtures mode for rehearsal.
 
