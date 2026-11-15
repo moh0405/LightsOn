@@ -1,4 +1,5 @@
 import asyncio
+import json
 
 import pytest
 
@@ -103,6 +104,48 @@ async def test_room_full_and_colors(tmp_path):
     with pytest.raises(RoomError) as e:
         await join(cmds, room, "late")
     assert e.value.code == "room_full"
+
+
+@pytest.mark.parametrize('phase', PHASE_ORDER)
+async def test_full_restored_room_reclaims_disconnected_players_only_while_waiting(tmp_path, game_mode, phase):
+    mgr, _ = make(tmp_path)
+    room = mgr.create('SPHZ')
+    original = [room.add_player(name) for name in ('Ann', 'Bo', 'Cam', 'Dee')]
+    room.phase = phase
+    room.save_players()
+    mgr.close()
+    mgr, cmds = make(tmp_path)
+    room = mgr.get('SPHZ')
+    screen, known, newcomer = Sink(), Sink('play'), Sink('play')
+    try:
+        assert all(not p.connected for p in room.players.values())
+        # The websocket rebinds a known player before the join command arrives.
+        known.conn.player_id = original[-1].id
+        room.players[known.conn.player_id].connected = True
+        room.conns += [screen.conn, known.conn, newcomer.conn]
+        rebound = await join(cmds, room, 'Dee', known)
+        assert rebound['player_id'] == original[-1].id and len(room.players) == 4
+        assert screen.events == []
+        if phase not in ('LOBBY', 'EXPLORE'):
+            with pytest.raises(RoomError) as error:
+                await join(cmds, room, 'New', newcomer)
+            assert error.value.code == 'room_full'
+            assert list(room.players) == [p.id for p in original]
+            assert screen.events == []
+            return
+        joined = await join(cmds, room, 'New', newcomer)
+        expected = [original[-1].id, joined['player_id']]
+        assert list(room.players) == expected
+        assert newcomer.conn.player_id == joined['player_id']
+        assert room.players[expected[0]].color != joined['color']
+        snapshot = next(e for e in screen.events if e['type'] == 'room_state')
+        assert [p['id'] for p in snapshot['players']] == expected
+        assert all(p['connected'] for p in snapshot['players'])
+        assert screen.types()[:2] == ['room_state', 'player_joined']
+        saved = json.loads((tmp_path / 'SPHZ.json').read_text())
+        assert [p['id'] for p in saved['players']] == expected
+    finally:
+        mgr.close()
 
 
 async def test_pointer_goes_to_screen_only(tmp_path):
