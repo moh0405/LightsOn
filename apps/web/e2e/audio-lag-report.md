@@ -1,5 +1,37 @@
 # /screen audio latency measurements
 
+## Demo path: Esperson, real demo timers, two phones (2026-11-15)
+
+Real `DEMO_MODE=1` phase timers (no host skips), 1920x1080 headless Chromium, real OS speechSynthesis at volume 0, two phone contexts, live-agent code path with a 2.5 s modelled turn and the offline fallback dialogue (Bedrock spend cap 0: no Bedrock calls). Three consecutive rounds per run. Times in ms.
+
+**Before** (commit 6e917c2, one round): the first live challenge arrived before the server armed the CHALLENGE timer, so it was spoken unbudgeted and the second player never got a turn.
+
+| ms after CHALLENGE | event |
+| ---: | --- |
+| 2653 | start "Dollface, 150,365 square feet across my dark floors await your pitch." (7.1 s: the number alone is eight spoken words) |
+| 9774 | start "What footprint would your shared space need?" |
+| 12110 | start "Give your community space a reason to buzz after sunset." |
+| 12680 | NEGOTIATE: `speechSynthesis.cancel()` cuts that sentence 0.57 s in (`interrupted`); player 2's challenge is never spoken |
+
+**After** (3 rounds, 18 utterances):
+
+| Measure | Target | Result |
+| --- | ---: | ---: |
+| Intro event -> first word (worst of 3) | <= 300 | 78.6 |
+| Challenge ready -> first word (worst of 6) | <= 300 | 3.8 |
+| Verdict event -> first word (worst of 3) | <= 300 | 76.7 |
+| Max gap between sentences | <= 250 | 32.9 |
+| Utterances started / ended | equal | 18 / 18 |
+| `cancel()` while speaking, `interrupted` errors | 0 | 0 / 0 |
+| Longest stall beyond the sentence's expected length | <= 2000 | 0 |
+| Challenges spoken (2 players x 3 rounds) | 6 | 6 |
+| Last challenge sentence ends before NEGOTIATE | >= 0 | 4031 |
+| Longest main-thread task during speech | <= 100 | 0 (earlier runs before the merge: 63 and 66; SwiftShader) |
+
+What changed: a sentence in progress is never cancelled by a phase or round change (only a room reset or unmount interrupts); the sentences and lines queued behind it are dropped. Each utterance is one sentence with a 5 s `resume()` keep-alive and a watchdog (expected length + 2 s, re-armed on `boundary`) that skips only the stalled sentence. Challenges are budgeted into the CHALLENGE window even when the timer is not armed yet, and numbers count as the words they are read as. Trade-off: with two players in a 10 s window the voice speaks each player's ask; the cited fact stays on the challenge card.
+
+Reproduce: add `AUDIO_LAG_REALTIME=1 AUDIO_LAG_ROUNDS=3 AUDIO_LAG_AGENT=recorded AUDIO_LAG_AGENT_DELAY=2.5` to the command at the end of this file.
+
 Measured 2026-11-14/15, macOS, Playwright Chromium, actual OS speechSynthesis (180 installed voices), real Tone/AudioContext, real local skyline/floor geometry, HTTP and WebSockets. Native speech start events approximate first-word onset; this is not a microphone/acoustic measurement. All times below are milliseconds, **before → after**.
 
 The server's wake list contains Esperson, TC Energy Center, 3 Houston Center, 1415 Louisiana, One Allen Center and 717 Texas. Wells Fargo Plaza (233899) has no prepared persona and is excluded by the server; its test is explicitly skipped. Kit data remains local and ignored.
