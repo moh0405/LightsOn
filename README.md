@@ -27,7 +27,7 @@ pretending to be a feasibility study.
 | Building and floor data | **Real** | CoStar hackathon kit, office properties only (propertyType 5), indexed into `data/costar/index.sqlite`. Floor status is dark / partial / occupied / unknown by the rule in the PRD. Broker and owner contacts are never shown or sent to a model. |
 | Aerial imagery and site evidence | **Real, cached** | Vexcel API 2.0: parcel, footprint, ortho and oblique images, and Vexcel's car and tree detections near the parcel. Fetched once at prep time (`scripts/fetch_vexcel.py`), then served from the cache. |
 | Interior tours | **Real** | Matterport model IDs from the kit, embedded during the building intro when present. |
-| Building research and persona | **Real run, cached** | One LangChain `deepagents` agent per building on Claude via Amazon Bedrock (`us.anthropic.claude-sonnet-4-6`). It plans with the todo tool, writes files, and delegates to three subagents: `property_scout` (CoStar facts), `spatial_scout` (Vexcel and Matterport evidence) and `persona_writer`. The server then merges and validates the result deterministically. The Esperson (PropertyId 233953) run is cached in `server/cache/prep/233953/` and replayed in the game. Other buildings have no prepared persona. |
+| Building research and persona | **Real run, cached** | One LangChain `deepagents` agent per building on Claude via Amazon Bedrock (`us.anthropic.claude-sonnet-4-6`). Its prompt asks it to plan with `write_todos`, but the recorded Esperson run did not capture a `write_todos` call (the trace panel says so). It writes files and delegates to three subagents: `property_scout` (CoStar facts), `spatial_scout` (Vexcel and Matterport evidence) and `persona_writer`. The server then merges and validates the result deterministically. The Esperson (PropertyId 233953) run is cached in `server/cache/prep/233953/` and replayed in the game. Other buildings have no prepared persona. |
 | Live challenges and verdicts | **Real when `AGENT_MODE=live`** | Amazon Bedrock: `us.anthropic.claude-haiku-4-5-20251001-v1:0` for challenges and claim checks, `us.anthropic.claude-sonnet-4-6` for verdicts. Every line passes server-side grounding (fact IDs, numbers and units must match the dossier) before it is shown. Every proposed action passes `server/app/actions.py`. A spend ledger caps Bedrock cost (default $3.00). |
 | Offline judge | **Deterministic** | `AGENT_MODE=fake` (the default) uses `server/app/agent/fake_agent.py`: the same dossier facts and grounding, no network. Live mode falls back to it on any timeout or rejected output. |
 | City needs | **Simulated** | Housing, food and retail, entertainment and community needs are a deterministic game simulation (`server/app/city.py`), labelled "game simulation" on screen. They are not real city data. |
@@ -59,6 +59,15 @@ pnpm install
 ./tunnel.sh                       # optional: HTTPS URL for phones (cloudflared); set PUBLIC_BASE_URL to it
 ```
 
+Aerial media: the intro's Vexcel ortho and oblique beats and the concept card's "before" image are served from
+`apps/web/public/media/<property id>/` (`ortho.jpg`, `oblique-*.jpg`). The folder is gitignored, so a fresh clone or
+worktree has none; without it the intro shows only the map and subtitles and the card reads "Source image unavailable".
+Copy it from a checkout that has it, or regenerate it (needs `VEXCEL_API_KEY` in `.env` and makes paid Vexcel calls; it also rewrites `server/fixtures/vexcel/<id>.json`):
+
+```sh
+uv run --project server python scripts/fetch_vexcel.py 233953   # images -> apps/web/public/media/233953/
+```
+
 Open `/screen` on the big display, scan the QR code with phones (`/play`), and use `/admin` with `HOST_PIN` for
 skip phase, reset round, reset room and the data mode switch.
 
@@ -68,10 +77,11 @@ skip phase, reset round, reset room and the data mode switch.
 | --- | --- | --- |
 | `DATA_MODE` | `kit` (default) / `fixtures` | `kit` authorizes buildings against the real kit index. `fixtures` uses the committed dossiers only, for offline play and tests. Switchable live from `/admin`. |
 | `AGENT_MODE` | `fake` (default) / `live` | `live` calls Amazon Bedrock for challenges and verdicts, with grounding and fallbacks. |
-| `DEMO_MODE` | `1` / unset | Demo round preset: pitch 20 s, negotiate 15 s, and only the Esperson can be woken. `/admin` shows whether it is on. Restart the server to change it. |
+| `DEMO_MODE` | `1` / unset | Demo round preset: pitch 20 s, negotiate 15 s, and only the Esperson can be woken (`DEMO_BUILDING_IDS`). Unset, the default timers apply (pitch 45 s, negotiate 30 s) and every hero with a prepared persona can be woken. `/admin` shows whether it is on. Restart the server to change it. |
 | `DEMO_BUILDING_IDS` | default `233953` | Buildings wakeable in demo mode (each still needs a prepared persona and dark floors). |
 | `PHASE_DURATIONS_SCALE` | default `1.0` | Multiplies every phase timer (tests use `0.1`). |
 | `HOST_PIN` | any | Protects host actions. |
+| `PREP_TRACE_DIR` | default `server/cache/prep` | Where the recorded prep-agent runs live (`<dir>/<id>/agent_steps.json`), read by the trace panel. In a git worktree, point it at the main checkout's `server/cache/prep`, which is gitignored and not copied. |
 
 ### Tests
 

@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties } from "react";
-import { factDescription, getDossier, type Dossier } from "../../lib/buildings";
+import { evidenceLine, getDossier, type Dossier } from "../../lib/buildings";
 import { useGame } from "../../lib/store";
 import { ConceptCard } from "./ConceptCard";
 import { useAnimatedNumber } from "../animated";
@@ -38,7 +38,11 @@ export function Evidence({ ids }: { ids: string[] }) {
     if (buildingId) void getDossier(buildingId).then((d) => { if (active) setDossier(d); }).catch(() => { if (active) setFailed(true); });
     return () => { active = false; };
   }, [buildingId, dataMode]);
-  return <div aria-label="Cited evidence">{ids.map((id) => <p key={id}><small>{id}: {(dossier?.facts?.find((f) => f.id === id) ? factDescription(dossier.facts.find((f) => f.id === id)!) : null) ?? (failed ? "Evidence unavailable" : dossier ? "Source text unavailable" : "Loading evidence…")}</small></p>)}</div>;
+  // Fact ids are internal: the projector shows the source and the dossier's say_as; ids stay in the trace panel.
+  return <div aria-label="Cited evidence">{ids.map((id) => {
+    const fact = dossier?.facts?.find((f) => f.id === id);
+    return <p key={id}><small>{fact ? evidenceLine(fact) : failed ? "Evidence unavailable" : dossier ? "Source text unavailable" : "Loading evidence…"}</small></p>;
+  })}</div>;
 }
 export function ScoreCard() {
   const { verdict, players, phase } = useGame();

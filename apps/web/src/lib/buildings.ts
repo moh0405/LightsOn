@@ -7,8 +7,27 @@ export interface DossierFact {
   id?: string; key: string; value: unknown; say_as: string | null;
   source?: string; kind?: "verified" | "estimate";
 }
+/** Whole numbers in prepared text read as integers: "9,068.0 sqft" -> "9,068 sqft". */
+export function wholeNumbers(text: string): string {
+  return text.replace(/(\d)\.0+(?![\d.])/g, "$1");
+}
 export function factDescription(fact: DossierFact): string {
-  return `${fact.kind === "estimate" ? "Estimate · " : ""}${fact.say_as ?? "Source text unavailable"}`;
+  return `${fact.kind === "estimate" ? "Estimate · " : ""}${fact.say_as == null ? "Source text unavailable" : wholeNumbers(fact.say_as)}`;
+}
+const SOURCES: [RegExp, string][] = [[/^costar/i, "CoStar"], [/^vexcel/i, "Vexcel"], [/^matterport/i, "Matterport"]];
+export function sourceLabel(source: string | undefined): string {
+  return SOURCES.find(([pattern]) => pattern.test(source ?? ""))?.[1] ?? "Source";
+}
+/** A readable name for a fact key; the fact id itself stays in the trace panel only. */
+export function factLabel(key: string): string {
+  const words = key.replace(/(_sqft|SquareFeet|InFeet)$/, "").replace(/([a-z])([A-Z])/g, "$1 $2").replace(/_/g, " ").trim().toLowerCase();
+  return words ? words[0]!.toUpperCase() + words.slice(1) : "Fact";
+}
+/** Projector evidence line: source, then what the number is, then the dossier's say_as. */
+export function evidenceLine(fact: DossierFact): string {
+  const source = sourceLabel(fact.source);
+  // CoStar say_as is a bare value ("9,068 sqft"); Vexcel and Matterport text is a full sentence.
+  return source === "CoStar" ? `${source} · ${factLabel(fact.key)}: ${factDescription(fact)}` : `${source} · ${factDescription(fact)}`;
 }
 export interface Dossier {
   id: string; name: string | null; stories: number | null;

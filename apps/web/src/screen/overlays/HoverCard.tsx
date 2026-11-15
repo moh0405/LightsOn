@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { factDescription, cachedDossier, getDossier, type Dossier } from "../../lib/buildings";
+import { factDescription, cachedDossier, wholeNumbers, getDossier, type Dossier } from "../../lib/buildings";
 
 export function HoverCard({ id, color, onError }: { id: string; color: string; onError: () => void }) {
   const [data, setData] = useState<Dossier | null>(() => cachedDossier(id));
@@ -12,7 +12,8 @@ export function HoverCard({ id, color, onError }: { id: string; color: string; o
   const floors = data?.floors;
   const available = floors?.every((f) => f.available_sqft !== null)
     ? floors.reduce((sum, f) => sum + (f.available_sqft ?? 0), 0) : null;
-  const spoken = data?.facts?.find((f) => f.key === "available_sqft")?.say_as;
+  const said = data?.facts?.find((f) => f.key === "available_sqft")?.say_as;
+  const spoken = said ? wholeNumbers(said) : null;
   return <article data-testid="hover-card" style={{ border: `2px solid ${color}`, borderRadius: 12, padding: 16, background: "#10131cef", fontSize: 28 }}>
     <strong>{data?.name ?? "Building"}</strong>
     {data?.stories != null && <div>{data.stories} stories</div>}

@@ -224,7 +224,7 @@ try {
         await expect(phase(screen)).toHaveText('PITCH');
         await expect(screen.locator('aside li')).toHaveCount(3);
         for (const [i, p] of phones.entries()) await expect(p.getByRole('heading', { name: ['Ann', 'Bo', 'Cy'][i], exact: true })).toBeVisible();
-        await expect(screen.getByText('Waking building 233953')).toBeVisible();
+        await expect(screen.getByText('Waking Esperson')).toBeVisible();
         restarting = false; await screenshot('restarted');
         await admin.getByRole('button', { name: 'Reset round', exact: true }).click();
         await expect(phase(screen)).toHaveText('EXPLORE');
