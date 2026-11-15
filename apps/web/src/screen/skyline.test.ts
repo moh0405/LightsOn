@@ -66,6 +66,13 @@ describe("hero display geometry", () => {
     const m = metres(clean.slice(0, -1));
     m.forEach((p, i) => { const a = m[(i + 3) % 4]!, b = m[(i + 1) % 4]!; expect(Math.abs((a[0] - p[0]) * (b[0] - p[0]) + (a[1] - p[1]) * (b[1] - p[1]))).toBeLessThan(1); });
   });
+  it("keeps a chamfered corner cut, so the drawn footprint never reaches past the surveyed one", () => {
+    const chamfered = [turn(0, 0), turn(40, 0), turn(40, 20), turn(30, 30), turn(0, 30), turn(0, 0)];
+    const clean = cleanRing(chamfered);
+    const reach = (ring: number[][]) => Math.max(...metres(ring).map(p => { const a = 20 * Math.PI / 180, x = p[0] * Math.cos(a) + p[1] * Math.sin(a), y = -p[0] * Math.sin(a) + p[1] * Math.cos(a); return x + y; }));
+    expect(reach(clean)).toBeLessThan(reach(chamfered) + 1.5);
+    expect(area(clean.slice(0, -1)) / area(chamfered.slice(0, -1))).toBeCloseTo(1, 1);
+  });
   it("keeps a shape that is not right-angled, and leaves tiny rings alone", () => {
     const triangle = [turn(0, 0), turn(40, 0), turn(10, 35), turn(0, 0)];
     const clean = cleanRing(triangle);
@@ -88,6 +95,7 @@ describe("hero display geometry", () => {
     const reveals = floorReveals(stack).features;
     expect(reveals.map(f => f.properties?.floor_number)).toEqual([2, 3]);
     for (const f of reveals) expect(f.properties!.height_m - f.properties!.base_m).toBeLessThan(0.31);
+    for (const f of reveals) expect(f.properties!.height_m).toBeGreaterThan(f.properties!.base_m);
     const caps = roofCaps(stack).features;
     expect(caps.map(f => f.properties?.part).sort()).toEqual(["crown", "deck"]);
     for (const f of caps) { expect(f.properties?.base_m).toBe(12); expect(f.properties?.height_m).toBeGreaterThan(12); expect(Object.keys(f.properties!).sort()).toEqual(["base_m", "building_id", "height_m", "part"]); }
