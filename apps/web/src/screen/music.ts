@@ -108,28 +108,64 @@ export class CityMusic {
 
 interface PersonaVoice { voice_style: string; voice_id: string }
 const defaultVoice: PersonaVoice = { voice_style: "", voice_id: "" };
-const moodVoice: Record<Mood, [number, number]> = {
-  lonely: [0.85, 0.85], proud: [0.95, 0.9], bitter: [0.85, 0.8], anxious: [1.1, 1.1],
-  hopeful: [1, 1.05], flattered: [1.05, 1.15], offended: [0.9, 0.85],
-};
-function browserSpeech(text: string, persona: PersonaVoice, mood: Mood, signal: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (!("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined") { reject(new Error("speech unavailable")); return; }
-    const speech = new SpeechSynthesisUtterance(text);
-    const voices = window.speechSynthesis.getVoices().filter((v) => v.lang.startsWith("en"));
-    if (voices.length) speech.voice = voices.find((v) => persona.voice_style.toLowerCase().includes(v.name.toLowerCase())) ?? voices[hash(persona.voice_style) % voices.length]!;
-    [speech.rate, speech.pitch] = moodVoice[mood];
-    const finish = (failed = false) => {
-      clearTimeout(timeout); signal.removeEventListener("abort", abort);
-      speech.onend = null; speech.onerror = null;
-      if (failed && !signal.aborted) reject(new Error("speech unavailable")); else resolve();
-    };
-    const abort = () => { window.speechSynthesis.cancel(); finish(); };
-    const timeout = setTimeout(() => { window.speechSynthesis.cancel(); finish(true); }, 20_000);
-    signal.addEventListener("abort", abort, { once: true });
-    speech.onend = () => finish(); speech.onerror = () => finish(true);
-    try { window.speechSynthesis.speak(speech); } catch { finish(true); }
+/** Keep a line below Chrome's long-utterance limit without losing words. */
+export function speechChunks(text: string): string[] {
+  const plain = text.replace(/<[^>]*>/g, " ").replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/\[?(?:fact[_:-][\w:.-]+|F_\d+_[\w.-]+)\]?/gi, " ").replace(/[*_`#]/g, "").replace(/\s+/g, " ").trim();
+  const chunks: string[] = [];
+  for (const sentence of plain.split(/(?<=[.!?])\s+/)) {
+    let chunk = "";
+    for (const word of sentence.trim().split(/\s+/)) {
+      if (chunk && (chunk.length + word.length > 140 || chunk.split(" ").length >= 22)) { chunks.push(chunk); chunk = ""; }
+      chunk += `${chunk ? " " : ""}${word}`;
+    }
+    if (chunk) chunks.push(chunk);
+  }
+  return chunks;
+}
+
+async function browserVoice(persona: PersonaVoice, signal: AbortSignal): Promise<SpeechSynthesisVoice | null> {
+  const synth = window.speechSynthesis;
+  if (!synth.getVoices().length && !signal.aborted) await new Promise<void>((resolve) => {
+    const done = () => { clearTimeout(timer); synth.removeEventListener("voiceschanged", changed); signal.removeEventListener("abort", done); resolve(); };
+    const changed = () => { if (synth.getVoices().length) done(); };
+    const timer = setTimeout(done, 1000);
+    synth.addEventListener("voiceschanged", changed); signal.addEventListener("abort", done, { once: true });
+    changed();
   });
+  // OS lists include musical/novelty voices; hashing across all English voices
+  // can select Bells, Whisper, or Zarvox. Use the natural default unless named.
+  const voices = synth.getVoices().filter(v => /^en(?:-|$)/i.test(v.lang));
+  const natural = voices.filter(v => !/^(Albert|Bad News|Bahh|Bells|Boing|Bubbles|Cellos|Good News|Jester|Junior|Organ|Superstar|Trinoids|Whisper|Wobble|Zarvox)$/i.test(v.name));
+  return natural.find(v => persona.voice_style.toLowerCase().includes(v.name.toLowerCase()))
+    ?? natural.find(v => v.default) ?? natural.find(v => /^(Samantha|Daniel|Karen|Google US English|Microsoft .* Natural)/.test(v.name))
+    ?? natural.sort((a, b) => a.name.localeCompare(b.name))[0] ?? null;
+}
+
+export async function browserSpeech(text: string, persona: PersonaVoice, _mood: Mood, signal: AbortSignal): Promise<void> {
+  if (!window.speechSynthesis || typeof SpeechSynthesisUtterance === "undefined") throw new Error("speech unavailable");
+  const voice = await browserVoice(persona, signal);
+  for (const chunk of speechChunks(text)) {
+    if (signal.aborted) return;
+    await new Promise<void>((resolve, reject) => {
+      const speech = new SpeechSynthesisUtterance(chunk);
+      speech.voice = voice; speech.lang = voice?.lang ?? "en-US";
+      // Mood belongs in the words; keep the building's voice intelligible.
+      speech.rate = 1; speech.pitch = 1;
+      let settled = false;
+      const finish = (error?: string) => {
+        if (settled) return;
+        settled = true; clearTimeout(timeout); signal.removeEventListener("abort", abort);
+        speech.onend = null; speech.onerror = null;
+        if (error && !signal.aborted) reject(new Error(`speech unavailable: ${error}`)); else resolve();
+      };
+      const abort = () => { finish(); window.speechSynthesis.cancel(); };
+      const timeout = setTimeout(() => { finish("timeout"); window.speechSynthesis.cancel(); }, 20_000);
+      signal.addEventListener("abort", abort, { once: true });
+      speech.onend = () => finish(); speech.onerror = (event) => finish(event.error);
+      try { window.speechSynthesis.speak(speech); } catch { finish("speak failed"); }
+    });
+  }
 }
 function playAudio(url: string, signal: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -158,6 +194,8 @@ export function useScreenAudio() {
     const cityMusic = music.current;
     if (!cityMusic) return;
     let persona = defaultVoice;
+    let personaReady = Promise.resolve();
+    const spoken = new Set<string>();
     let generation = 0;
     let queue = Promise.resolve();
     let controller = new AbortController();
@@ -167,23 +205,32 @@ export function useScreenAudio() {
       generation++; controller.abort(); controller = new AbortController(); queue = Promise.resolve(); cityMusic.duck(false);
     };
     const loadPersona = (id: string | null) => {
-      personaRequest.abort(); personaRequest = new AbortController(); persona = defaultVoice;
+      personaRequest.abort(); personaRequest = new AbortController(); persona = defaultVoice; personaReady = Promise.resolve();
       if (!id) return;
       const requestSignal = personaRequest.signal;
       // The dossier says whether a persona was prepared, so an unprepared
       // building never triggers a 404 persona request.
-      void getDossier(id)
+      personaReady = getDossier(id)
         .then((dossier) => {
           const prepared = (dossier as typeof dossier & { persona?: Partial<PersonaVoice> | null }).persona;
           if (!requestSignal.aborted && prepared) persona = { voice_style: prepared.voice_style ?? "", voice_id: prepared.voice_id ?? "" };
         })
         .catch(() => { /* Optional persona: default browser voice still speaks the subtitle. */ });
     };
-    const say = (text: string, url: string | null, mood: Mood) => {
+    const speechGroup = (phase: string) => ["INTRO", "PITCH"].includes(phase) ? "intro"
+      : ["CHALLENGE", "NEGOTIATE"].includes(phase) ? "challenge"
+      : ["VERDICT", "POWER_UP", "REVIVED"].includes(phase) ? "verdict" : phase;
+    const say = (key: string, text: string, url: string | null, mood: Mood) => {
+      const identity = `${key}:${text}`;
+      if (spoken.has(identity)) return;
+      spoken.add(identity);
+      const group = speechGroup(useGame.getState().phase);
       const { room, roundId } = useGame.getState();
       const current = generation, signal = controller.signal;
       queue = queue.then(async () => {
-        if (signal.aborted || current !== generation) return;
+        await personaReady;
+        // Finish the active line, but never start queued lines from an old phase.
+        if (signal.aborted || current !== generation || group !== speechGroup(useGame.getState().phase)) return;
         cityMusic.duck(true);
         try {
           if (!url) {
@@ -200,22 +247,21 @@ export function useScreenAudio() {
             catch { warn("Recorded speech unavailable. Using browser speech."); }
           }
           if (!signal.aborted) await browserSpeech(text, persona, mood, signal);
-        } catch { if (!signal.aborted) warn("Audio unavailable. Follow the subtitles."); }
+        } catch (error) { if (!signal.aborted) { console.warn(error); warn("Audio unavailable. Follow the subtitles."); } }
         finally { if (current === generation) cityMusic.duck(false); }
       });
     };
     const sync = (state: GameState, previous?: GameState) => {
       if (!previous || state.buildingId !== previous.buildingId || state.dataMode !== previous.dataMode) loadPersona(state.buildingId);
       if (!previous || state.room !== previous.room || (state.hasState && !previous.hasState) || (state.city?.buildings_revived === 0 && previous.city?.buildings_revived !== 0)) cityMusic.restore(state.city?.song_categories ?? []);
-      const speechGroup = (phase: string) => ["INTRO", "PITCH"].includes(phase) ? "intro" : ["CHALLENGE", "NEGOTIATE"].includes(phase) ? "challenge" : phase;
-      if (previous && (state.roundId !== previous.roundId || speechGroup(state.phase) !== speechGroup(previous.phase))) cancel();
-      if (["INTRO", "PITCH"].includes(state.phase) && state.intro && state.intro !== previous?.intro) say(state.intro.text, state.intro.audio_url, state.intro.mood);
+      if (previous && (state.roundId !== previous.roundId || state.room !== previous.room || state.dataMode !== previous.dataMode)) { cancel(); spoken.clear(); }
+      if (["INTRO", "PITCH"].includes(state.phase) && state.intro) say("intro", state.intro.text, state.intro.audio_url, state.intro.mood);
       if (["CHALLENGE", "NEGOTIATE"].includes(state.phase)) {
         for (const [player, offer] of Object.entries(state.counteroffers)) {
-          if (offer !== previous?.counteroffers[player]) say(`${offer.line} ${offer.counteroffer}`, offer.audio_url, state.mood);
+          say(`challenge:${player}`, `${offer.line} ${offer.counteroffer}`, offer.audio_url, state.mood);
         }
       }
-      if (state.phase === "VERDICT" && state.verdict && state.verdict !== previous?.verdict) say(state.verdict.reason_line, null, state.mood);
+      if (speechGroup(state.phase) === "verdict" && state.verdict) say("verdict", state.verdict.reason_line, null, state.mood);
       if (previous && state.revival && state.revival !== previous.revival) {
         cityMusic.revive(state.revival.category);
         // Share the visual flash lead-in and first-floor timestamp.
