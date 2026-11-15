@@ -49,7 +49,7 @@ export function SkylineAccents({ map, floors, selections, colors, revival }: {
       if (element.width !== w || element.height !== h) { element.width = w; element.height = h; }
       ctx.clearRect(0, 0, w, h);
       // Use the same projection matrix as the 3D framing checks, including elevation.
-      const matrix = map._camera.transform.getProjectionDataForCustomLayer().mainMatrix;
+      const matrix = map._camera.transform.getProjectionDataForCustomLayer(false).mainMatrix;
       const project = ([x, y, z]: Vertex): Point => {
         const cx = x * matrix[0]! + y * matrix[4]! + z * matrix[8]! + matrix[12]!;
         const cy = x * matrix[1]! + y * matrix[5]! + z * matrix[9]! + matrix[13]!;

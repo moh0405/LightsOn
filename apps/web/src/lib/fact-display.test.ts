@@ -27,3 +27,12 @@ describe("projector evidence lines", () => {
     expect(sourceLabel(undefined)).toBe("Source");
   });
 });
+
+import { availableSpaceLine } from "./buildings";
+describe("available space line (A10)", () => {
+  it("labels the dossier quantity as listed available space", () => {
+    expect(availableSpaceLine("280,852.0 sqft", null)).toBe("Available space: 280,852 sqft");
+    expect(availableSpaceLine(null, 12000)).toBe("Available space: 12,000 sq ft");
+    expect(availableSpaceLine(null, null)).toBeNull();
+  });
+});
