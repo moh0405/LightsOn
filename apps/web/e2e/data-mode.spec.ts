@@ -73,6 +73,9 @@ test('host switch changes the process provider and refreshes skyline facts', asy
       expect(modes.every((m) => m === mode)).toBe(true);
       expect(lists).toBe(1);
       await expect(screen.getByTestId('field')).toHaveAttribute('data-facts-ready', 'true');
+      // The council's safe-mode fallback is labelled on the projector, not only on /admin.
+      if (mode === 'fixtures') await expect(screen.getByTestId('data-mode-badge')).toHaveText('Fixture data · offline');
+      else await expect(screen.getByTestId('data-mode-badge')).toHaveCount(0);
     }
   } finally { await screen.close(); }
 });

@@ -16,6 +16,7 @@
 .screen-heading button { align-self: center; }
 .screen-status { display: flex; align-items: baseline; gap: 24px; }
 .screen-status p { margin: 4px 0; }
+.data-badge { align-self: center; padding: 2px 10px; border: 1px solid #c9a24a; border-radius: 999px; color: #f2c46d; font-size: 0.8em; }
 .challenge-card { padding: 12px 16px !important; border-width: 2px !important; }
 .challenge-card h3 { margin: 0 0 4px; }
 .challenge-card h3 small { color: #b8c6dd; font-weight: 400; }

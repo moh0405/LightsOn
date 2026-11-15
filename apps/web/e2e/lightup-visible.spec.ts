@@ -68,6 +68,10 @@ test("hero's lit floors are visible after the dive", async ({ browser, baseURL }
     await phone.getByRole("button", { name: "Wake building Esperson", exact: true }).click();
     await expect(phase(screen)).toHaveText(/INTRO|PITCH/);
     await expect(screen.getByTestId("building-label")).toHaveText("Waking Esperson");
+    // The dictation button keeps its dark fill so its light label stays readable (C8).
+    const talk = phone.getByRole("button", { name: "Hold to talk", exact: true });
+    await expect(talk).toBeVisible();
+    expect(await talk.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgb(28, 34, 48)");
     await phone.getByLabel("Your pitch").fill("A public community gaming studio open at night");
     await phone.getByRole("button", { name: "Submit pitch", exact: true }).click();
     await expect(phase(screen)).toHaveText("NEGOTIATE", { timeout: 15000 });

@@ -29,7 +29,7 @@ export function ScreenApp() {
   const onMediaError = useCallback((message: string) => setMediaError(message), []);
   const [failed, setFailed] = useState(false);
   useRoomSocket(room, "screen");
-  const { players, buildingId, hasState } = useGame();
+  const { players, buildingId, hasState, dataMode } = useGame();
   const buildingName = useBuildingName(buildingId);
 
   useEffect(() => {
@@ -56,7 +56,7 @@ export function ScreenApp() {
         {failed && <p role="alert">Could not reach the server.</p>}
         <header className="screen-heading"><h1>Lights On</h1>{!audio.ready && <button onClick={() => void audio.start()}>Start audio</button>}<span>Your city needs you.</span></header>
         {audio.error && <p role="alert">{audio.error}</p>}
-        <div className="screen-status"><PhaseBadge />{buildingId && <p className="building-label" data-testid="building-label">Waking {buildingName ?? "a building"}</p>}</div>
+        <div className="screen-status"><PhaseBadge />{dataMode === "fixtures" && <span className="data-badge" data-testid="data-mode-badge">Fixture data · offline</span>}{buildingId && <p className="building-label" data-testid="building-label">Waking {buildingName ?? "a building"}</p>}</div>
         <div className="city-stage"><City /><IntroMedia onError={onMediaError} /><RoundOverlays /></div>
         {mediaError && <div className="screen-toast" role="alert">{mediaError}<button aria-label="Dismiss media notice" onClick={() => setMediaError(null)}>×</button></div>}
       </section>
