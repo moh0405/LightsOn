@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 import math
+from decimal import Decimal
 import re
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from .prompts import safe_facts
 from .persona import fact_line
@@ -13,7 +14,7 @@ NUMBER_WORDS = dict(zero=0, one=1, two=2, three=3, four=4, five=5, six=6, seven=
                     eight=8, nine=9, ten=10, eleven=11, twelve=12, thirteen=13, fourteen=14, fifteen=15,
                     sixteen=16, seventeen=17, eighteen=18, nineteen=19, twenty=20, thirty=30, forty=40,
                     fifty=50, sixty=60, seventy=70, eighty=80, ninety=90,
-                    hundred=100, thousand=1000, million=1000000)
+                    hundred=100, thousand=1000, million=1000000, billion=1000000000)
 _WORD = '(?:' + '|'.join(sorted(NUMBER_WORDS, key=len, reverse=True)) + ')'
 # Unit words that may follow a hyphenated number: "twenty-seven-story", "nine-million-square-foot".
 _HYPHEN_UNIT = r'(?:square|sq\b|stor(?:y|ey|ies|eys)\b|floors?\b|foot\b|feet\b|ft\b|years?\b|percent\b)'
@@ -26,13 +27,32 @@ UNITS = {'sqft': r'(?:sq\.?\s*ft\.?|square\s+feet|square\s+foot)', 'ft': r'(?:ft
 
 class ClaimCheck(BaseModel):
     model_config = ConfigDict(extra='forbid', strict=True)
+    index: int = Field(ge=0)
     supported: bool
     reason: str
 
 
 class ClaimChecks(BaseModel):
-    model_config = ConfigDict(extra='forbid', strict=True)
-    checks: list[ClaimCheck]
+    # Malformed/missing entries are unsupported claims, not a malformed verdict.
+    model_config = ConfigDict(extra='ignore', strict=True)
+    checks: list[ClaimCheck] = Field(default_factory=list)
+
+    @field_validator('checks', mode='before')
+    @classmethod
+    def parse_entries(cls, rows):
+        if not isinstance(rows, list):
+            return []
+        parsed = []
+        for row in rows:
+            try:
+                parsed.append(ClaimCheck.model_validate(row))
+            except ValidationError:
+                # Keep an identifiable malformed result so a duplicate valid one
+                # cannot hide it. Unidentifiable entries cannot support any claim.
+                index = row.get('index') if isinstance(row, dict) else None
+                if type(index) is int and index >= 0:
+                    parsed.append(ClaimCheck(index=index, supported=False, reason='Unparsed claim result'))
+        return parsed
 
 
 def number_value(text: str) -> float:
@@ -79,6 +99,26 @@ def hyphen_numbers(line: str) -> str:
     return re.sub(r'\bsquare-(foot|feet)\b', r'square \1', line, flags=re.I)
 
 
+MAGNITUDES = {'k': 1000, 'm': 1000000, 'b': 1000000000,
+              'thousand': 1000, 'million': 1000000, 'billion': 1000000000}
+MAGNITUDE = re.compile(
+    rf'(?<![\w.])(?P<amount>[-+]?(?:\d{{1,3}}(?:,\d{{3}})+|\d+)(?:\.\d+)?|'
+    rf'half(?:\s+a)?|{_WORD}(?:[ -]+{_WORD})*)'
+    r'(?:(?:[ -]+)(?P<word>thousand|million|billion)|(?P<suffix>[kmb]))\b', re.I)
+
+
+def normalize_magnitudes(line: str) -> str:
+    """Expand whole quantities before any per-word or per-number checks."""
+    def expand(match):
+        amount = match['amount'].casefold()
+        value = (Decimal('.5') if amount.startswith('half') else
+                 Decimal(amount.replace(',', '')) if re.match(r'[-+]?\d', amount) else
+                 Decimal(words_value(amount)))
+        scale = MAGNITUDES[(match['word'] or match['suffix']).casefold()]
+        return format(value * scale, 'f')
+    return MAGNITUDE.sub(expand, hyphen_numbers(line))
+
+
 SCORE_MAX = 40  # four 0-10 scores; the server clamps and totals them
 
 
@@ -106,7 +146,7 @@ def quoted_numbers(texts: list[str] | None) -> set[tuple[float, str | None]]:
     """(value, unit) pairs written in player pitches, normalized like dialogue."""
     found = set()
     for text in texts or []:
-        text = hyphen_numbers(text)
+        text = normalize_magnitudes(text)
         text = re.sub(r'\b(' + '|'.join(NUMBER_WORDS) + r')\b', lambda m: str(NUMBER_WORDS[m[0].lower()]), text, flags=re.I)
         text = re.sub(r'(\d[\d,]*(?:\.\d+)?)\s+(1000|1000000)\b',
                       lambda m: str(float(m[1].replace(',', '')) * float(m[2])), text)
@@ -149,7 +189,7 @@ def pitch_quantity(value: float, unit: str | None, pitched: set[tuple[float, str
         return False
     # An unrecognized explicit unit (cars, meters, etc.) is not an omitted unit.
     if unit is None and not re.match(
-            r"(?:\s*$|\s*[,.;:!?—–)]|\s+(?:is|are|was|were|would|could|should|will|won.t|can.t|seems?|looks?|sounds?|feels?)\b)",
+            r"(?:\s*$|\s*[,.;:!?—–)]|\s+(?:is|are|was|were|would|could|should|will|won.t|can.t|seems?|looks?|sounds?|feels?|on|onto|into|for)\b)",
             after, re.I):
         return False
     clause = re.split(r'[.!?;:\u2014\u2013]', before)[-1]
@@ -182,6 +222,7 @@ def check_line(line: str, fact_ids: list[str], dossier: dict, impact: dict | Non
         return 'Estimate must say looks like'
     # Quantified physical claims use number words; conversational "one idea" or
     # "two of you" is game dialogue, left to the semantic claim check.
+    line = normalize_magnitudes(line)
     def spoken_number(match):
         after = line[match.end():]
         before = line[:match.start()]
@@ -190,15 +231,17 @@ def check_line(line: str, fact_ids: list[str], dossier: dict, impact: dict | Non
         asserted = re.search(r'\b(?:i|we|this building)\s+(?:have|has|had|own|contain|offer|rise|stand)\b', clause, re.I)
         # "a restaurant on one floor" restates a pitch's plan, like "fits one floor".
         placed = re.search(r'\b(?:on|onto|into)\s+$', before, re.I)
+        pilot = (re.search(r'\ba\s+$', before, re.I)
+                 and re.match(r'\s+floor\s+pilot\b', after, re.I))
         if (match[0].casefold() == 'one' and re.match(r'\s+floor\b', after, re.I)
-                and (hypothetical or placed) and not asserted):
+                and (hypothetical or placed or pilot) and not asserted):
             return match[0]  # "start on one floor" proposes a plan, not an existing floor count
         physical = (number_unit(after) is not None
                     or re.match(r'\s+(?:dark\s+)?(?:floors?|trees?|cars?|entries|spaces?|thousand|million)\b', after, re.I)
                     or re.search(r'\bfloor\s*$', before, re.I))
         return str(NUMBER_WORDS[match[0].lower()]) if physical else match[0]
     normalized = re.sub(r'\b(' + '|'.join(NUMBER_WORDS) + r')\b',
-                        spoken_number, hyphen_numbers(line), flags=re.I)
+                        spoken_number, line, flags=re.I)
     normalized = re.sub(r'(\d[\d,]*(?:\.\d+)?)\s+(1000|1000000)\b',
                         lambda m: str(float(m[1].replace(',', '')) * float(m[2])), normalized)
     pitched = quoted_numbers(quoted)

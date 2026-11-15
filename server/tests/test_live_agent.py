@@ -75,8 +75,8 @@ async def test_bad_json_retries_once_then_falls_back(dossier):
 async def test_claim_failure_regenerates_then_templates(dossier):
     c = fake_agent.challenge(pitch(), dossier).model_dump()
     c['line'] = 'I have a secret tunnel.'
-    model = Model([{'challenges': [c]}, {'checks': [{'supported': False, 'reason': 'unsupported tunnel'}]},
-                   {'challenges': [c]}, {'checks': [{'supported': False, 'reason': 'unsupported tunnel'}]}])
+    model = Model([{'challenges': [c]}, {'checks': [{'index': 0, 'supported': False, 'reason': 'unsupported tunnel'}]},
+                   {'challenges': [c]}, {'checks': [{'index': 0, 'supported': False, 'reason': 'unsupported tunnel'}]}])
     result = await LiveAgent(model=model).challenge([pitch()], dossier, City())
     assert 'tunnel' not in result[0].line
     assert result[0].counteroffer == fake_agent.challenge(pitch(), dossier).counteroffer
@@ -111,7 +111,7 @@ async def test_verdict_scores_original_and_revision_in_one_model_call(dossier):
     a, revised = pitch(), pitch('A tiny library', revision=True)
     proposal = fake_agent.verdict([a.model_copy(update={'player_id': 'candidate_0'}),
                                     revised.model_copy(update={'player_id': 'candidate_1'})], dossier, City()).model_dump()
-    model = Model([proposal, {'checks': [{'supported': True, 'reason': ''}]}])
+    model = Model([proposal, {'checks': [{'index': 0, 'supported': True, 'reason': ''}]}])
     batches = await LiveAgent(model=model).verdict_batches([a], [revised], dossier, City(), [])
     assert len(batches) == 2 and len(model.calls) == 2
     assert all(batch[0].scores[0].player_id == 'p1' for batch in batches)
@@ -383,7 +383,7 @@ async def test_per_player_challenges_accept_voice_and_hypothetical_counteroffers
                 counteroffer='Could your studio welcome neighbors after sunset?', category_guess='work') for p in selected]}
         assert step == 'claim_check'
         assert 'Fictional mood' in system and 'hypothetical counteroffers' in system
-        return {'checks': [{'supported': True, 'reason': ''}]}
+        return {'checks': [{'index': 0, 'supported': True, 'reason': ''}]}
     agent = LiveAgent(model=model)
     result = await agent.challenge(pitches, dossier)
     assert calls.count('challenge') == calls.count('claim_check') == 4
@@ -479,7 +479,7 @@ async def test_bad_candidate_does_not_replace_other_grounded_players(dossier, re
     async def model(step, system, content, schema, timeout):
         calls.append((step, content))
         if step == 'claim_check':
-            return {'checks': [{'supported': True, 'reason': ''}]}
+            return {'checks': [{'index': 0, 'supported': True, 'reason': ''}]}
         pid = re.search(r'<pitch player="([^"]+)"', content)[1]
         attempts[pid] += 1
         if pid == 'p3':
@@ -514,18 +514,16 @@ def test_small_paid_check_plan_and_budget_ceiling(monkeypatch):
     import sys
     from pathlib import Path
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2]))
-    from evals.live_quality import RESERVATION_HEADROOM_USD, budget_ceiling, challenge_plan
-    # Reservations run ~6-7x the reconciled $0.074 of the last paid check; the
-    # run sub-cap must admit them, never above the configured cap minus $0.30.
-    assert RESERVATION_HEADROOM_USD >= .12 * 7
-    assert budget_ceiling(1.00, 3.0) == pytest.approx(1.00 + RESERVATION_HEADROOM_USD)
-    assert budget_ceiling(2.44, 3.0) == pytest.approx(2.70, abs=1e-5)
-    assert budget_ceiling(2.44, 3.0) < 2.70
+    from evals.live_quality import RUN_SPEND_LIMIT_USD, budget_ceiling, challenge_plan
+    assert RUN_SPEND_LIMIT_USD == .12
+    assert budget_ceiling(1.00, 3.0) == pytest.approx(1.12)
+    assert budget_ceiling(2.44, 3.0) == pytest.approx(2.56)
     assert budget_ceiling(2.60, 3.0) < 2.70
-    assert budget_ceiling(4.0, 4.5) < 4.20
+    assert budget_ceiling(4.0, 4.5) == pytest.approx(4.12)
     for total in (0, 1.5, 2.0, 2.69, 3.5):
         for cap in (3.0, 4.5):
             assert budget_ceiling(total, cap) < cap - .30
+            assert budget_ceiling(total, cap) <= total + .12
     plan = challenge_plan()
     assert sum(len(rows) for rows in plan.values()) == 8
     assert len(plan) == 2
@@ -559,7 +557,7 @@ async def test_small_check_runs_eight_independent_challenges_without_network(gam
         def __call__(self, step, system, content, schema, timeout):
             calls.append(step)
             if step == 'claim_check':
-                return {'checks': [{'supported': True, 'reason': ''} for _ in json.loads(content)]}
+                return {'checks': [{'index': row['index'], 'supported': True, 'reason': ''} for row in json.loads(content)]}
             d = provider_for_mode(game_mode).dossier('233953' if 'Esperson' in system else '233899')
             ps = [pitch(html.unescape(text), player=pid) for pid, text in
                   re.findall(r'<pitch player="([^"]+)"[^>]*>(.*?)</pitch>', content)]
@@ -641,7 +639,7 @@ async def test_players_publish_independently_while_other_claim_check_waits(dossi
         if 'evening workshop' in content:
             slow_check.set()
             await first_published.wait()
-        return {'checks': [{'supported': True, 'reason': ''}]}
+        return {'checks': [{'index': 0, 'supported': True, 'reason': ''}]}
     async def publish(c):
         published.append(c.player_id)
         first_published.set()
@@ -681,7 +679,7 @@ async def test_only_fact_free_templates_skip_remote_check(dossier):
     checked = []
     async def model(*args):
         checked.append(args)
-        return {'checks': [{'supported': False, 'reason': 'Unsupported tunnel'}]}
+        return {'checks': [{'index': 0, 'supported': False, 'reason': 'Unsupported tunnel'}]}
     agent.model = model
     assert await agent.grounded([('I have a secret tunnel.', [])], dossier, monotonic() + 1, step='verdict', attempt=0)
     assert len(checked) == 1
@@ -696,7 +694,7 @@ async def test_room_publishes_fast_player_and_reset_cancels_slow_player(dossier,
     first, second = room.add_player('First'), room.add_player('Second')
     async def call(self, step, system, content, schema, deadline):
         if step == 'claim_check':
-            return schema.model_validate({'checks': [{'supported': True, 'reason': ''}]})
+            return schema.model_validate({'checks': [{'index': 0, 'supported': True, 'reason': ''}]})
         pid = re.search(r'<pitch player="([^"]+)"', content)[1]
         if pid == second.id:
             slow_started.set()
@@ -790,7 +788,7 @@ async def test_hypothetical_prefix_cannot_hide_uncited_existing_feature(dossier)
     called = []
     async def model(*args):
         called.append(True)
-        return {'checks': [{'supported': False, 'reason': 'Unsupported building feature'}]}
+        return {'checks': [{'index': 0, 'supported': False, 'reason': 'Unsupported building feature'}]}
     agent = LiveAgent(model=model)
     assert await agent.grounded([('Could your studio use my swimming pool?', [])], dossier,
                                 monotonic() + 1, step='verdict', attempt=0)
@@ -852,7 +850,7 @@ async def test_hypothetical_prefix_lines_always_reach_claim_check(dossier, line)
     called = []
     async def model(step, system, content, schema, timeout):
         called.append(step)
-        return {'checks': [{'supported': False, 'reason': 'Uncited building feature'}]}
+        return {'checks': [{'index': 0, 'supported': False, 'reason': 'Uncited building feature'}]}
     agent = LiveAgent(model=model)
     assert await agent.grounded([(line, [])], dossier, monotonic() + 1, step='verdict', attempt=0)
     assert called == ['claim_check']
@@ -867,7 +865,7 @@ async def test_uncited_history_verdict_falls_back_end_to_end(dossier):
     async def model(step, system, content, schema, timeout):
         calls.append(step)
         if step == 'claim_check':
-            return {'checks': [{'supported': False, 'reason': 'Uncited past use'} for _ in json.loads(content)]}
+            return {'checks': [{'index': row['index'], 'supported': False, 'reason': 'Uncited past use'} for row in json.loads(content)]}
         proposal = fake_agent.verdict([p.model_copy(update={'player_id': 'candidate_0'})], dossier, City())
         return proposal.model_copy(update={'reason_line': line, 'fact_ids': []}).model_dump()
     agent = LiveAgent(model=model)
@@ -887,7 +885,7 @@ async def test_legitimate_counteroffers_pass_after_claim_check(dossier, line):
     called = []
     async def model(step, system, content, schema, timeout):
         called.append(step)
-        return {'checks': [{'supported': True, 'reason': ''}]}
+        return {'checks': [{'index': 0, 'supported': True, 'reason': ''}]}
     agent = LiveAgent(model=model)
     assert await agent.grounded([(line, [])], dossier, monotonic() + 1, step='verdict', attempt=0) is None
     assert called == ['claim_check']
@@ -921,7 +919,7 @@ async def test_paid_rejected_verdict_publishes_without_fallback(dossier):
     pitches = [pitch(text, player=f'p{i}') for i, text in enumerate(PAID_PITCHES)]
     async def model(step, system, content, schema, timeout):
         if step == 'claim_check':
-            return {'checks': [{'supported': True, 'reason': ''} for _ in json.loads(content)]}
+            return {'checks': [{'index': row['index'], 'supported': True, 'reason': ''} for row in json.loads(content)]}
         proposal = fake_agent.verdict([p.model_copy(update={'player_id': f'candidate_{i}'})
                                        for i, p in enumerate(pitches)], dossier, City())
         return proposal.model_copy(update={'reason_line': PAID_VERDICT, 'fact_ids': PAID_VERDICT_FACTS}).model_dump()
@@ -960,7 +958,7 @@ async def test_live_verdict_may_cite_this_rounds_housing_estimate(dossier):
     def model_for():
         async def model(step, system, content, schema, timeout):
             if step == 'claim_check':
-                return {'checks': [{'supported': True, 'reason': ''} for _ in json.loads(content)]}
+                return {'checks': [{'index': row['index'], 'supported': True, 'reason': ''} for row in json.loads(content)]}
             proposal = fake_agent.verdict([p.model_copy(update={'player_id': 'candidate_0'})], dossier, City())
             return proposal.model_copy(update={'reason_line': line, 'fact_ids': ['F_233953_dark_sqft']}).model_dump()
         return model
@@ -991,7 +989,7 @@ SMOKE_PIXEL = "Floor 7 has 31,503 listed available square feet—that's too big 
 ])
 async def test_smoke_challenges_ground_without_regeneration(dossier, line, offer, refs, text):
     candidate = dict(player_id='p1', line=line, counteroffer=offer, fact_ids=refs, category_guess='wildcard')
-    model = Model([{'challenges': [candidate]}, {'checks': [{'supported': True, 'reason': ''}]}])
+    model = Model([{'challenges': [candidate]}, {'checks': [{'index': 0, 'supported': True, 'reason': ''}]}])
     agent = LiveAgent(model=model)
     result = await agent.challenge([pitch(text)], dossier)
     assert not agent.fallbacks
@@ -1070,7 +1068,7 @@ async def test_smoke_unitless_floor_labels_do_not_repair(dossier):
 async def test_challenge_cannot_borrow_another_players_quantity(dossier):
     def model(step, system, content, schema, timeout):
         if step == 'claim_check':
-            return {'checks': [{'supported': True, 'reason': ''}]}
+            return {'checks': [{'index': 0, 'supported': True, 'reason': ''}]}
         player = re.search(r'player="([^"]+)"', content)[1]
         return {'challenges': [dict(player_id=player, line=SMOKE_ATLAS,
             counteroffer='Could your restaurant welcome neighbors?',
@@ -1089,3 +1087,98 @@ def test_challenge_prompt_lists_source_wording_beside_ids(dossier):
     facts = {f['id']: f for f in dossier['facts']}
     assert rows
     assert all(row[1] == facts[row[0]]['say_as'] for row in rows)
+
+
+@pytest.mark.parametrize('quantity,value', [
+    ('9 million', 9000000), ('nine million', 9000000), ('9M', 9000000),
+    ('1.5 billion', 1500000000), ('half a million', 500000),
+])
+def test_magnitude_quantities_keep_full_value_and_units(dossier, quantity, value):
+    from app.agent.grounding import quoted_numbers
+    assert quoted_numbers([f'{quantity} square feet']) == {(value, 'sqft')}
+    assert check_line(f'Your {quantity} is too big.', [], dossier, quoted=[f'{value} square feet']) is None
+    assert check_line(f'Your {value} is too big.', [], dossier, quoted=[f'{quantity} square feet']) is None
+    assert check_line(f'Your {quantity} feet is too tall.', [], dossier, quoted=[f'{value} square feet'])
+    assert check_line(f'I have {quantity} square feet.', [], dossier, quoted=[f'{value} square feet'])
+    assert check_line(f'Your {quantity} is too big.', [], dossier, quoted=['A gaming studio'])
+
+
+@pytest.mark.parametrize('line', [
+    "My typical floor gives you 22,189 square feet—nine million on one floor? Kid, that's a kitchen dream, not a pitch. Show me a restaurant that fits inside one of my actual floors, and we'll talk about lighting it up proper.",
+    "My typical floor gives you 22,189 square feet—but 9 million on one floor? Kid, that's a fantasy. Pitch a restaurant that fits within my actual floor plates, and I'll light it up proper.",
+])
+def test_paid_confirmation_rejected_magnitudes(dossier, line):
+    assert check_line(line, ['F_233953_grossTypicalFloorSquareFeet'], dossier,
+                      quoted=['I need 9000000 square feet on a single floor for a restaurant.']) is None
+
+
+@pytest.mark.parametrize('checks', [
+    [{'index': 0, 'supported': True, 'reason': ''}, {'index': 99, 'supported': True, 'reason': ''}],
+    [{'index': 0, 'supported': True, 'reason': ''}, None],
+])
+async def test_indexed_claim_checks_ignore_unrelated_extras(dossier, checks):
+    from time import monotonic
+    agent = LiveAgent(model=Model([{'checks': checks}]))
+    error = await agent.grounded([('Could your studio welcome neighbors?', [])], dossier,
+                                 monotonic() + 1, step='verdict', attempt=0)
+    assert error is None and agent.schema_failures == 0
+
+
+@pytest.mark.parametrize('checks', [None, {}, [None], [], [{'index': 99, 'supported': True, 'reason': ''}],
+    [{'index': 0, 'supported': 'true', 'reason': ''}],
+    [{'index': 0, 'supported': True, 'reason': ''}, {'index': 0, 'supported': False, 'reason': 'Unsupported'}],
+    [{'supported': True, 'reason': ''}],
+])
+async def test_missing_or_unparsed_claim_is_unsupported_not_schema_failure(dossier, checks):
+    from time import monotonic
+    agent = LiveAgent(model=Model([{'checks': checks}]))
+    issues = await agent.grounded_each([('Could your studio welcome neighbors?', [])], dossier,
+                                       monotonic() + 1, step='verdict', attempt=0)
+    assert issues[0][1] == 'claim_check'
+    assert agent.schema_failures == 0
+
+
+async def test_claim_indices_preserve_order_and_unchecked_template_gaps(dossier):
+    from time import monotonic
+    model = Model([{'checks': [{'index': 2, 'supported': False, 'reason': 'Unsupported'},
+                              {'index': 1, 'supported': True, 'reason': ''}]}])
+    agent = LiveAgent(model=model)
+    issues = await agent.grounded_each([('Darling, you have my attention.', []),
+        ('Could your studio welcome neighbors?', []), ('Could your cafe welcome neighbors?', [])],
+        dossier, monotonic() + 1, step='verdict', attempt=0)
+    assert issues[:2] == [None, None] and issues[2][1] == 'claim_check'
+    assert [row['index'] for row in json.loads(model.calls[0][1])] == [1, 2]
+
+
+async def test_malformed_claim_check_regenerates_verdict_once(dossier):
+    proposal = fake_agent.verdict([pitch(player='candidate_0')], dossier, City()).model_dump()
+    model = Model([proposal, 'bad json', proposal, {'checks': []}])
+    agent = LiveAgent(model=model)
+    await agent.verdict_batches([pitch()], [], dossier, City(), [])
+    assert [step for step, _ in model.calls] == ['verdict', 'claim_check', 'verdict', 'claim_check']
+    assert agent.schema_failures == 0 and agent.fallback_causes == {'claim_check': 1}
+
+
+def test_paid_eval_caps_reservations_before_invoking_fake_api(monkeypatch, tmp_path):
+    from pathlib import Path
+    from app.agent.spend import SpendLedger, SpendUnavailable
+    from app.agent.live_agent import FAST
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2]))
+    from evals.live_quality import budget_ceiling
+    path = tmp_path / 'fake-ledger.json'
+    start = 1.0
+    path.write_text(json.dumps(dict(total_usd=start, input_tokens=0, output_tokens=0, calls=[])))
+    ledger = SpendLedger(path, cap=budget_ceiling(start, 3.0))
+    invoked = []
+    def invoke():
+        invoked.append(True)
+        # The first call has reserved $0.11 but has not reconciled yet. A second
+        # request must be refused BEFORE invocation or appending a ledger row.
+        with pytest.raises(SpendUnavailable, match='cap'):
+            ledger.call(FAST, 100000, 0, lambda: pytest.fail('Over-budget API invoked'), lambda value: value)
+        assert len(ledger.snapshot()['calls']) == 1
+        assert ledger.snapshot()['total_usd'] - start <= .12
+        return dict(input_tokens=10, output_tokens=0)
+    ledger.call(FAST, 100000, 0, invoke, lambda value: value)
+    assert len(invoked) == 1
+    assert ledger.snapshot()['total_usd'] - start <= .12

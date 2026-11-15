@@ -27,18 +27,14 @@ from app.models import Pitch
 
 
 RUN_MARGIN_USD = .30  # the eval's ledger ceiling stays this far below the configured cap
-RUN_SPEND_LIMIT_USD = .12  # pass criterion on reconciled spend
-# spend.py reserves worst-case input/output bounds before each request, ~6-7x the
-# reconciled cost, and parallel players hold several reservations at once. A run
-# sub-cap of total + $0.12 refused real calls ("budget" fallbacks) even though the
-# run spent $0.074. Reservations reconcile down, so this headroom only admits
-# requests; the ceiling never exceeds the configured cap minus RUN_MARGIN_USD.
-RESERVATION_HEADROOM_USD = RUN_SPEND_LIMIT_USD * 8
+RUN_SPEND_LIMIT_USD = .12  # hard ceiling, including outstanding reservations
+# The shared ledger reserves before invoking Bedrock. Never add headroom beyond
+# the authorized run spend: if parallel reservations do not fit, use fallback.
 
 
 def budget_ceiling(total: float, cap: float | None = None) -> float:
     cap = SpendLedger().cap if cap is None else cap
-    return min(total + RESERVATION_HEADROOM_USD, cap - RUN_MARGIN_USD - .000001)
+    return min(total + RUN_SPEND_LIMIT_USD, cap - RUN_MARGIN_USD - .000001)
 
 
 def percentile(samples, quantile):
