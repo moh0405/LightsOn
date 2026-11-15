@@ -59,15 +59,26 @@ export function SkylineAccents({ map, floors, selections, colors, revival }: {
       const path = (points: Point[]) => {
         ctx.beginPath(); points.forEach((p, i) => i ? ctx.lineTo(...p) : ctx.moveTo(...p)); ctx.closePath();
       };
+      // Batch lit floors by colour and fake the glow with a wide faint stroke:
+      // canvas shadowBlur per floor cost ~5 ms a frame on the attract orbit.
+      const lit = new Map<string, Point[][]>();
       for (const floor of geometry) {
         const revived = colors[floor.id]?.floors.includes(floor.floor);
         if (floor.status !== "occupied" && !revived) continue;
         const order = revival?.building_id === floor.id ? [...revival.floors].sort((a, b) => a - b).indexOf(floor.floor) : -1;
         const progress = order >= 0 && revival ? Math.max(0, Math.min(1, (Date.now() - firstFloorAt(revival.at) - order * 60) / 600)) : 1;
         if (progress <= 0) continue;
-        ctx.strokeStyle = resolveFloorColor(floor.status, floor.game, floor.id, floor.floor, colors);
-        ctx.shadowColor = ctx.strokeStyle; ctx.shadowBlur = 6; ctx.lineWidth = 1; ctx.globalAlpha = 0.12 * progress;
-        for (const edge of floor.edges) { path(edge.map(project)); ctx.stroke(); }
+        const key = `${resolveFloorColor(floor.status, floor.game, floor.id, floor.floor, colors)}|${Math.round(progress * 10)}`;
+        const list = lit.get(key) ?? []; lit.set(key, list);
+        for (const edge of floor.edges) list.push(edge.map(project));
+      }
+      for (const [key, edges] of lit) {
+        const [color, step] = key.split("|");
+        ctx.beginPath();
+        for (const points of edges) { points.forEach((p, i) => i ? ctx.lineTo(...p) : ctx.moveTo(...p)); ctx.closePath(); }
+        ctx.strokeStyle = color!; const progress = Number(step) / 10;
+        ctx.lineWidth = 5; ctx.globalAlpha = 0.04 * progress; ctx.stroke();
+        ctx.lineWidth = 1; ctx.globalAlpha = 0.12 * progress; ctx.stroke();
       }
       for (const selection of selections) {
         const points = hull(geometry.filter(f => f.id === selection.building).flatMap(f => f.volume.map(project)));

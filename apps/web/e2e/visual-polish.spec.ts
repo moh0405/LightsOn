@@ -44,6 +44,18 @@ test("1080p skyline, stable floor selection, eased dive and frame times", async 
       }; requestAnimationFrame(frame);
     }));
     const attract = await measure();
+    // A06: the attract orbit must advance every frame, not in 100 ms jumps.
+    const orbitSteps = await screen.evaluate(() => new Promise<number[]>(resolve => {
+      const map = window.__lightsOnMap!, gaps: number[] = [];
+      let bearing = map.getBearing(), changed = performance.now();
+      const start = changed;
+      const frame = (now: number) => {
+        if (map.getBearing() !== bearing) { gaps.push(now - changed); changed = now; bearing = map.getBearing(); }
+        if (now - start < 2000) requestAnimationFrame(frame); else resolve(gaps.sort((a, b) => a - b));
+      }; requestAnimationFrame(frame);
+    }));
+    expect(orbitSteps.length).toBeGreaterThan(40);
+    expect(orbitSteps[Math.floor(orbitSteps.length / 2)]!).toBeLessThan(40);
     const phone = await context.newPage();
     await phone.goto((await screen.locator("aside p").filter({ hasText: "/play?room=" }).innerText()).trim());
     await phone.getByLabel("Nickname").fill("Polish");
@@ -81,6 +93,7 @@ test("1080p skyline, stable floor selection, eased dive and frame times", async 
     const metrics = { attract, selection };
     writeFileSync(`${dir}/${baseline ? "before" : "after"}-frames.json`, JSON.stringify(metrics, null, 2));
     console.log("1080p frame times", JSON.stringify(metrics));
+    if (errors.length) console.log("console errors", errors);
     if (!baseline) {
       expect(attract.fps).toBeGreaterThanOrEqual(50);
       expect(selection.fps).toBeGreaterThanOrEqual(50);
