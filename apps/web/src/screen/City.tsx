@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Map as CityMap, MercatorCoordinate, setWorkerUrl } from "maplibre-gl";
+import { Map as CityMap, MercatorCoordinate, setWorkerUrl, type ExpressionSpecification, type FilterSpecification } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
 setWorkerUrl(workerUrl);
@@ -12,11 +12,22 @@ import { Sparks } from "./Sparks";
 import { SkylineAccents } from "./SkylineAccents";
 import { FLASH_MS, firstFloorAt, INTRO_DIVE_MS, lightUpDuration } from "./effects";
 import { fadedOccluders, frameCamera, frameVolume, occluders, planCamera, ROUND_PITCH } from "./camera";
-import { facadeBands, floorHalos, groundGrid, roofEdges, smoothFlight, stickyHit, type Hit } from "./skyline";
+import { displayFloors, facadeBands, floorHalos, floorReveals, glass, groundGrid, mapColors, recede, roofCaps, roofEdges, smoothFlight, stickyHit, type Hit } from "./skyline";
 
 declare global { interface Window { __lightsOnMap?: CityMap; __lightsOnFrameBuilding?: (id: string) => void } }
 const CENTER: [number, number] = [-95.3650891, 29.7588018];
 const FLOOR_COLOR = floorColorExpression({});
+interface Lit { id: string; floors: number[] }
+/** Glow belongs to lit floors only: occupied in the data, or revived in the game. */
+function haloFilter(lit: Lit[], faded: string[]): FilterSpecification {
+  const on: FilterSpecification = ["any", ["==", ["get", "source_status"], "occupied"], ["==", ["get", "game_status"], "revived"],
+    ...lit.map(({ id, floors }): ExpressionSpecification => ["all", ["==", ["get", "building_id"], id], ["in", ["get", "floor_number"], ["literal", floors]]])];
+  return faded.length ? ["all", on, ["!", ["in", ["get", "building_id"], ["literal", faded]]]] : on;
+}
+const LIT = haloFilter([], []);
+// Decorative layers that follow each tower's floors (hidden together when a tower is faded).
+const TOWER_LAYERS = ["floors", "windows", "reveals", "roof-deck", "roof-crown"];
+const CONTEXT_COLOR = "#29394e", CONTEXT_RECEDED = "#131b29";
 interface Bounds { left: number; right: number; top: number; bottom: number }
 interface Hover { player: string; building: string; color: string; floor: number | null; bounds: Bounds | null }
 
@@ -81,6 +92,8 @@ export function City({ onHover }: { onHover?: (id: string | null) => void }) {
   const reframe = useRef<(duration?: number) => void>(() => {});
   const testFrame = useRef(false);
   const overview = useRef<ReturnType<typeof frameVolume>>(null);
+  const lit = useRef<Lit[]>([]);
+  const fadedFloors = useRef<string[]>([]);
   const factError = useCallback(() => setError("Building facts are unavailable. You can still aim and wake a building."), []);
 
   useEffect(() => {
@@ -130,27 +143,27 @@ export function City({ onHover }: { onHover?: (id: string | null) => void }) {
         }
         if (floors.status === "fulfilled") {
           geo.current.floors = floors.value;
-          map.addSource("floors", { type: "geojson", data: floors.value });
-          map.addLayer({ id: "floors", type: "fill-extrusion", source: "floors", paint: {
-            "fill-extrusion-base": ["get", "base_m"], "fill-extrusion-height": ["get", "height_m"], "fill-extrusion-color": FLOOR_COLOR,
-          } });
-          map.addLayer({ id: "floors-faded", type: "fill-extrusion", source: "floors", filter: ["in", ["get", "building_id"], ["literal", []]], paint: {
-            "fill-extrusion-base": ["get", "base_m"], "fill-extrusion-height": ["get", "height_m"], "fill-extrusion-color": FLOOR_COLOR, "fill-extrusion-opacity": 0.12,
-          } });
-          map.addSource("halos", { type: "geojson", data: floorHalos(floors.value) });
-          map.addLayer({ id: "floor-halos", type: "fill-extrusion", source: "halos", paint: {
-            "fill-extrusion-base": ["get", "base_m"], "fill-extrusion-height": ["get", "height_m"],
-            "fill-extrusion-color": FLOOR_COLOR, "fill-extrusion-opacity": 0.2, "fill-extrusion-vertical-gradient": false,
-          } });
-          map.addSource("windows", { type: "geojson", data: facadeBands(floors.value) });
-          map.addLayer({ id: "windows", type: "fill-extrusion", source: "windows", paint: {
-            "fill-extrusion-base": ["get", "base_m"], "fill-extrusion-height": ["get", "height_m"],
-            "fill-extrusion-color": FLOOR_COLOR, "fill-extrusion-vertical-gradient": false,
-          } });
+          // Display geometry only: the same floors on a crisp footprint. Camera maths keeps the raw outline.
+          const display = displayFloors(floors.value);
+          const extrusion: { "fill-extrusion-base": ExpressionSpecification; "fill-extrusion-height": ExpressionSpecification; "fill-extrusion-vertical-gradient": boolean } = { "fill-extrusion-base": ["get", "base_m"], "fill-extrusion-height": ["get", "height_m"], "fill-extrusion-vertical-gradient": false };
+          map.addSource("floors", { type: "geojson", data: display });
+          // Opaque slabs in the status colour; everything else sits proud of them, so nothing blends.
+          map.addLayer({ id: "floors", type: "fill-extrusion", source: "floors", paint: { ...extrusion, "fill-extrusion-color": FLOOR_COLOR } });
+          map.addLayer({ id: "floors-faded", type: "fill-extrusion", source: "floors", filter: ["in", ["get", "building_id"], ["literal", []]], paint: { ...extrusion, "fill-extrusion-color": FLOOR_COLOR, "fill-extrusion-opacity": 0.05 } });
+          map.addSource("windows", { type: "geojson", data: facadeBands(display) });
+          map.addLayer({ id: "windows", type: "fill-extrusion", source: "windows", paint: { ...extrusion, "fill-extrusion-color": mapColors(FLOOR_COLOR, glass) } });
+          map.addSource("reveals", { type: "geojson", data: floorReveals(display) });
+          map.addLayer({ id: "reveals", type: "fill-extrusion", source: "reveals", paint: { ...extrusion, "fill-extrusion-color": "#070a12" } });
+          map.addSource("roofs", { type: "geojson", data: roofCaps(display) });
+          map.addLayer({ id: "roof-deck", type: "fill-extrusion", source: "roofs", filter: ["==", ["get", "part"], "deck"], paint: { ...extrusion, "fill-extrusion-color": "#0d131f" } });
+          map.addLayer({ id: "roof-crown", type: "fill-extrusion", source: "roofs", filter: ["==", ["get", "part"], "crown"], paint: { ...extrusion, "fill-extrusion-color": "#2a3448", "fill-extrusion-vertical-gradient": true } });
+          // One soft shell around lit floors only, drawn last so it blooms over the facade.
+          map.addSource("halos", { type: "geojson", data: floorHalos(display) });
+          map.addLayer({ id: "floor-halos", type: "fill-extrusion", source: "halos", filter: LIT, paint: { ...extrusion, "fill-extrusion-color": FLOOR_COLOR, "fill-extrusion-opacity": 0.22 } });
         }
         // Context towers between the round camera and the hero are drawn after the floors as glass,
         // so the light-up stays visible (filters are set per hero below).
-        if (city.status === "fulfilled") map.addLayer({ id: "context-faded", type: "fill-extrusion", source: "city", filter: ["in", ["get", "_i"], ["literal", []]], paint: { "fill-extrusion-color": "#3a4560", "fill-extrusion-height": ["get", "height_m"], "fill-extrusion-opacity": 0.12 } });
+        if (city.status === "fulfilled") map.addLayer({ id: "context-faded", type: "fill-extrusion", source: "city", filter: ["in", ["get", "_i"], ["literal", []]], paint: { "fill-extrusion-color": "#3a4560", "fill-extrusion-height": ["get", "height_m"], "fill-extrusion-opacity": 0.05 } });
         if (city.status === "rejected" || floors.status === "rejected") setError("Skyline data is unavailable. Use the Wake buttons on your phone.");
         // Attract frames the wakeable towers so they fill the projector; the context city runs off the edges.
         overview.current = frameVolume(geo.current.floors ? [geo.current.floors] : geo.current.city ? [geo.current.city] : []);
@@ -181,17 +194,22 @@ export function City({ onHover }: { onHover?: (id: string | null) => void }) {
   useEffect(() => {
     const map = mapRef.current;
     if (!ready || !map) return;
-    const fade = (indexes: number[], floorIds: string[] = []) => {
+    const fade = (indexes: number[], floorIds: string[] = [], staged = false) => {
       if (!map.getLayer("context") || !map.getLayer("context-faded")) return;
       map.setFilter("context", indexes.length ? ["!", ["in", ["get", "_i"], ["literal", indexes]]] : null);
       map.setFilter("context-faded", ["in", ["get", "_i"], ["literal", indexes]]);
       if (map.getLayer("roof-edges")) map.setFilter("roof-edges", indexes.length ? ["!", ["in", ["get", "_i"], ["literal", indexes]]] : null);
       if (map.getLayer("floors-faded")) {
-        map.setFilter("floors", floorIds.length ? ["!", ["in", ["get", "building_id"], ["literal", floorIds]]] : null);
+        const shown = floorIds.length ? ["!", ["in", ["get", "building_id"], ["literal", floorIds]]] as FilterSpecification : null;
+        for (const layer of TOWER_LAYERS) map.setFilter(layer, layer.startsWith("roof-") ? ["all", ["==", ["get", "part"], layer.slice(5)], ...(shown ? [shown] : [])] as FilterSpecification : shown);
         map.setFilter("floors-faded", ["in", ["get", "building_id"], ["literal", floorIds]]);
-        map.setFilter("windows", floorIds.length ? ["!", ["in", ["get", "building_id"], ["literal", floorIds]]] : null);
-          if (map.getLayer("floor-halos")) map.setFilter("floor-halos", floorIds.length ? ["!", ["in", ["get", "building_id"], ["literal", floorIds]]] : null);
+        fadedFloors.current = floorIds;
+        map.setFilter("floor-halos", haloFilter(lit.current, floorIds));
       }
+      // Neighbours step back while a building holds the stage.
+      map.setPaintProperty("context", "fill-extrusion-color", staged ? CONTEXT_RECEDED : CONTEXT_COLOR);
+      if (map.getLayer("roof-edges")) map.setPaintProperty("roof-edges", "fill-extrusion-opacity", staged ? 0.16 : 0.55);
+      if (map.getLayer("ground-edges")) map.setPaintProperty("ground-edges", "line-opacity", staged ? 0.3 : 0.45);
     };
     const dive = (id: string, duration = INTRO_DIVE_MS, settle = false) => {
       const { city, floors } = geo.current;
@@ -203,7 +221,7 @@ export function City({ onHover }: { onHover?: (id: string | null) => void }) {
       // Fade both representations without changing the open-side bearing.
       const floorIds = floors ? [...new Set(fadedOccluders(occluders(floors, ...volume.center), plan.bearing, 0, ROUND_PITCH, volume.radius)
         .map(index => String(floors.features[index]?.properties?.building_id)).filter(other => other !== id))] : [];
-      fade(plan.faded, floorIds);
+      fade(plan.faded, floorIds, true);
       const canvas = map.getCanvas();
       const camera = frameCamera(volume, canvas.clientWidth, canvas.clientHeight, plan.bearing, ROUND_PITCH, map.getVerticalFieldOfView(), Math.min(220, canvas.clientHeight * 0.34));
       if (settle) map.easeTo({ ...camera, zoom: camera.zoom - 0.15, duration, essential: true });
@@ -279,22 +297,27 @@ export function City({ onHover }: { onHover?: (id: string | null) => void }) {
   useEffect(() => {
     const map = mapRef.current;
     if (!ready || !map?.getLayer("floors")) return;
-    map.setPaintProperty("floors", "fill-extrusion-color-transition", { duration: 0 });
-    map.setPaintProperty("floors-faded", "fill-extrusion-color-transition", { duration: 0 });
-    map.setPaintProperty("windows", "fill-extrusion-color-transition", { duration: 0 });
-    map.setPaintProperty("floor-halos", "fill-extrusion-color-transition", { duration: 0 });
+    for (const layer of ["floors", "floors-faded", "windows", "floor-halos"]) map.setPaintProperty(layer, "fill-extrusion-color-transition", { duration: 0 });
+    const hero = revival?.building_id ?? buildingId;
+    lit.current = Object.entries(revivedColors).map(([id, entry]) => ({ id, floors: entry.floors }));
+    map.setFilter("floor-halos", haloFilter(lit.current, fadedFloors.current));
     let frame = 0;
     const paint = () => {
       // Paint and scheduling must share one clock read so the final frame
       // cannot be dropped when the deadline is crossed during setPaintProperty.
       const now = Date.now();
       const color = floorColorExpression(revivedColors, revival ? { ...revival, at: firstFloorAt(revival.at) } : undefined, now);
-      for (const layer of ["floors", "floors-faded", "windows", "floor-halos"]) map.setPaintProperty(layer, "fill-extrusion-color", color);
+      // The hero keeps the full palette; the other towers recede so only one building is on stage.
+      const staged = (value: ExpressionSpecification): ExpressionSpecification => hero ? ["case", ["==", ["get", "building_id"], hero], value, mapColors(value, recede)] : value;
+      map.setPaintProperty("floors", "fill-extrusion-color", staged(color));
+      map.setPaintProperty("floors-faded", "fill-extrusion-color", color);
+      map.setPaintProperty("windows", "fill-extrusion-color", staged(mapColors(color, glass)));
+      map.setPaintProperty("floor-halos", "fill-extrusion-color", color);
       if (revival && now - revival.at < lightUpDuration(revival.floors)) frame = requestAnimationFrame(paint);
     };
     paint();
     return () => cancelAnimationFrame(frame);
-  }, [revivedColors, revival, ready, buildings]);
+  }, [revivedColors, revival, ready, buildings, buildingId]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -311,7 +334,7 @@ export function City({ onHover }: { onHover?: (id: string | null) => void }) {
 
   return <>
     {error && <div role="alert" style={{ padding: 10, background: "#5a3b00" }}>{error}</div>}
-    <div data-testid="field" className="city-field" data-facts-ready={ready && factsReady} style={{ position: "relative", height: "100%", minHeight: 0, borderRadius: 12, overflow: "hidden", background: "#10131c" }}>
+    <div data-testid="field" className="city-field" data-staged={buildingId ? "true" : undefined} data-facts-ready={ready && factsReady} style={{ position: "relative", height: "100%", minHeight: 0, borderRadius: 12, overflow: "hidden", background: "#10131c" }}>
       {revival && flashPoint && <div key={revival.at} data-testid="revival-flash" data-soft={revival.auto_completed} aria-hidden="true" style={{ position: "absolute", top: flashPoint.y, left: flashPoint.x - 32, width: 64, height: 24, zIndex: 1, background: revival.auto_completed ? "#ffffff40" : "white", filter: "blur(18px)", animation: `city-flash ${FLASH_MS}ms forwards`, pointerEvents: "none" }} />}
       <style>{`@keyframes city-flash { from { opacity: 0.9 } to { opacity: 0 } }`}</style>
       <div ref={container} style={{ position: "absolute", inset: 0 }} />
