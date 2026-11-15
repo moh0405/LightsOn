@@ -22,7 +22,6 @@ export function AdminApp() {
   const [room, setRoom] = useState<string>(safeGet("lo.room") ?? "");
   const [active, setActive] = useState<string | null>(room.length === 4 ? room.toUpperCase() : null);
   const [pin, setPin] = useState<string>(safeGet("lo.pin", "session") ?? "");
-  const [msg, setMsg] = useState<string | null>(null);
   const sock = useRoomSocket(active, "admin");
   const { dataMode, dataModeScope, players, conn } = useGame();
   const [demoMode, setDemoMode] = useState<boolean | null>(null);
@@ -35,13 +34,16 @@ export function AdminApp() {
   }, []);
 
   const run = async (extra: Record<string, unknown>) => {
-    setMsg(null);
     safeSet("lo.pin", pin, "session");
     try {
       await sock.current?.send({ type: "host_action", pin, ...extra });
     } catch (e) {
-      // Server command errors already arrive through the shared error toast.
-      if (!(e instanceof CommandError)) setMsg("Failed.");
+      // One toast surface for both server rejections and local transport failures.
+      useGame.setState({ lastError: {
+        code: e instanceof CommandError ? e.code : "host_action_failed",
+        message: e instanceof CommandError ? e.message : "Failed.",
+        at: Date.now(),
+      } });
     }
   };
 
@@ -71,7 +73,6 @@ export function AdminApp() {
           </div>
         </>
       )}
-      {msg && <p role="alert">{msg}</p>}
     </main>
   );
 }

@@ -93,3 +93,24 @@ for (const mode of ["kit", "fixtures"] as const) test(`phone keeps tap selection
     await expect(phone.getByRole("button", { name: "Wake building Esperson", exact: true })).toBeVisible();
   } finally { releaseNames!(); await Promise.all([desktop.close(), mobile.close()]); }
 });
+
+test("admin reports a command timeout once when no server error event arrives", async ({ browser, baseURL }) => {
+  const context = await browser.newContext();
+  let dropCommands = false;
+  try {
+    await context.routeWebSocket(/\/ws\/.*role=admin/, socket => {
+      const server = socket.connectToServer();
+      socket.onMessage(message => { if (!dropCommands) server.send(message); });
+    });
+    const screen = await context.newPage();
+    await screen.goto(`${baseURL}/screen`);
+    await expect(screen.getByTestId("qr")).toBeVisible();
+    const admin = await context.newPage();
+    await admin.goto(`${baseURL}/admin`);
+    await expect(admin.getByText(/· open ·/)).toBeVisible();
+    await admin.getByLabel("Host PIN").fill("1234");
+    dropCommands = true;
+    await admin.getByRole("button", { name: "Skip phase", exact: true }).click();
+    await expect(admin.getByRole("alert")).toHaveText("The server did not answer.", { timeout: 10000 });
+  } finally { await context.close(); }
+});
