@@ -1,71 +1,66 @@
-# Sponsor track endings
+# Lights On — judge follow-ups by track
 
-Every track gets the same 2-minute demo (docs/submission/demo-script.md). Only the last ~30 seconds change.
-Claim only what's on screen. Never say "vacant". **Photon: not entered.** Don't mention iMessage.
+Give the same [core demo](demo-script.md) first: pitch → counteroffer → revision → verdict → shared light-up. These are optional **20–30 second follow-ups**, not four speeches to squeeze into the core. Use the one that answers the judge's interest.
 
-Numbers below come from `evals/latency-check.md` (paid check, 2026-11-14, DATA_MODE=kit) unless noted.
+Do not promise a specific model response or cite an old timing result as current performance. Photon/iMessage is not shipped and is not part of this demo.
 
-## Entertainment (main track)
+## Entertainment
 
-**Ending (30 s):** Stay on the light-up. Let the room cheer, then:
-> "Every round, the city changes. What the neighborhood needs shifts, so the next building wants something
-> different. You compete for the pitch, but everyone shares the skyline. Shark Tank, but the investor is a dark
-> skyscraper. Your city needs you."
+**Keep the skyline visible.**
 
-**Evidence to show:** the city progress meter and needs bars (labelled "game simulation"), the concept card, the
-revision changing the outcome, phones charging together.
+> “The competition gives you a reason to pitch. The counteroffer gives you a reason to listen. And even if you lose, you help light the building. Every revival changes the simulated city needs and adds to its song. You compete for the pitch, but everyone shares the skyline.”
+
+**Point to:** both proposals, the actual revision, group charging, the lit floors, city needs and the new music layer. Do not claim a revision reversed the outcome without evidence.
 
 ## CoStar: AI for the Built World
 
-**Ending (30 s):** Hover the Esperson card, then the aerial caption, then the Matterport walk-in, then the challenge
-that cites one of them:
-> "Three layers, one address, one decision. The dark windows are floors CoStar lists as available with no tenant on
-> record: office only, contacts never shown. Vexcel and Matterport give the building its evidence, and the agent
-> uses that evidence to push back. CoStar tells us what's empty. Lights On lets everyone imagine what it could
-> become."
+**Point to the cited evidence; offer the interior tour afterward.**
 
-**Evidence to show:**
-- Floor status rule: `scripts/build_dossier.py`. Kit index: `scripts/build_kit_index.py` → `data/costar/index.sqlite`.
-- Spatial evidence: `server/app/data/vexcel.py`, `server/app/data/matterport.py`, `scripts/fetch_vexcel.py`.
-- A challenge citing a kit fact, from the paid check: "My typical floor gives you 22,189 square feet"
-  (cites `F_233953_grossTypicalFloorSquareFeet`).
-- Agentic depth: the trace panel (press **T**): three subagents, files written, then grounded live negotiation.
+> “CoStar makes the game specific to a real building: floor areas, listings and recorded tenancies shape what it can challenge. Vexcel adds aerial evidence, and Matterport lets you look inside. We keep unknowns unknown, exclude contacts, and distinguish listed availability from physical occupancy. The game makes the data something people can discuss and play with.”
+
+**Evidence:**
+
+- `scripts/build_kit_index.py`: streaming, Office-only index with contact-free allowlists.
+- `server/app/data/floor_status.py`: dark / partial / occupied / unknown rules.
+- `server/app/data/vexcel.py` and `server/app/data/matterport.py`: spatial/tour adapters.
+- The source label and dossier fact under the actual challenge card. A challenge does not necessarily cite all three providers.
+- **M** / **Walk inside**: an available real Matterport tour. Aerial evidence is cached; the embedded tour loads live.
 
 ## Amazon: Practical AI Innovation
 
-**Ending (30 s):** Open the trace panel (press **T**) and point at the model IDs:
-> "Every building is an agent on Amazon Bedrock. Claude Haiku challenges each pitch in about two and a half seconds,
-> and Claude Sonnet picks the winner. Nothing it says reaches the screen until our server checks every number
-> against the dossier, and nothing it decides changes the game until our action validator approves it. Two real
-> uses: city engagement sessions, and leasing events where a building pitches itself."
+**Use the live trace if available; distinguish it from recorded research.**
 
-**Evidence to show:**
-- Model IDs: `us.anthropic.claude-haiku-4-5-20251001-v1:0` (challenges, claim checks),
-  `us.anthropic.claude-sonnet-4-6` (verdicts) in the trace panel and README.
-- Latency: model-only time to a grounded line **p50 2.39 s / p90 4.08 s**; first grounded line per round 2.26 to 2.39 s.
-- Reliability: **0/8** challenge fallbacks, **0/2** verdict fallbacks, 0 invalid schema attempts; published local
-  numeric/ID grounding 9/10 in that check. The earlier full eval (`evals/report.md`) had 100% published grounding
-  and schema (33/33), counting fallbacks.
-- Validation and cost: `server/app/agent/grounding.py`, `server/app/actions.py`, spend guard
-  `server/app/agent/spend.py` (the check cost $0.079).
-- Use case and target user: README "Use case and target user".
+> “Claude on Amazon Bedrock powers the negotiation: Haiku handles challenges and claim checks, and Sonnet handles verdicts. The live agent can retrieve facts from the building's dossier. Our server checks citations and quantities, validates proposed actions, and enforces a spend cap. If generation fails, the same game loop can continue with a deterministic judge.”
+
+**Evidence:**
+
+- `server/app/agent/live_agent.py` and `knowledge.py`: live negotiation and fact lookup.
+- `server/app/agent/grounding.py` and `server/app/actions.py`: grounding and final state-change validation.
+- `server/app/agent/spend.py`: persistent spend accounting and enforced cap.
+- `apps/web/e2e/visible-demo-run-report.md`: a documented replacement live round with two live challenges and a live verdict, no fallback in that run. Challenges were ready at about 3.0 and 3.4 seconds; verdict readiness was about 6.6 seconds. These are historical observations from that build, not a fresh benchmark or guarantee.
+- `evals/latency-check.md`: a separate budget-limited evaluation. Do not quote its fallback cases as live-model successes or reuse the obsolete 0/8 fallback claim.
+
+**Potential use, if asked:** facilitated classroom or city engagement sessions. These are proposed extensions, not validated customers or deployments.
 
 ## LangChain: Best use of deepagents
 
-**Ending (30 s):** Press **T** on `/screen` and walk the "Recorded prep run" panel:
-> "Each building is its own deep agent. Before the game, the Esperson's agent ran three subagents:
-> property_scout read the CoStar facts, spatial_scout read the Vexcel and Matterport evidence, and persona_writer
-> wrote its personality, all as files. Our server then validated that output. This is a recording of a real run
-> that we cached; the panel is ours, built from the deepagents steps. Then the same building judges you live."
+**Press T and identify the recorded prep run before describing it.**
 
-**Evidence to show:**
-- `server/app/agent/prep_agent.py`: `create_deep_agent` with `subagents=[property_scout, spatial_scout,
-  persona_writer]` and a `FilesystemBackend`.
-- Trace panel: `apps/web/src/screen/overlays/TracePanel.tsx`, `server/app/trace.py`;
-  screenshot `apps/web/e2e/screenshots/phase7/recorded-trace-1920x1080.png`.
-- Be upfront: prep was cached; the recording has no captured todo plan or historical model IDs, so the panel
-  shows the current model configuration, labelled as such. No LangSmith key, so it's our own trace panel.
+> “This is the recorded research run for Esperson. A deepagents supervisor delegated to property_scout, spatial_scout and persona_writer, which wrote research artifacts. We validated those outputs before using them. At play time, a separate LangChain agent retrieves dossier facts to negotiate. Research is cached; the conversation can be live.”
 
-## Photon: not entered
+**Evidence:**
 
-The iMessage controller isn't shipped (`messaging/` is a stub, no keys). Don't demo or mention it.
+- `server/app/agent/prep_agent.py`: `create_deep_agent`, named subagents and a scoped filesystem backend.
+- `server/app/trace.py` and `apps/web/src/screen/overlays/TracePanel.tsx`: the project's own recorded/live trace UI.
+- The prepared Esperson artifacts in the local cache, if available. They are not included in a fresh clone.
+- Seven buildings have grounded personas; only Esperson has the documented full recorded research run. Do not generalize that run to every building.
+- The saved run did not capture `write_todos` or historical model IDs. The panel labels the model configuration it shows; it is not a LangSmith trace.
+
+## One-line answers when there is no time
+
+| Judge interest | Say |
+| --- | --- |
+| Entertainment | “Compete to persuade the building, then cooperate to bring it to life.” |
+| CoStar | “Real property evidence becomes the constraints of a playable conversation.” |
+| Amazon | “Bedrock powers the negotiation; our server validates the result and controls the spend.” |
+| LangChain | “Deepagents researches Esperson before play; a LangChain agent uses its dossier during negotiation.” |
